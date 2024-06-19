@@ -7,7 +7,9 @@ OUT     := lib/lib$(LIB).a
 objects += mc.o
 objects += dlib.o
 objects += error.o
+objects += sched.o
 objects += data/string.o
+objects += data/vector.o
 
 build: $(addprefix obj/, $(objects))
 	@mkdir -p $(dir ./$(OUT))
@@ -22,6 +24,7 @@ run: build
 	./run
 
 gdb: build
+	gcc -ggdb $(CARGS) -static -o run run.c -L$(dir $(OUT)) -l$(LIB)
 	gdb ./run
 
 clean:

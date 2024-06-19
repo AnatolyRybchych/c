@@ -58,7 +58,7 @@ void *mc_dlib_get(MC_DLib *lib, MC_Str symbol){
     MC_String *sym = mc_string(symbol);
     assert(sym != NULL);
 
-    void *res = dlsym(lib->dl, sym->data);
+    res = dlsym(lib->dl, sym->data);
     free(sym);
 #endif
 

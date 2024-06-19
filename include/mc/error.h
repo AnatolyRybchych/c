@@ -10,6 +10,8 @@ typedef unsigned MC_Error;
     MC_ERROR(NOT_SUPPORTED) \
     MC_ERROR(NOT_FOUND) \
     MC_ERROR(OUT_OF_MEMORY) \
+    MC_ERROR(BLOCK) \
+    MC_ERROR(BUSY) \
 
 enum MC_Error{
     #define MC_ERROR(ERROR, ...) MCE_##ERROR,

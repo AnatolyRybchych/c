@@ -2,19 +2,37 @@
 
 #include <mc.h>
 #include <mc/dlib.h>
+#include <mc/sched.h>
 
-int main(){
-    MC_DLib *gl;
-    MC_Error error = mc_dlib_open(&gl, MC_STRC("libGL.so"));
-    if(error){
-        printf("mc_dlib_open: %s\n", mc_strerror(error));
-        return 1;
+#include <stdbool.h>
+
+static MC_TaskStatus count(MC_Task *task){
+    int *value = mc_task_data(task, NULL);
+    printf("count: %i\n", *value);
+
+    if(*value == 0){
+        return MC_TASK_DONE;
     }
 
-    void *func = mc_dlib_get(gl, MC_STRC("glClear"));
-    void (*glClear)(int bit) = *(void (**)(int bit))&func;
-    glClear(0);
+    *value -= 1;
 
-    mc_dlib_close(gl);
+    return MC_TASK_CONTINUE;
+}
+
+int main(){
+    MC_Sched *sched;
+    mc_sched_new(&sched);
+
+    int initial_count = 10;
+    MC_Task *counter1, *counter2, *counter3;
+    mc_run_task(sched, &counter1, count, sizeof(int), &initial_count);
+    mc_run_task(sched, &counter2, count, sizeof(int), &initial_count);
+    mc_run_task_after(counter2, &counter3, count, sizeof(int), &initial_count);
+
+    while (true){
+        mc_sched_continue(sched);
+    }
+
     return 0;
 }
+
