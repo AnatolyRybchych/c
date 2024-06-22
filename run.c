@@ -29,10 +29,7 @@ int main(){
     mc_run_task(sched, &counter2, count, sizeof(int), &initial_count);
     mc_run_task_after(counter2, &counter3, count, sizeof(int), &initial_count);
 
-    while (true){
-        mc_sched_continue(sched);
-    }
-
-    return 0;
+    mc_sched_run(sched, 1);
+    mc_sched_delete(sched);
 }
 

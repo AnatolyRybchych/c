@@ -89,13 +89,16 @@ void mc_sched_delete(MC_Sched *sched){
     free(sched);
 }
 
-MC_Error mc_sched_continue(MC_Sched *sched){
+MC_TaskStatus mc_sched_continue(MC_Sched *sched){
+    MC_TaskStatus res = MC_TASK_SUSPEND;
+
     while(sched->finished){
         TaskNode *task = sched->finished;
         sched->finished = task->next;
         task->next = sched->garbage;
         sched->garbage = task;
     }
+
 
     for(TaskNode *task = sched->active_tasks, *prev = NULL, *next; task;){
         switch (task->task.do_some((MC_Task*)&task->task)){
@@ -107,13 +110,31 @@ MC_Error mc_sched_continue(MC_Sched *sched){
             task = next;
             break;
         case MC_TASK_CONTINUE:
+            res = MC_TASK_CONTINUE;
+            // FALLTHROUGH
+        case MC_TASK_SUSPEND:
             prev = task;
             task = task->next;
             break;
         }
     }
 
-    return MCE_OK;
+    if(sched->active_tasks) return res;
+    else if(sched->finished) return MC_TASK_CONTINUE;
+    else return MC_TASK_DONE;
+}
+
+void mc_sched_run(MC_Sched *sched, unsigned suspend_ms){
+    while (true) switch (mc_sched_continue(sched)){
+    case MC_TASK_DONE:
+        return;
+    case MC_TASK_SUSPEND:
+        // TODO: sleep(suspend_ms);
+        (void)suspend_ms;
+        // FALLTHROUGH
+    case MC_TASK_CONTINUE:
+        break;
+    }
 }
 
 bool mc_sched_is_terminating(MC_Sched *sched){
