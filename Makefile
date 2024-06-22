@@ -8,6 +8,7 @@ objects += mc.o
 objects += dlib.o
 objects += error.o
 objects += sched.o
+objects += time.o
 objects += data/string.o
 objects += data/vector.o
 

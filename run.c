@@ -3,31 +3,36 @@
 #include <mc.h>
 #include <mc/dlib.h>
 #include <mc/sched.h>
+#include <mc/time.h>
 
 #include <stdbool.h>
 
 static MC_TaskStatus count(MC_Task *task){
-    int *value = mc_task_data(task, NULL);
-    printf("count: %i\n", *value);
-
-    if(*value == 0){
+    MC_Time time;
+    if(mc_gettime(MC_GETTIME_SINCE_BOOT, &time)){
         return MC_TASK_DONE;
     }
 
-    *value -= 1;
+    MC_Time *prev_time = mc_task_data(task, NULL);
+    MC_Time diff;
+    mc_timediff(prev_time, &time, &diff);
+    for(uint64_t sec = 0; sec < diff.sec; sec++){
+        printf("count(%zu)\n", prev_time->sec + sec);
+    }
 
-    return MC_TASK_CONTINUE;
+    prev_time->sec += diff.sec;
+
+    return MC_TASK_SUSPEND;
 }
 
 int main(){
     MC_Sched *sched;
     mc_sched_new(&sched);
 
-    int initial_count = 10;
-    MC_Task *counter1, *counter2, *counter3;
-    mc_run_task(sched, &counter1, count, sizeof(int), &initial_count);
-    mc_run_task(sched, &counter2, count, sizeof(int), &initial_count);
-    mc_run_task_after(counter2, &counter3, count, sizeof(int), &initial_count);
+    MC_Time time;
+    mc_gettime(MC_GETTIME_SINCE_PROCCESS_START, &time);
+    MC_Task *counter;
+    mc_run_task(sched, &counter, count, sizeof(time), &time);
 
     mc_sched_run(sched, 1);
     mc_sched_delete(sched);
