@@ -4,37 +4,30 @@
 #include <mc/dlib.h>
 #include <mc/sched.h>
 #include <mc/time.h>
+#include <mc/data/pqueue.h>
 
 #include <stdbool.h>
+#include <ctype.h>
+#include <string.h>
+#include <stdlib.h>
 
-static MC_TaskStatus count(MC_Task *task){
-    MC_Time time;
-    if(mc_gettime(MC_GETTIME_SINCE_BOOT, &time)){
-        return MC_TASK_DONE;
-    }
-
-    MC_Time *prev_time = mc_task_data(task, NULL);
-    MC_Time diff;
-    mc_timediff(prev_time, &time, &diff);
-    for(uint64_t sec = 0; sec < diff.sec; sec++){
-        printf("count(%zu)\n", prev_time->sec + sec);
-    }
-
-    prev_time->sec += diff.sec;
-
-    return MC_TASK_SUSPEND;
+int cmp(const void *first, const void *second){
+    return strcmp(first, second);
 }
 
 int main(){
-    MC_Sched *sched;
-    mc_sched_new(&sched);
+    MC_PQueue *queue = mc_pqueue_create(0, cmp);
+    queue = mc_pqueue_enqueue(queue, "a");
+    queue = mc_pqueue_enqueue(queue, "b");
+    queue = mc_pqueue_enqueue(queue, "c");
+    queue = mc_pqueue_enqueue(queue, "d");
+    queue = mc_pqueue_enqueue(queue, "e");
+    queue = mc_pqueue_enqueue(queue, "f");
+    queue = mc_pqueue_enqueue(queue, "g");
 
-    MC_Time time;
-    mc_gettime(MC_GETTIME_SINCE_PROCCESS_START, &time);
-    MC_Task *counter;
-    mc_run_task(sched, &counter, count, sizeof(time), &time);
 
-    mc_sched_run(sched, 1);
-    mc_sched_delete(sched);
+    for(char *s = mc_pqueue_dequeuev(queue); s; s = mc_pqueue_dequeuev(queue)){
+        printf("%s\n", s);
+    }
 }
 

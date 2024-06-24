@@ -11,6 +11,7 @@ objects += sched.o
 objects += time.o
 objects += data/string.o
 objects += data/vector.o
+objects += data/pqueue.o
 
 build: $(addprefix obj/, $(objects))
 	@mkdir -p $(dir ./$(OUT))
