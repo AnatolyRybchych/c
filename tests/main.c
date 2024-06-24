@@ -32,19 +32,16 @@ static void begin_test(TestContext *ctx, const char *test_name, const char *args
 static void finish_test(TestContext *ctx){
     for(TestAssertation *a = ctx->assertations; a != ctx->assertation; a++){
         if(a->succeded){
-            printf("    %s -> OK\n", a->expr);
+            printf(GRN "    %s -> OK\n" RST, a->expr);
         }
         else{
-            printf("    %s -> FAIL\n", a->expr);
-            printf("%s: %i\n", a->file, a->line);
+            printf(RED "    %s -> FAIL\n" RST, a->expr);
+            printf(RED "%s: %i\n" RST, a->file, a->line);
         }
     }
 
-    if(ctx->succeeded){
-        printf("    OK\n");
-    }
-    else{
-        printf("    ERROR\n");
+    if(!ctx->succeeded){
+        printf(RED "    ERROR\n" RST);
         exit(1);
     }
 }
