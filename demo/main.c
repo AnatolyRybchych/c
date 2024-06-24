@@ -1,6 +1,5 @@
 #include <stdio.h>
 
-#include <mc.h>
 #include <mc/dlib.h>
 #include <mc/sched.h>
 #include <mc/time.h>

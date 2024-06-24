@@ -37,19 +37,41 @@ MC_Error mc_gettime(MC_GetTime gettime, MC_Time *time){
 }
 
 MC_Sign mc_timecmp(const MC_Time *time1, const MC_Time *time2){
-    if(time2->sec != time1->sec)
-        return time2->sec > time1->sec ? MC_SIGN_GREATER : MC_SIGN_LESS;
-    else if(time2->nsec == time1->nsec) return MC_SIGN_EQUALS;
-    else return time2->nsec > time1->nsec ? MC_SIGN_GREATER : MC_SIGN_LESS;
+    if(time1->sec != time2->sec)
+        return time1->sec > time2->sec ? MC_SIGN_GREATER : MC_SIGN_LESS;
+    else if(time1->nsec == time2->nsec) return MC_SIGN_EQUALS;
+    else return time1->nsec > time2->nsec ? MC_SIGN_GREATER : MC_SIGN_LESS;
 }
 
 MC_Sign mc_timediff(const MC_Time *time1, const MC_Time *time2, MC_Time *diff){
     switch (mc_timecmp(time1, time2)){
     case MC_SIGN_LESS:
-        *diff = (MC_Time){.sec = time1->sec - time2->sec, .nsec = time1->nsec - time2->nsec};
+        if((int64_t)time2->nsec - (int64_t)time1->nsec < 0){
+            *diff = (MC_Time){
+                .sec = time2->sec - time1->sec - 1,
+                .nsec = 1000000000 + (int64_t)time2->nsec - (int64_t)time1->nsec
+            };
+        }
+        else{
+            *diff = (MC_Time){
+                .sec = time2->sec - time1->sec,
+                .nsec = time2->nsec - time1->nsec
+            };
+        }
         return MC_SIGN_EQUALS;
     case MC_SIGN_GREATER:
-        *diff = (MC_Time){.sec = time2->sec - time1->sec, .nsec = time2->nsec - time1->nsec};
+        if((int64_t)time1->nsec - (int64_t)time2->nsec < 0){
+            *diff = (MC_Time){
+                .sec = time1->sec - time2->sec - 1,
+                .nsec = 1000000000 + (int64_t)time1->nsec - (int64_t)time2->nsec
+            };
+        }
+        else{
+            *diff = (MC_Time){
+                .sec = time1->sec - time2->sec,
+                .nsec = time1->nsec - time2->nsec
+            };
+        }
         return MC_SIGN_EQUALS;
     default:
         *diff = (MC_Time){0};
