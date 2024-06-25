@@ -12,6 +12,7 @@ typedef unsigned MC_Error;
     MC_ERROR(OUT_OF_MEMORY) \
     MC_ERROR(BLOCK) \
     MC_ERROR(BUSY) \
+    MC_ERROR(OVERFLOW) \
 
 enum MC_Error{
     #define MC_ERROR(ERROR, ...) MCE_##ERROR,

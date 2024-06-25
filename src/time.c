@@ -78,3 +78,49 @@ MC_Sign mc_timediff(const MC_Time *time1, const MC_Time *time2, MC_Time *diff){
         return MC_SIGN_EQUALS;
     }
 }
+
+MC_Error mc_timesum(const MC_Time *time1, const MC_Time *time2, MC_Time *result){
+    MC_Error status = MCE_OK;
+
+    uint64_t sum_nsec = (time1->nsec % MC_NSEC_IN_SEC)
+        + time2->nsec % MC_NSEC_IN_SEC;
+
+    uint64_t sum_sec = (time1->nsec / MC_NSEC_IN_SEC)
+        + (time2->nsec / MC_NSEC_IN_SEC)
+        + (sum_nsec / MC_NSEC_IN_SEC);
+
+    sum_nsec %= MC_NSEC_IN_SEC;
+
+    MC_Time sum = {
+        .sec = sum_sec,
+        .nsec = sum_nsec
+    };
+
+    sum.sec += time1->sec;
+    if(sum.sec < sum_sec){
+        status = MCE_OVERFLOW;
+    }
+
+    sum_sec = sum.sec;
+    sum.sec += time2->sec;
+    if(sum.sec < sum_sec){
+        status = MCE_OVERFLOW;
+    }
+
+    *result = sum;
+
+    return status;
+}
+
+MC_Error mc_sleep(const MC_Time *time){
+    struct timespec delay = {
+        .tv_sec = time->sec,
+        .tv_nsec = time->nsec
+    };
+
+    if (nanosleep(&delay, NULL) < 0) {
+        return MCE_NOT_SUPPORTED;
+    }
+
+    return MCE_OK;
+}

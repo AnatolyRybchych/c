@@ -10,23 +10,24 @@
 #include <string.h>
 #include <stdlib.h>
 
-int cmp(const void *first, const void *second){
-    return strcmp(first, second);
+MC_TaskStatus greet(MC_Task *task){
+    const char **name = mc_task_data(task, NULL);
+    printf("%s\n", *name);
+    mc_task_delay(task, (MC_Time){.sec = 1});
+    return MC_TASK_SUSPEND;
 }
 
 int main(){
-    MC_PQueue *queue = mc_pqueue_create(0, cmp);
-    queue = mc_pqueue_enqueue(queue, "a");
-    queue = mc_pqueue_enqueue(queue, "b");
-    queue = mc_pqueue_enqueue(queue, "c");
-    queue = mc_pqueue_enqueue(queue, "d");
-    queue = mc_pqueue_enqueue(queue, "e");
-    queue = mc_pqueue_enqueue(queue, "f");
-    queue = mc_pqueue_enqueue(queue, "g");
+    MC_Sched *sched;
+    mc_sched_new(&sched);
 
+    MC_Task *task;
+    char *test = "qwerty";
+    mc_sched_task(sched, &task, (MC_Time){.sec = 1}, greet, sizeof(char*), &test);
 
-    for(char *s = mc_pqueue_dequeuev(queue); s; s = mc_pqueue_dequeuev(queue)){
-        printf("%s\n", s);
-    }
+    mc_sched_run(sched, (MC_Time){
+        .sec = 0,
+        .nsec = 10000
+    });
 }
 

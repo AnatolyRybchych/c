@@ -5,6 +5,10 @@
 #include <mc/error.h>
 #include <mc/util/sign.h>
 
+#define MC_MSEC_IN_SEC 1000
+#define MC_USEC_IN_SEC (MC_MSEC_IN_SEC * 1000)
+#define MC_NSEC_IN_SEC (MC_USEC_IN_SEC * 1000)
+
 typedef struct MC_Time MC_Time;
 
 typedef unsigned MC_GetTime;
@@ -19,6 +23,10 @@ enum MC_GetTime{
 MC_Error mc_gettime(MC_GetTime gettime, MC_Time *time);
 MC_Sign mc_timecmp(const MC_Time *time1, const MC_Time *time2);
 MC_Sign mc_timediff(const MC_Time *time1, const MC_Time *time2, MC_Time *diff);
+
+/// @return OVERFLOW in case of overflow
+MC_Error mc_timesum(const MC_Time *time1, const MC_Time *time2, MC_Time *result);
+MC_Error mc_sleep(const MC_Time *time);
 
 struct MC_Time{
     uint64_t sec;
