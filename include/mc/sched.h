@@ -19,8 +19,9 @@ enum MC_TaskStatus{
 MC_Error mc_sched_new(MC_Sched **sched);
 void mc_sched_delete(MC_Sched *sched);
 MC_TaskStatus mc_sched_continue(MC_Sched *sched);
-void mc_sched_run(MC_Sched *sched, MC_Time suspend);
+void mc_sched_run(MC_Sched *sched);
 bool mc_sched_is_terminating(MC_Sched *sched);
+void mc_sched_sleep(MC_Sched *sched, MC_Time delay);
 
 MC_Error mc_sched_task(MC_Sched *sched, MC_Task **task, MC_Time timeout, MC_TaskStatus (*do_some)(MC_Task *this), unsigned context_size, const void *context);
 MC_Error mc_run_task(MC_Sched *sched, MC_Task **task, MC_TaskStatus (*do_some)(MC_Task *this), unsigned context_size, const void *context);
@@ -29,6 +30,11 @@ void *mc_task_data(MC_Task *task, unsigned *size);
 MC_Sched *mc_task_sched(MC_Task *task);
 MC_Error mc_task_delay(MC_Task *task, MC_Time delay);
 void mc_task_release(MC_Task *task);
+
+/// @param task... list of tasks to wait, last SHOULD be NULL
+/// @param timeout if NULL, then timeout is infinite
+/// @return MCE_TIMEOUT if exited due to timeout
+MC_Error mc_task_wait_all(const MC_Time *timeout, MC_Task *task, ...);
 void mc_task_allow_hard_terminating(MC_Task *task);
 
 #endif // MC_SCHED_H

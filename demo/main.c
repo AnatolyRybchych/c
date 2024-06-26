@@ -20,23 +20,32 @@ struct Greet{
 MC_TaskStatus greet(MC_Task *task){
     Greet *data = mc_task_data(task, NULL);
     printf("%s\n", data->name);
-    // mc_task_delay(task, (MC_Time){.sec = 1});
-    return MC_TASK_DONE;
+    mc_task_delay(task, (MC_Time){.sec = 1});
+    return data->cnt-- ? MC_TASK_CONTINUE :MC_TASK_DONE;
 }
 
 int main(){
     MC_Sched *sched;
     mc_sched_new(&sched);
 
-    MC_Task *task;
-    Greet greet_data = {.name = "QWERTY", .cnt = 3};
-    mc_sched_task(sched, &task, (MC_Time){.sec = 1}, greet, sizeof(greet_data), &greet_data);
-    mc_task_release(task);
+    Greet greet1 = {.name = "GREET 1", .cnt = 3};
+    Greet greet2 = {.name = "GREET 2", .cnt = 5};
+    Greet greet3 = {.name = "GREET 3", .cnt = 5};
 
-    mc_sched_run(sched, (MC_Time){
-        .sec = 0,
-        .nsec = 10000
-    });
+    MC_Task *task1, *task2, *task3;
+    mc_sched_sleep(sched, (MC_Time){.sec = 5});
+    
+    mc_sched_task(sched, &task1, (MC_Time){.sec = 1}, greet, sizeof(greet1), &greet1);
+    mc_sched_task(sched, &task2, (MC_Time){.sec = 1}, greet, sizeof(greet2), &greet2);
+    mc_task_wait_all(NULL, task1, NULL);
+    printf("task1 done\n");
+    mc_sched_task(sched, &task3, (MC_Time){.sec = 1}, greet, sizeof(greet3), &greet3);
+
+    mc_task_release(task1);
+    mc_task_release(task2);
+    mc_task_release(task3);
+
+    mc_sched_run(sched);
 
     mc_sched_delete(sched);
 

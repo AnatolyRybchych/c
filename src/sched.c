@@ -6,6 +6,7 @@
 #include <stdint.h>
 #include <malloc.h>
 #include <memory.h>
+#include <stdarg.h>
 
 #define TASK_NODE(TASK) ((TaskNode*)((uint8_t*)TASK - offsetof(TaskNode, task)))
 
@@ -24,6 +25,8 @@ enum TaskFlags{
     TASK_DELAYED = 1 << 2,
     TASK_DETACHED = 1 << 3,
     TASK_TODELETE = 1 << 4,
+    TASK_DONE = 1 << 5,
+    TASK_IGNORE = 1 << 6,
 };
 
 struct TaskHeader{
@@ -52,6 +55,10 @@ struct TaskNode{
 
 struct MC_Sched{
     SchedFlags flags;
+    MC_Time suspend;
+    MC_Time now;
+
+    TaskNode *task_under_execution;
 
     MC_PQueue *scheduled_tasks;
     TaskNode *active_tasks;
@@ -66,11 +73,18 @@ static MC_Error schedule(MC_Sched *sched, TaskNode *task);
 static void reschedule_active_tasks(MC_Sched *sched);
 static void flush_finished_tasks(MC_Sched *sched);
 static bool active_task_ready(TaskNode *task, const MC_Time *now);
-static void activate_scheduled_tasks(MC_Sched *sched, const MC_Time *now);
+static void activate_scheduled_tasks(MC_Sched *sched);
 static MC_TaskStatus terminate_task(MC_Task *task);
 static int time_cmp(const void *lhs, const void *rhs);
+static MC_TaskStatus do_some(TaskNode *task);
 
 MC_Error mc_sched_new(MC_Sched **sched){
+    MC_Time now;
+    MC_Error error = mc_gettime(MC_GETTIME_SINCE_BOOT, &now);
+    if(error != MCE_OK){
+        return error;
+    }
+
     MC_Sched *new = malloc(sizeof(MC_Sched));
     *sched = new;
     if(new == NULL){
@@ -78,6 +92,7 @@ MC_Error mc_sched_new(MC_Sched **sched){
     }
 
     memset(new, 0, sizeof(MC_Sched));
+    new->now = now;
 
     new->scheduled_tasks = mc_pqueue_create(10, time_cmp);
     if(new->scheduled_tasks == NULL){
@@ -120,21 +135,21 @@ MC_TaskStatus mc_sched_continue(MC_Sched *sched){
 
     flush_finished_tasks(sched);
 
-    MC_Time now;
-    mc_gettime(MC_GETTIME_SINCE_BOOT, &now);
+    mc_gettime(MC_GETTIME_SINCE_BOOT, &sched->now);
 
     reschedule_active_tasks(sched);
-    activate_scheduled_tasks(sched, &now);
+    activate_scheduled_tasks(sched);
 
     for(TaskNode *task = sched->active_tasks, **own = &sched->active_tasks; task;){
-        if(!active_task_ready(task, &now)){
+        if(!active_task_ready(task, &sched->now)){
             own = &task->next;
             task = *own;
             continue;;
         }
 
-        switch (task->task.do_some((MC_Task*)&task->task)){
+        switch (do_some(task)){
         case MC_TASK_DONE:
+            task->task.flags |= TASK_DONE;
             *own = task->pending ? task->pending : task->next;
             task->next = sched->finished;
             sched->finished = task;
@@ -155,13 +170,13 @@ MC_TaskStatus mc_sched_continue(MC_Sched *sched){
     else return MC_TASK_DONE;
 }
 
-void mc_sched_run(MC_Sched *sched, MC_Time suspend){
+void mc_sched_run(MC_Sched *sched){
     while (true) switch (mc_sched_continue(sched)){
     case MC_TASK_DONE:
         return;
     case MC_TASK_SUSPEND:
-        mc_sleep(&suspend);
-        // FALLTHROUGH
+        mc_sleep(&sched->suspend);
+        break;
     case MC_TASK_CONTINUE:
         break;
     }
@@ -169,6 +184,33 @@ void mc_sched_run(MC_Sched *sched, MC_Time suspend){
 
 bool mc_sched_is_terminating(MC_Sched *sched){
     return sched->flags & SCHED_TERMINATING;
+}
+
+void mc_sched_sleep(MC_Sched *sched, MC_Time delay){
+    TaskNode *task_under_execution = sched->task_under_execution;
+    if(task_under_execution){
+        task_under_execution->task.flags |= TASK_IGNORE;
+    }
+
+    MC_Time sleep_until;
+    if(mc_timesum(&sched->now, &delay, &sleep_until) == MCE_OVERFLOW){
+        while (true){
+            mc_sleep(&(MC_Time){.sec = 600});
+        }
+    }
+
+    while (mc_timecmp(&sched->now, &sleep_until) < 0) switch (mc_sched_continue(sched)){
+    case MC_TASK_DONE:
+    case MC_TASK_SUSPEND:
+        mc_sleep(&sched->suspend);
+        break;
+    case MC_TASK_CONTINUE:
+        break;
+    }
+
+    if(task_under_execution){
+        task_under_execution->task.flags &= ~TASK_IGNORE;
+    }
 }
 
 MC_Error mc_run_task(MC_Sched *sched, MC_Task **task, MC_TaskStatus (*do_some)(MC_Task *this), unsigned context_size, const void *context){
@@ -300,6 +342,41 @@ void mc_task_release(MC_Task *task){
     }
 }
 
+MC_Error mc_task_wait_all(const MC_Time *timeout, MC_Task *task, ...){
+    MC_Sched *sched = task->hdr.scheduler;
+
+    MC_Time wait_until;
+    if(timeout && mc_timesum(&sched->now, timeout, &wait_until) == MCE_OVERFLOW){
+        wait_until = (MC_Time){.sec = ~0LLU};
+    }
+
+    va_list tasks;
+    va_start(tasks, task);
+
+    for(MC_Task *cur = task; task; task = va_arg(tasks, MC_Task*)){
+        while (!(cur->hdr.flags & TASK_DONE)){
+            switch (mc_sched_continue(sched)){
+            case MC_TASK_DONE:
+                va_end(tasks);
+                return MCE_OK;
+            case MC_TASK_SUSPEND:
+                mc_sleep(&sched->suspend);
+                break;
+            case MC_TASK_CONTINUE:
+                break;
+            }
+
+            if(timeout && mc_timecmp(&wait_until, &sched->now) < 0){
+                va_end(tasks);
+                return MCE_TIMEOUT;
+            }
+        }
+    }
+
+    va_end(tasks);
+    return MCE_OK;
+}
+
 void mc_task_allow_hard_terminating(MC_Task *task){
     task->hdr.flags |= TASK_HARD_TERMINATE;
 }
@@ -368,13 +445,13 @@ static bool active_task_ready(TaskNode *task, const MC_Time *now){
         return mc_timecmp(now, &task->task.scheduled_on) >= 0;
     }
     else{
-        return true;
+        return !(task->task.flags & TASK_IGNORE);
     }
 }
 
-static void activate_scheduled_tasks(MC_Sched *sched, const MC_Time *now){
+static void activate_scheduled_tasks(MC_Sched *sched){
     for(TaskNode *scheduled = mc_pqueue_getv(sched->scheduled_tasks);
-    scheduled && mc_timecmp(now, &scheduled->task.scheduled_on) >= 0;
+    scheduled && mc_timecmp(&sched->now, &scheduled->task.scheduled_on) >= 0;
     scheduled = mc_pqueue_getv(sched->scheduled_tasks)){
         TaskNode *active = mc_pqueue_dequeuev(sched->scheduled_tasks);
         active->task.flags &= ~(TASK_SCHDULED | TASK_DELAYED);
@@ -424,4 +501,12 @@ static MC_TaskStatus terminate_task(MC_Task *task){
 
 static int time_cmp(const void *lhs, const void *rhs){
     return mc_timecmp(lhs, rhs);
+}
+
+static MC_TaskStatus do_some(TaskNode *task){
+    TaskNode *outher = task->task.scheduler->task_under_execution;
+    task->task.scheduler->task_under_execution = task;
+    MC_TaskStatus result = task->task.do_some((MC_Task*)&task->task);
+    task->task.scheduler->task_under_execution = outher;
+    return result;
 }
