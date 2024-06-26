@@ -35,6 +35,9 @@ typedef struct TestAssertation TestAssertation;
 TEST(time_diff_equ, MC_Time t1, MC_Time t2);
 TEST(time_diff_lt, MC_Time t1, MC_Time t2);
 TEST(time_diff_gt, MC_Time t1, MC_Time t2);
+TEST(time_sum);
+TEST(time_sum_overflow, MC_Time t1, MC_Time t2);
+TEST(time_sum_no_overflow, MC_Time t1, MC_Time t2);
 
 #define RUN_TESTS() \
     RUN_TEST(time_diff_equ, (MC_Time){.sec = 0, .nsec = 0}, (MC_Time){.sec = 0, .nsec = 0}) \
@@ -42,6 +45,11 @@ TEST(time_diff_gt, MC_Time t1, MC_Time t2);
     RUN_TEST(time_diff_lt, (MC_Time){.sec = 0, .nsec = 0}, (MC_Time){.sec = 0, .nsec = 1}) \
     RUN_TEST(time_diff_gt, (MC_Time){.sec = 1, .nsec = 0}, (MC_Time){.sec = 0, .nsec = 0}) \
     RUN_TEST(time_diff_gt, (MC_Time){.sec = 0, .nsec = 1}, (MC_Time){.sec = 0, .nsec = 0}) \
+    RUN_TEST(time_sum) \
+    RUN_TEST(time_sum_overflow, (MC_Time){.sec = UINT64_MAX, .nsec = MC_NSEC_IN_SEC}, (MC_Time){.sec = 0, .nsec = 1}) \
+    RUN_TEST(time_sum_overflow, (MC_Time){.sec = 0, .nsec = 1}, (MC_Time){.sec = UINT64_MAX, .nsec = MC_NSEC_IN_SEC}) \
+    RUN_TEST(time_sum_no_overflow, (MC_Time){.sec = UINT64_MAX - 1, .nsec = MC_NSEC_IN_SEC}, (MC_Time){.sec = 0, .nsec = 1}) \
+    RUN_TEST(time_sum_no_overflow, (MC_Time){.sec = 0, .nsec = 1}, (MC_Time){.sec = UINT64_MAX - 1, .nsec = MC_NSEC_IN_SEC}) \
 
 
 struct TestAssertation{

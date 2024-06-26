@@ -72,14 +72,8 @@ int mc_timediff(const MC_Time *time1, const MC_Time *time2, MC_Time *diff){
 MC_Error mc_timesum(const MC_Time *time1, const MC_Time *time2, MC_Time *result){
     MC_Error status = MCE_OK;
 
-    uint64_t sum_nsec = (time1->nsec % MC_NSEC_IN_SEC)
-        + time2->nsec % MC_NSEC_IN_SEC;
-
-    uint64_t sum_sec = (time1->nsec / MC_NSEC_IN_SEC)
-        + (time2->nsec / MC_NSEC_IN_SEC)
-        + (sum_nsec / MC_NSEC_IN_SEC);
-
-    sum_nsec %= MC_NSEC_IN_SEC;
+    uint64_t sum_nsec = (time1->nsec % MC_NSEC_IN_SEC + time1->nsec % MC_NSEC_IN_SEC) % MC_NSEC_IN_SEC;
+    uint64_t sum_sec = time1->nsec / MC_NSEC_IN_SEC + time2->nsec / MC_NSEC_IN_SEC;
 
     MC_Time sum = {
         .sec = sum_sec,
