@@ -28,6 +28,7 @@ MC_Error mc_run_task_after(MC_Task *prev, MC_Task **task, MC_TaskStatus (*do_som
 void *mc_task_data(MC_Task *task, unsigned *size);
 MC_Sched *mc_task_sched(MC_Task *task);
 MC_Error mc_task_delay(MC_Task *task, MC_Time delay);
+void mc_task_release(MC_Task *task);
 void mc_task_allow_hard_terminating(MC_Task *task);
 
 #endif // MC_SCHED_H

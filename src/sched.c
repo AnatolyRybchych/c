@@ -1,5 +1,6 @@
 #include <mc/sched.h>
 #include <mc/data/pqueue.h>
+#include <mc/util/assert.h>
 
 #include <stddef.h>
 #include <stdint.h>
@@ -21,6 +22,8 @@ enum TaskFlags{
     TASK_HARD_TERMINATE = 1 << 0,
     TASK_SCHDULED = 1 << 1,
     TASK_DELAYED = 1 << 2,
+    TASK_DETACHED = 1 << 3,
+    TASK_TODELETE = 1 << 4,
 };
 
 struct TaskHeader{
@@ -90,7 +93,7 @@ void mc_sched_delete(MC_Sched *sched){
     }
 
     sched->flags |= SCHED_TERMINATING;
-    while (sched->active_tasks || sched->finished){
+    while(sched->active_tasks){
         for(TaskNode *task = sched->active_tasks; task; task = task->next){
             if(task->task.flags & TASK_HARD_TERMINATE){
                 task->task.do_some = terminate_task;
@@ -100,10 +103,13 @@ void mc_sched_delete(MC_Sched *sched){
         mc_sched_continue(sched);
     }
 
-    while(sched->garbage){
-        TaskNode *node = sched->garbage;
-        sched->garbage = sched->garbage->next;
+    flush_finished_tasks(sched);
+
+    for(TaskNode *node, *next; sched->garbage;){
+        node = sched->garbage;
+        next = node->next;
         free(node);
+        sched->garbage = next;
     }
 
     free(sched);
@@ -117,7 +123,6 @@ MC_TaskStatus mc_sched_continue(MC_Sched *sched){
     MC_Time now;
     mc_gettime(MC_GETTIME_SINCE_BOOT, &now);
 
-    // REDUNDANCY
     reschedule_active_tasks(sched);
     activate_scheduled_tasks(sched, &now);
 
@@ -130,7 +135,7 @@ MC_TaskStatus mc_sched_continue(MC_Sched *sched){
 
         switch (task->task.do_some((MC_Task*)&task->task)){
         case MC_TASK_DONE:
-            own = task->pending ? &task->pending : &task->next;
+            *own = task->pending ? task->pending : task->next;
             task->next = sched->finished;
             sched->finished = task;
             task = *own;
@@ -146,7 +151,6 @@ MC_TaskStatus mc_sched_continue(MC_Sched *sched){
     }
 
     if(sched->active_tasks) return res;
-    else if(sched->finished) return MC_TASK_CONTINUE;
     else if(mc_pqueue_getv(sched->scheduled_tasks)) return MC_TASK_SUSPEND;
     else return MC_TASK_DONE;
 }
@@ -287,6 +291,15 @@ MC_Error mc_task_delay(MC_Task *task, MC_Time delay){
     return MCE_OK;
 }
 
+void mc_task_release(MC_Task *task){
+    if(task->hdr.flags & TASK_TODELETE){
+        free(task);
+    }
+    else{
+        task->hdr.flags |= TASK_DETACHED;
+    }
+}
+
 void mc_task_allow_hard_terminating(MC_Task *task){
     task->hdr.flags |= TASK_HARD_TERMINATE;
 }
@@ -370,11 +383,18 @@ static void activate_scheduled_tasks(MC_Sched *sched, const MC_Time *now){
 }
 
 static void flush_finished_tasks(MC_Sched *sched){
-    while(sched->finished){
-        TaskNode *task = sched->finished;
-        sched->finished = task->next;
-        task->next = sched->garbage;
-        sched->garbage = task;
+    for(TaskNode *task = sched->finished, **own = &sched->finished; task;){
+        *own = task->next;
+
+        if(task->task.flags & TASK_DETACHED){
+            task->next = sched->garbage;
+            sched->garbage = task;
+        }
+        else{
+            task->task.flags |= TASK_TODELETE;
+        }
+
+        task = *own;
     }
 }
 
