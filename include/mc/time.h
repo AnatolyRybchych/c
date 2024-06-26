@@ -3,7 +3,6 @@
 
 #include <stdint.h>
 #include <mc/error.h>
-#include <mc/util/sign.h>
 
 #define MC_MSEC_IN_SEC 1000
 #define MC_USEC_IN_SEC (MC_MSEC_IN_SEC * 1000)
@@ -21,8 +20,8 @@ enum MC_GetTime{
 };
 
 MC_Error mc_gettime(MC_GetTime gettime, MC_Time *time);
-MC_Sign mc_timecmp(const MC_Time *time1, const MC_Time *time2);
-MC_Sign mc_timediff(const MC_Time *time1, const MC_Time *time2, MC_Time *diff);
+int mc_timecmp(const MC_Time *time1, const MC_Time *time2);
+int mc_timediff(const MC_Time *time1, const MC_Time *time2, MC_Time *diff);
 
 /// @return OVERFLOW in case of overflow
 MC_Error mc_timesum(const MC_Time *time1, const MC_Time *time2, MC_Time *result);
