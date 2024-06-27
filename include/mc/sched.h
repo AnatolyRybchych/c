@@ -21,7 +21,6 @@ void mc_sched_delete(MC_Sched *sched);
 MC_TaskStatus mc_sched_continue(MC_Sched *sched);
 void mc_sched_run(MC_Sched *sched);
 bool mc_sched_is_terminating(MC_Sched *sched);
-void mc_sched_sleep(MC_Sched *sched, MC_Time delay);
 
 MC_Error mc_sched_task(MC_Sched *sched, MC_Task **task, MC_Time timeout, MC_TaskStatus (*do_some)(MC_Task *this), unsigned context_size, const void *context);
 MC_Error mc_run_task(MC_Sched *sched, MC_Task **task, MC_TaskStatus (*do_some)(MC_Task *this), unsigned context_size, const void *context);

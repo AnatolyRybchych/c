@@ -24,8 +24,7 @@ enum TaskFlags{
     TASK_SCHDULED = 1 << 1,
     TASK_DELAYED = 1 << 2,
     TASK_TODELETE = 1 << 4,
-    TASK_DONE = 1 << 5,
-    TASK_IGNORE = 1 << 6,
+    TASK_DONE = 1 << 5
 };
 
 struct TaskHeader{
@@ -184,33 +183,6 @@ void mc_sched_run(MC_Sched *sched){
 
 bool mc_sched_is_terminating(MC_Sched *sched){
     return sched->flags & SCHED_TERMINATING;
-}
-
-void mc_sched_sleep(MC_Sched *sched, MC_Time delay){
-    TaskNode *task_under_execution = sched->task_under_execution;
-    if(task_under_execution){
-        task_under_execution->task.flags |= TASK_IGNORE;
-    }
-
-    MC_Time sleep_until;
-    if(mc_timesum(&sched->now, &delay, &sleep_until) == MCE_OVERFLOW){
-        while (true){
-            mc_sleep(&(MC_Time){.sec = 600});
-        }
-    }
-
-    while (mc_timecmp(&sched->now, &sleep_until) < 0) switch (mc_sched_continue(sched)){
-    case MC_TASK_DONE:
-    case MC_TASK_SUSPEND:
-        mc_sleep(&sched->suspend);
-        break;
-    case MC_TASK_CONTINUE:
-        break;
-    }
-
-    if(task_under_execution){
-        task_under_execution->task.flags &= ~TASK_IGNORE;
-    }
 }
 
 MC_Error mc_run_task(MC_Sched *sched, MC_Task **task, MC_TaskStatus (*do_some)(MC_Task *this), unsigned context_size, const void *context){
@@ -454,9 +426,8 @@ static bool active_task_ready(TaskNode *task, const MC_Time *now){
     if(task->task.flags & TASK_SCHDULED){
         return mc_timecmp(now, &task->task.scheduled_on) >= 0;
     }
-    else{
-        return !(task->task.flags & TASK_IGNORE);
-    }
+
+    return true;
 }
 
 static void activate_scheduled_tasks(MC_Sched *sched){
