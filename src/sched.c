@@ -23,7 +23,6 @@ enum TaskFlags{
     TASK_HARD_TERMINATE = 1 << 0,
     TASK_SCHDULED = 1 << 1,
     TASK_DELAYED = 1 << 2,
-    TASK_DETACHED = 1 << 3,
     TASK_TODELETE = 1 << 4,
     TASK_DONE = 1 << 5,
     TASK_IGNORE = 1 << 6,
@@ -31,6 +30,7 @@ enum TaskFlags{
 
 struct TaskHeader{
     TaskFlags flags;
+    size_t ref_count;
     MC_Sched *scheduler;
     MC_Time scheduled_on;
     MC_TaskStatus (*do_some)(MC_Task *task);
@@ -333,12 +333,21 @@ MC_Error mc_task_delay(MC_Task *task, MC_Time delay){
     return MCE_OK;
 }
 
-void mc_task_release(MC_Task *task){
+MC_Task *mc_task_ref(MC_Task *task){
+    task->hdr.ref_count++;
+    return task;
+}
+
+void mc_task_unref(MC_Task *task){
+    MC_ASSERT_FAULT(task->hdr.ref_count > 0);
+    task->hdr.ref_count--;
+
+    if(task->hdr.ref_count){
+        return;
+    }
+
     if(task->hdr.flags & TASK_TODELETE){
         free(task);
-    }
-    else{
-        task->hdr.flags |= TASK_DETACHED;
     }
 }
 
@@ -409,6 +418,7 @@ static TaskNode *create_task(MC_Sched *sched, MC_TaskStatus (*do_some)(MC_Task *
     new->next = NULL;
     new->pending = NULL;
     new->task.flags = 0;
+    new->task.ref_count = 1;
     new->task.scheduler = sched;
     new->task.do_some = do_some;
     new->buffer_size = context_size;
@@ -463,7 +473,7 @@ static void flush_finished_tasks(MC_Sched *sched){
     for(TaskNode *task = sched->finished, **own = &sched->finished; task;){
         *own = task->next;
 
-        if(task->task.flags & TASK_DETACHED){
+        if(task->task.ref_count == 0){
             task->next = sched->garbage;
             sched->garbage = task;
         }

@@ -4,5 +4,6 @@
 #include <assert.h>
 
 #define MC_ASSERT_BUG(...) assert(__VA_ARGS__)
+#define MC_ASSERT_FAULT(...) assert(__VA_ARGS__)
 
 #endif // MC_ASSERT_H
