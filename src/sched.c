@@ -210,6 +210,10 @@ bool mc_sched_is_terminating(MC_Sched *sched){
     return sched->flags & SCHED_TERMINATING;
 }
 
+void mc_sched_set_suspend_interval(MC_Sched *sched, MC_Time suspend){
+    sched->suspend = suspend;
+}
+
 MC_Error mc_run_task(MC_Sched *sched, MC_Task **task, MC_TaskStatus (*do_some)(MC_Task *this), unsigned context_size, const void *context){
     if(sched->flags & SCHED_TERMINATING){
         return MCE_BUSY;
@@ -347,6 +351,10 @@ MC_Error mc_task_delay(MC_Task *task, MC_Time delay){
     task->hdr.scheduled_on = schedule_on;
     task->hdr.flags |= TASK_DELAYED;
     return MCE_OK;
+}
+
+void mc_task_set_handler(MC_Task *task, MC_TaskStatus (*do_some)(MC_Task *this)){
+    task->hdr.do_some = do_some ? do_some : terminate_task;
 }
 
 MC_Task *mc_task_ref(MC_Task *task){
