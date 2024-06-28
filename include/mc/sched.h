@@ -14,6 +14,8 @@ enum MC_TaskStatus{
     MC_TASK_DONE,
     MC_TASK_SUSPEND,
     MC_TASK_CONTINUE,
+
+    __MC_TASK_STATUS_COUNT
 };
 
 MC_Error mc_sched_new(MC_Sched **sched);
@@ -25,6 +27,8 @@ bool mc_sched_is_terminating(MC_Sched *sched);
 MC_Error mc_sched_task(MC_Sched *sched, MC_Task **task, MC_Time timeout, MC_TaskStatus (*do_some)(MC_Task *this), unsigned context_size, const void *context);
 MC_Error mc_run_task(MC_Sched *sched, MC_Task **task, MC_TaskStatus (*do_some)(MC_Task *this), unsigned context_size, const void *context);
 MC_Error mc_run_task_after(MC_Task *prev, MC_Task **task, MC_TaskStatus (*do_some)(MC_Task *this), unsigned context_size, const void *context);
+MC_Error mc_run_task_after_all(MC_Sched *sched, unsigned prev_cnt, MC_Task *prev[prev_cnt], MC_Task **task,
+    MC_TaskStatus (*do_some)(MC_Task *this), unsigned context_size, const void *context);
 void *mc_task_data(MC_Task *task, unsigned *size);
 MC_Sched *mc_task_sched(MC_Task *task);
 MC_Error mc_task_delay(MC_Task *task, MC_Time delay);
