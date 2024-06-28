@@ -435,13 +435,11 @@ static TaskNode *create_task(MC_Sched *sched, MC_TaskStatus (*do_some)(MC_Task *
             return NULL;
         }
 
-        *new = (TaskNode){0};
         new->buffer_capacity = context_size;
     }
 
-    new->next = NULL;
-    new->pending = NULL;
-    new->task.flags = 0;
+    *new = (TaskNode){.buffer_capacity = new->buffer_capacity};
+
     new->task.ref_count = 1;
     new->task.scheduler = sched;
     new->task.do_some = do_some;
