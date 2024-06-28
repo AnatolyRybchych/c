@@ -1,5 +1,6 @@
 #include <mc/sched.h>
 #include <mc/data/pqueue.h>
+#include <mc/data/list.h>
 #include <mc/util/assert.h>
 
 #include <stddef.h>
@@ -48,7 +49,7 @@ struct MC_Task{
 };
 
 struct TaskNode{
-    TaskNode *next;
+    MC_List *next;
     TaskNode *pending;
     size_t buffer_capacity;
 
@@ -68,7 +69,7 @@ struct MC_Sched{
     MC_PQueue *scheduled_tasks;
     TaskNode *pre_active;
     TaskNode *active;
-    TaskNode *finished, *finished_last;
+    TaskNode *finished;
     TaskNode *garbage;
 };
 
@@ -79,13 +80,7 @@ struct RunAfterAllTaskData{
 
 static TaskNode *create_task(MC_Sched *sched, MC_TaskStatus (*do_some)(MC_Task *this), unsigned context_size, const void *context);
 
-static void set_pending_all(TaskNode *task, TaskNode *dependent);
-static void set_pre_active(MC_Sched *sched, TaskNode *task);
-static void set_active(MC_Sched *sched, TaskNode *task);
-static void set_active_all(MC_Sched *sched, TaskNode *task);
-static void set_finished(MC_Sched *sched, TaskNode *finished);
-static void set_garbage(MC_Sched *sched, TaskNode *garbage);
-
+static void set_pending(TaskNode *task, TaskNode *dependent);
 static MC_Error schedule(MC_Sched *sched, TaskNode *task);
 static void reschedule_active_tasks(MC_Sched *sched);
 static void flush_finished_tasks(MC_Sched *sched);
@@ -127,10 +122,11 @@ void mc_sched_delete(MC_Sched *sched){
     }
 
     sched->flags |= SCHED_TERMINATING;
-    while(sched->active){
-        for(TaskNode *task = sched->active; task; task = task->next){
-            if(task->task.flags & TASK_HARD_TERMINATE){
-                task->task.do_some = terminate_task;
+    
+    while(!mc_list_empty(sched->active)){
+        MC_LIST_FOR(TaskNode, sched->active, active){
+            if(active->task.flags & TASK_HARD_TERMINATE){
+                active->task.do_some = terminate_task;
             }
         }
 
@@ -139,11 +135,8 @@ void mc_sched_delete(MC_Sched *sched){
 
     flush_finished_tasks(sched);
 
-    for(TaskNode *node, *next; sched->garbage;){
-        node = sched->garbage;
-        next = node->next;
-        free(node);
-        sched->garbage = next;
+    MC_LIST_FOR_LOCATIONS(TaskNode, sched->garbage, garbage){
+        free(mc_list_remove(garbage_location));
     }
 
     free(sched);
@@ -159,37 +152,35 @@ MC_TaskStatus mc_sched_continue(MC_Sched *sched){
     reschedule_active_tasks(sched);
     activate_scheduled_tasks(sched);
 
-    for(TaskNode *task = sched->active, **own = &sched->active; task;){
+    MC_LIST_FORS(TaskNode, sched->active, task){
         if(!active_task_ready(task, &sched->now)){
-            own = &task->next;
-            task = *own;
-            continue;;
+            continue;
         }
 
         switch (do_some(task)){
         case MC_TASK_DONE:
+            if(task->pending){
+                mc_list_add(&sched->pre_active, task->pending);
+                task->pending = NULL;
+            }
+
             task->task.flags |= TASK_DONE;
-            *own = task->next ? task->next : task->pending;
-            set_finished(sched, task);
-            task = *own;
+            mc_list_add(&sched->finished, mc_list_remove(task_location));
             break;
         case MC_TASK_CONTINUE:
             res = MC_TASK_CONTINUE;
             // FALLTHROUGH
         case MC_TASK_SUSPEND:
-            own = &task->next;
-            task = *own;
             break;
         case TASK_INTERNAL_STATUS_DISAPPEAR:
-            *own = task->next;
-            task = *own;
+            mc_list_remove(task_location);
             break;
         }
     }
 
     activate_pre_active_tasks(sched);
 
-    if(sched->active) return res;
+    if(!mc_list_empty(sched->active)) return res;
     else if(mc_pqueue_getv(sched->scheduled_tasks)) return MC_TASK_SUSPEND;
     else return MC_TASK_DONE;
 }
@@ -225,7 +216,7 @@ MC_Error mc_run_task(MC_Sched *sched, MC_Task **task, MC_TaskStatus (*do_some)(M
         return MCE_OUT_OF_MEMORY;
     }
     else{
-        set_active(sched, new);
+        mc_list_add(&sched->active, new);
         *task = TASK(new);
         return MCE_OK;
     }
@@ -277,7 +268,7 @@ MC_Error mc_run_task_after(MC_Task *prev, MC_Task **task, MC_TaskStatus (*do_som
     }
     else{
         *task = TASK(new);
-        set_pending_all(TASK_NODE(prev), new);
+        set_pending(TASK_NODE(prev), new);
         return MCE_OK;
     }
 }
@@ -307,7 +298,7 @@ MC_Error mc_run_task_after_all(MC_Sched *sched, unsigned prev_cnt, MC_Task *prev
     TaskNode *waiting_task = create_task(sched, run_after_all, sizeof(RunAfterAllTaskData) + sizeof(MC_Task*[prev_cnt]), NULL);
     if(waiting_task == NULL){
         *task = NULL;
-        set_garbage(sched, run_after);
+        mc_list_add(&sched->garbage, run_after);
         return MCE_OUT_OF_MEMORY;
     }
 
@@ -319,7 +310,7 @@ MC_Error mc_run_task_after_all(MC_Sched *sched, unsigned prev_cnt, MC_Task *prev
     waiting_data->prev_cnt = prev_cnt;
 
     for(MC_Task **prev_task = prev; prev_task != &prev[prev_cnt]; prev_task++){
-        set_pending_all(TASK_NODE(*prev_task), waiting_task);
+        set_pending(TASK_NODE(*prev_task), waiting_task);
     }
 
     return MCE_OK;
@@ -416,17 +407,15 @@ void mc_task_allow_hard_terminating(MC_Task *task){
 
 static TaskNode *create_task(MC_Sched *sched, MC_TaskStatus (*do_some)(MC_Task *this), unsigned context_size, const void *context){
     TaskNode *new;
-    if (sched->garbage){
-        new = sched->garbage;
+
+    if(!mc_list_empty(sched->garbage)){
+        new = mc_list_remove(&sched->garbage);
         if(context_size > new->buffer_capacity){
             new = realloc(new, sizeof(TaskNode) + context_size);
             if(new == NULL){
-                //TODO: clean up some garbage and try again
+                free(new);
                 return NULL;
             }
-
-            sched->garbage = sched->garbage->next;
-            new->buffer_capacity = context_size;
         }
     }
     else{
@@ -451,31 +440,6 @@ static TaskNode *create_task(MC_Sched *sched, MC_TaskStatus (*do_some)(MC_Task *
     return new;
 }
 
-static void set_active(MC_Sched *sched, TaskNode *task){
-    task->next = sched->active;
-    sched->active = task;
-}
-
-static void set_active_all(MC_Sched *sched, TaskNode *task){
-    for(TaskNode *cur = task, *next = cur ? cur->next : NULL; cur; cur = next, next = next ? next->next : NULL){
-        set_active(sched, cur);
-    }
-}
-
-static void set_finished(MC_Sched *sched, TaskNode *finished){
-    finished->next = sched->finished;
-    sched->finished = finished;
-}
-
-static void set_garbage(MC_Sched *sched, TaskNode *garbage){
-    garbage->next = sched->garbage;
-    sched->garbage = garbage;
-}
-
-static void set_pre_active(MC_Sched *sched, TaskNode *task){
-    task->next = sched->pre_active;
-    sched->pre_active = task;
-}
 
 static MC_Error schedule(MC_Sched *sched, TaskNode *task){
     MC_PQueue *scheduled_tasks = mc_pqueue_enqueue(sched->scheduled_tasks, task);
@@ -503,49 +467,38 @@ static void activate_scheduled_tasks(MC_Sched *sched){
     scheduled = mc_pqueue_getv(sched->scheduled_tasks)){
         TaskNode *active = mc_pqueue_dequeuev(sched->scheduled_tasks);
         active->task.flags &= ~(TASK_SCHDULED | TASK_DELAYED);
-        set_active_all(sched, active);
+        mc_list_add(&sched->active, active);
     }
 }
 
 static void activate_pre_active_tasks(MC_Sched *sched){
-    if(sched->pre_active){
-        set_active_all(sched, sched->pre_active);
-        sched->pre_active = NULL;
+    MC_LIST_FOR_LOCATIONS(TaskNode, sched->pre_active, pre_active){
+        mc_list_add(&sched->active, mc_list_remove(pre_active_location));
     }
 }
 
 static void flush_finished_tasks(MC_Sched *sched){
-    for(TaskNode *cur = sched->finished, *next; cur; cur = next){
-        next = cur->next;
-
-        if(cur->task.ref_count == 0){
-            set_garbage(sched, cur);
+    MC_LIST_FORS(TaskNode, sched->finished, finished){
+        if(finished->task.ref_count == 0){
+            mc_list_add(&sched->garbage, mc_list_remove(finished_location));
         }
         else{
-            cur->task.flags |= TASK_TODELETE;
-            cur->next = NULL;
+            finished->task.flags |= TASK_TODELETE;
+            mc_list_remove(finished_location);
         }
     }
-
-    sched->finished = NULL;
 }
 
 static void reschedule_active_tasks(MC_Sched *sched){
-    TaskNode **own = &sched->active;
-    for(TaskNode *active = sched->active;active;){
+    MC_LIST_FORS(TaskNode, sched->active, active){
         if(active->task.flags & (TASK_DELAYED | TASK_SCHDULED)){
             active->task.flags &= ~(TASK_DELAYED | TASK_SCHDULED);
 
-            if(schedule(sched, active) == MCE_OK){
-                *own = active->next;
-                active->next = NULL;
-                active = *own;
-                continue;
+            mc_list_remove(active_location);
+            if(schedule(sched, active) != MCE_OK){
+                mc_list_add(&active_location, active);
             }
         }
-
-        own = &active->next;
-        active = *own;
     }
 }
 
@@ -572,18 +525,18 @@ static MC_TaskStatus run_after_all(MC_Task *task){
     MC_ASSERT_BUG(data->prev_cnt > 0);
     data->prev_cnt--;
     if(data->prev_cnt == 0){
-        set_pre_active(mc_task_sched(task), data->task);
+        mc_list_add(&mc_task_sched(task)->pre_active, data->task);
         return MC_TASK_DONE;
     }
 
     return TASK_INTERNAL_STATUS_DISAPPEAR;
 }
 
-static void set_pending_all(TaskNode *task, TaskNode *dependent){
+static void set_pending(TaskNode *task, TaskNode *dependent){
     if(task->pending){
         TaskNode *last_dependend;
-        for(last_dependend = dependent; last_dependend; last_dependend = last_dependend->next);
-        last_dependend->next = task->pending;
+        for(last_dependend = dependent; last_dependend; last_dependend = (void*)last_dependend->next);
+        last_dependend->next = (void*)task->pending;
         task->pending = last_dependend;
     }
     else{

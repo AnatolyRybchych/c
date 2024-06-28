@@ -14,6 +14,7 @@ objects			+= time.o
 objects			+= data/string.o
 objects			+= data/vector.o
 objects			+= data/pqueue.o
+objects			+= data/list.o
 
 
 DEMO_BIN		:= bin/demo

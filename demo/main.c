@@ -4,6 +4,7 @@
 #include <mc/sched.h>
 #include <mc/time.h>
 #include <mc/data/pqueue.h>
+#include <mc/data/list.h>
 
 #include <stdbool.h>
 #include <ctype.h>
