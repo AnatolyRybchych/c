@@ -2,11 +2,15 @@
 #define MC_DATA_STRING_H
 
 #include <stddef.h>
+#include <stdarg.h>
 #include <mc/data/str.h>
 
 typedef struct MC_String MC_String;
 
 MC_String *mc_string(MC_Str str);
+MC_String *mc_stringn(size_t len);
+MC_String *mc_string_fmtv(const char *fmt, va_list args);
+MC_String *mc_string_fmt(const char *fmt, ...);
 
 struct MC_String{
     size_t len;

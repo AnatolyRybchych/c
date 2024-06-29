@@ -94,6 +94,41 @@ MC_Error mc_stream_write_all(MC_Stream *stream, size_t size, const void *data){
     return MCE_OK;
 }
 
+MC_Error mc_stream_fmtv(MC_Stream *stream, const char *fmt, va_list args){
+    MC_Error status;
+
+    va_list args_cp;
+    va_copy(args_cp, args);
+    int len = vsnprintf(NULL, 0, fmt, args);
+    va_end(args_cp);
+
+    if(len < 512){
+        char buffer[len + 1];
+        vsnprintf(buffer, sizeof(buffer), fmt, args_cp);
+        status = mc_stream_write_all(stream, len, buffer);
+    }
+    else{
+        MC_String *buffer = mc_string_fmtv(fmt, args);
+        if(buffer){
+            status = mc_stream_write_all(stream, buffer->len, buffer->data);
+            free(buffer);
+        }
+        else{
+            status = MCE_OUT_OF_MEMORY;
+        }
+    }
+    
+    return status;
+}
+
+MC_Error mc_stream_fmt(MC_Stream *stream, const char *fmt, ...){
+    va_list args;
+    va_start(args, fmt);
+    MC_Error error = mc_stream_fmtv(stream, fmt, args);
+    va_end(args);
+    return error;
+}
+
 MC_Error mc_stream_flush(MC_Stream *stream){
     if(stream && stream->vtab.flush){
         return stream->vtab.flush(stream->data);
