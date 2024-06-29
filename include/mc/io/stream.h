@@ -20,6 +20,9 @@ MC_Error mc_stream_write(MC_Stream *stream, size_t size, const void *data, size_
 MC_Error mc_stream_write_all(MC_Stream *stream, size_t size, const void *data);
 MC_Error mc_stream_fmtv(MC_Stream *stream, const char *fmt, va_list args);
 MC_Error mc_stream_fmt(MC_Stream *stream, const char *fmt, ...);
+
+MC_Error mc_stream_packv(MC_Stream *stream, const char *fmt, va_list args);
+MC_Error mc_stream_pack(MC_Stream *stream, const char *fmt, ...);
 MC_Error mc_stream_flush(MC_Stream *stream);
 
 MC_Error mc_stream_get_cursor(MC_Stream *stream, size_t *cursor);

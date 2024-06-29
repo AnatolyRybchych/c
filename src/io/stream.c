@@ -1,4 +1,7 @@
 #include "_stream.h"
+
+#include <mc/data/struct.h>
+
 #include <malloc.h>
 #include <memory.h>
 
@@ -127,6 +130,37 @@ MC_Error mc_stream_fmt(MC_Stream *stream, const char *fmt, ...){
     MC_Error error = mc_stream_fmtv(stream, fmt, args);
     va_end(args);
     return error;
+}
+
+MC_Error mc_stream_packv(MC_Stream *stream, const char *fmt, va_list args){
+    int size = mc_struct_calcsize(fmt);
+    if(size < 0){
+        return MCE_INVALID_INPUT;
+    }
+
+    if(size <= 512){
+        char buffer[512];
+        mc_struct_vnpack(buffer, ~(unsigned)0, fmt, args);
+        return mc_stream_write_all(stream, size, buffer);
+    }
+
+    char *buffer = malloc(size);
+    if(buffer == NULL){
+        return MCE_OUT_OF_MEMORY;
+    }
+
+    mc_struct_vnpack(buffer, ~(unsigned)0, fmt, args);
+    MC_Error status = mc_stream_write_all(stream, size, buffer);
+    free(buffer);
+    return status;
+}
+
+MC_Error mc_stream_pack(MC_Stream *stream, const char *fmt, ...){
+    va_list args;
+    va_start(args, fmt);
+    size_t res = mc_stream_packv(stream, fmt, args);
+    va_end(args);
+    return res;
 }
 
 MC_Error mc_stream_flush(MC_Stream *stream){

@@ -75,7 +75,7 @@ MC_Stream *mc_get_stdout(void){
 
     static MC_Stream *stdout_stream = NULL;
     if(stdout_stream == NULL){
-        MC_Error error = open_fd_stream(&stdout_stream, STDIN_FILENO, stdout_string);
+        MC_Error error = open_fd_stream(&stdout_stream, STDOUT_FILENO, stdout_string);
         if(error){
             return NULL;
         }
@@ -95,7 +95,7 @@ MC_Stream *mc_get_stderr(void){
 
     static MC_Stream *stderr_stream = NULL;
     if(stderr_stream == NULL){
-        MC_Error error = open_fd_stream(&stderr_stream, STDIN_FILENO, stderr_string);
+        MC_Error error = open_fd_stream(&stderr_stream, STDERR_FILENO, stderr_string);
         if(error){
             return NULL;
         }

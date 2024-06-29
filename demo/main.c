@@ -6,6 +6,7 @@
 #include <mc/data/pqueue.h>
 #include <mc/data/list.h>
 #include <mc/data/string.h>
+#include <mc/data/struct.h>
 #include <mc/io/stream.h>
 #include <mc/io/file.h>
 
@@ -15,10 +16,7 @@
 #include <stdlib.h>
 
 int main(){
-    MC_String *test = mc_string_fmt("test %i, %zu\n", 10, (size_t)20);
-    printf("%s\n", test->data);
-
-    mc_stream_fmt(MC_STDOUT, "test %i, %zu\n", 10, (size_t)20);
+    mc_stream_pack(MC_STDOUT, "<I", 10);
     mc_stream_flush(MC_STDOUT);
 }
 
