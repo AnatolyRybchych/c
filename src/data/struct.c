@@ -1,6 +1,7 @@
 #include <mc/data/struct.h>
 #include <mc/util/assert.h>
 #include <mc/util/memory.h>
+#include <mc/util/minmax.h>
 
 #include <stdint.h>
 #include <stdalign.h>
@@ -224,15 +225,18 @@ static int pack_aligned_native(void *buffer, unsigned buffer_size, const char *f
         ITER_NATIVE_FMT()
         #undef FMT
 
-        #define FMT(CH, _, NATIVE_TYPE, ...) \
-        case CH:{ \
-            NATIVE_TYPE *val = va_arg(args, NATIVE_TYPE*); \
-            cur_size = ALIGN(alignof(NATIVE_TYPE), cur_size); \
-            memcpy(&U8(buffer)[cur_size], val, alignof(NATIVE_TYPE) * (mul - 1) + sizeof(NATIVE_TYPE)); \
-            cur_size += alignof(NATIVE_TYPE) * (mul - 1) + sizeof(NATIVE_TYPE); \
+        case 's':{ \
+            const char *val = va_arg(args, char*); \
+            int len = strnlen(val, mul); \
+            memcpy(U8(buffer) + cur_size, val, sizeof(char) * len); \
+            memset(U8(buffer) + cur_size + len, 0, mul - len); \
+            cur_size += sizeof(char) * mul; \
         } break;
-        ITER_ARR_FMT()
-        #undef FMT
+        case 'p':{ \
+            uint8_t *val = va_arg(args, uint8_t*); \
+            memcpy(U8(buffer) + cur_size, val, sizeof(uint8_t) * mul); \
+            cur_size += sizeof(uint8_t) * mul; \
+        } break;
         default: return -1;
         }
         
@@ -274,14 +278,18 @@ static int pack_unaligned_native(void *buffer, unsigned buffer_size, const char 
         ITER_NATIVE_FMT()
         #undef FMT
 
-        #define FMT(CH, _, NATIVE_TYPE, ...) \
-        case CH:{ \
-            NATIVE_TYPE *val = va_arg(args, NATIVE_TYPE*); \
-            memcpy(buf, val, sizeof(NATIVE_TYPE) * repeat); \
-            buf += sizeof(NATIVE_TYPE) * repeat; \
+        case 's':{ \
+            const char *val = va_arg(args, char*); \
+            int len = strnlen(val, mul); \
+            memcpy(buf, val, sizeof(char) * len); \
+            memset(buf + len, 0, mul - len); \
+            buf += sizeof(char) * mul; \
         } break;
-        ITER_ARR_FMT()
-        #undef FMT
+        case 'p':{ \
+            uint8_t *val = va_arg(args, uint8_t*); \
+            memcpy(buf, val, sizeof(uint8_t) * mul); \
+            buf += sizeof(uint8_t) * mul; \
+        } break;
         default: return -1;
         }
     }
@@ -323,14 +331,18 @@ static int pack_unaligned_native_inverse_endian(void *buffer, unsigned buffer_si
         ITER_NATIVE_FMT()
         #undef FMT
 
-        #define FMT(CH, _, NATIVE_TYPE, ...) \
-        case CH:{ \
-            NATIVE_TYPE *val = va_arg(args, NATIVE_TYPE*); \
-            memcpy(buf, val, sizeof(NATIVE_TYPE) * repeat); \
-            buf += sizeof(NATIVE_TYPE) * repeat; \
+        case 's':{ \
+            const char *val = va_arg(args, char*); \
+            int len = strnlen(val, mul); \
+            memcpy(buf, val, sizeof(char) * len); \
+            memset(buf + len, 0, mul - len); \
+            buf += sizeof(char) * mul; \
         } break;
-        ITER_ARR_FMT()
-        #undef FMT
+        case 'p':{ \
+            uint8_t *val = va_arg(args, uint8_t*); \
+            memcpy(buf, val, sizeof(uint8_t) * mul); \
+            buf += sizeof(uint8_t) * mul; \
+        } break;
         default: return -1;
         }
     }

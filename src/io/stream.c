@@ -139,7 +139,7 @@ MC_Error mc_stream_packv(MC_Stream *stream, const char *fmt, va_list args){
     }
 
     if(size <= 512){
-        char buffer[512];
+        char buffer[size];
         mc_struct_vnpack(buffer, ~(unsigned)0, fmt, args);
         return mc_stream_write_all(stream, size, buffer);
     }
