@@ -11,33 +11,42 @@
 
 #define U8(PTR) ((uint8_t*)(PTR))
 
-
+#define GET_INT(ARGS) va_arg(ARGS, int)
+#define GET_UINT(ARGS) va_arg(ARGS, unsigned)
+#define GET_DOUBLE(ARGS) va_arg(ARGS, double)
+#define GET_LONG(ARGS) va_arg(ARGS, long)
+#define GET_LONG_LONG(ARGS) va_arg(ARGS, long long)
+#define GET_ULONG_LONG(ARGS) va_arg(ARGS, unsigned long long)
+#define GET_ZERO(ARGS) (0)
+#define GET_BOOL(ARGS) (GET_INT(ARGS) ? 1 : 0)
+#define GET_PTR(ARGS) va_arg(ARGS, void*)
+#define GET_SIZE(ARGS) va_arg(ARGS, size_t)
 
 #define ITER_BASIC_FMT() \
-    FMT('x', uint8_t,   uint8_t,                int) \
-    FMT('c', uint8_t,   char,                   int) \
-    FMT('b', uint8_t,   signed char,            int) \
-    FMT('B', int8_t,    unsigned char,          int) \
-    FMT('?', uint8_t,   bool,                   int) \
-    FMT('h', int16_t,   short,                  int) \
-    FMT('H', uint16_t,  unsigned short,         int) \
-    FMT('e', uint16_t,  uint16_t,               double) \
-    FMT('i', int32_t,   int,                    int) \
-    FMT('I', uint32_t,  unsigned int,           unsigned int) \
-    FMT('l', int32_t,   long int,               long) \
-    FMT('L', uint32_t,  unsigned long int,      long) \
-    FMT('f', float,     float,                  double) \
-    FMT('q', int64_t,   long long int,          long long) \
-    FMT('Q', uint64_t,  unsigned long long int, unsigned long long) \
-    FMT('d', double,    double,                 double) \
+    FMT('x', uint8_t,   uint8_t,                GET_ZERO) \
+    FMT('c', uint8_t,   char,                   GET_INT) \
+    FMT('b', uint8_t,   signed char,            GET_INT) \
+    FMT('B', int8_t,    unsigned char,          GET_INT) \
+    FMT('?', uint8_t,   bool,                   GET_BOOL) \
+    FMT('h', int16_t,   short,                  GET_INT) \
+    FMT('H', uint16_t,  unsigned short,         GET_INT) \
+    FMT('e', uint16_t,  uint16_t,               GET_DOUBLE) \
+    FMT('i', int32_t,   int,                    GET_INT) \
+    FMT('I', uint32_t,  unsigned int,           GET_UINT) \
+    FMT('l', int32_t,   long int,               GET_LONG) \
+    FMT('L', uint32_t,  unsigned long int,      GET_LONG) \
+    FMT('f', float,     float,                  GET_DOUBLE) \
+    FMT('q', int64_t,   long long int,          GET_LONG_LONG) \
+    FMT('Q', uint64_t,  unsigned long long int, GET_ULONG_LONG) \
+    FMT('d', double,    double,                 GET_DOUBLE) \
 
 #define ITER_ARR_FMT() \
-    FMT('s', uint8_t,   char,   int) \
-    FMT('p', uint8_t,   char,   int) 
+    FMT('s', uint8_t,   char,   GET_INT) \
+    FMT('p', uint8_t,   char,   GET_INT) 
 
 #define ITER_NATIVE_FMT() \
-    FMT('n',,           size_t, size_t) \
-    FMT('P',,           void*,  void*) \
+    FMT('n',,           size_t, GET_SIZE) \
+    FMT('P',,           void*,  GET_PTR) \
 
 #define ITER_FMT() \
     ITER_BASIC_FMT() \
@@ -202,10 +211,10 @@ static int pack_aligned_native(void *buffer, unsigned buffer_size, const char *f
         repeat = 0;
 
         switch (ch){
-        #define FMT(CH, _, NATIVE_TYPE, VA_TYPE, ...) \
+        #define FMT(CH, _, NATIVE_TYPE, VA_GET, ...) \
         case CH:{ \
             for(int i = 0; i < mul; i++){ \
-                NATIVE_TYPE val = va_arg(args, VA_TYPE); \
+                NATIVE_TYPE val = VA_GET(args); \
                 cur_size = ALIGN(alignof(NATIVE_TYPE), cur_size); \
                 memcpy(&U8(buffer)[cur_size], &val, sizeof(NATIVE_TYPE)); \
                 cur_size += sizeof(NATIVE_TYPE); \
@@ -253,10 +262,10 @@ static int pack_unaligned_native(void *buffer, unsigned buffer_size, const char 
         repeat = 0;
 
         switch (ch){
-        #define FMT(CH, _, NATIVE_TYPE, VA_TYPE, ...) \
+        #define FMT(CH, _, NATIVE_TYPE, VA_GET, ...) \
         case CH:{ \
             for(int i = 0; i < mul; i++){ \
-                NATIVE_TYPE val = va_arg(args, VA_TYPE); \
+                NATIVE_TYPE val = VA_GET(args); \
                 memcpy(buf, &val, sizeof(NATIVE_TYPE)); \
                 buf += sizeof(NATIVE_TYPE);\
             } \
@@ -301,10 +310,10 @@ static int pack_unaligned_native_inverse_endian(void *buffer, unsigned buffer_si
         repeat = 0;
 
         switch (ch){
-        #define FMT(CH, _, NATIVE_TYPE, VA_TYPE, ...) \
+        #define FMT(CH, _, NATIVE_TYPE, VA_GET, ...) \
         case CH:{ \
             for(int i = 0; i < mul; i++){ \
-                NATIVE_TYPE val = va_arg(args, VA_TYPE); \
+                NATIVE_TYPE val = VA_GET(args); \
                 memcpy(buf, &val, sizeof(NATIVE_TYPE)); \
                 inverse_endian(buf, sizeof(NATIVE_TYPE)); \
                 buf += sizeof(NATIVE_TYPE); \
