@@ -14,12 +14,15 @@ typedef unsigned MC_Error;
     MC_ERROR(BUSY) \
     MC_ERROR(OVERFLOW) \
     MC_ERROR(TIMEOUT) \
+    MC_ERROR(AGAIN) \
 
 enum MC_Error{
     #define MC_ERROR(ERROR, ...) MCE_##ERROR,
     MC_ITER_ERRORS()
     #undef MC_ERROR
 };
+
+MC_Error mc_error_from_errno(int err_no);
 
 inline const char *mc_strerror(MC_Error err){
     switch (err){
@@ -29,5 +32,6 @@ inline const char *mc_strerror(MC_Error err){
     default: return (const char *)0;
     }
 }
+
 
 #endif // MC_ERROR_H
