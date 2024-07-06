@@ -16,7 +16,7 @@
 #include <stdlib.h>
 
 int main(){
-    mc_stream_pack(MC_STDOUT, "3sc", "tewsdf", '\n');
-    mc_stream_flush(MC_STDOUT);
+    mc_pack(MC_STDOUT, "3sc", "tewsdf", '\n');
+    mc_flush(MC_STDOUT);
 }
 

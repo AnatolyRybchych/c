@@ -9,7 +9,7 @@
 
 static int open_flags(MC_OpenMode mode);
 
-MC_Error mc_file_open(MC_Stream **file, MC_Str path, MC_OpenMode mode){
+MC_Error mc_fopen(MC_Stream **file, MC_Str path, MC_OpenMode mode){
     int flags = open_flags(mode);
     if(flags < 0){
         return MCE_INVALID_INPUT;

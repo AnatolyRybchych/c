@@ -28,12 +28,12 @@ MC_Error open_fd_stream(MC_Stream **stream, int fd, MC_String *path){
     //     buffer_size = stat(path->data, &stats) ? buffer_size : stats.st_blksize;
     // }
 
-    MC_Error error = mc_stream_open(stream, &vtbl_fd, sizeof(FileCtx) + buffer_size, NULL);
+    MC_Error error = mc_open(stream, &vtbl_fd, sizeof(FileCtx) + buffer_size, NULL);
     if(error){
         return error;
     }
 
-    FileCtx *ctx = mc_stream_ctx(*stream);
+    FileCtx *ctx = mc_ctx(*stream);
     ctx->fd = fd;
     ctx->path = path;
     ctx->buffer_size = buffer_size;
