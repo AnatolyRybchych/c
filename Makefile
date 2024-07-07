@@ -20,12 +20,16 @@ objects			+= io/stream.o
 objects			+= io/file.o
 objects			+= io/fd.o
 
+objects			+= wm/wm.o
+
+objects			+= xlib_wm/wm.o
+
 
 DEMO_BIN		:= bin/demo
 DEMO_OBJ_DIR	:= build/demo/obj
 DEMO_SRC_DIR	:= demo
 DEMO_CARGS		:= -ggdb -Wall -Wextra -Werror -pedantic -Iinclude
-DEMO_LDARGS		:= -static -L$(LIB_DIR) -l$(LIBMC)
+DEMO_LDARGS		:= -L$(LIB_DIR) -l$(LIBMC) -lX11
 
 demo_objects	+= main.o
 

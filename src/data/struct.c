@@ -122,7 +122,7 @@ static int calcsize_aligned_native(const char *fmt){
         switch (ch){
         #define FMT(CH, _, NATIVE_TYPE, ...) \
         case CH: \
-            size = ALIGN(alignof(NATIVE_TYPE), size) + alignof(NATIVE_TYPE) * (mul -1) + sizeof(NATIVE_TYPE); \
+            size = MC_ALIGN(alignof(NATIVE_TYPE), size) + alignof(NATIVE_TYPE) * (mul -1) + sizeof(NATIVE_TYPE); \
             break;
         ITER_FMT()
         #undef FMT
@@ -216,7 +216,7 @@ static int pack_aligned_native(void *buffer, unsigned buffer_size, const char *f
         case CH:{ \
             for(int i = 0; i < mul; i++){ \
                 NATIVE_TYPE val = VA_GET(args); \
-                cur_size = ALIGN(alignof(NATIVE_TYPE), cur_size); \
+                cur_size = MC_ALIGN(alignof(NATIVE_TYPE), cur_size); \
                 memcpy(&U8(buffer)[cur_size], &val, sizeof(NATIVE_TYPE)); \
                 cur_size += sizeof(NATIVE_TYPE); \
             } \

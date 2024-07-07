@@ -1,6 +1,14 @@
 #ifndef MC_UTIL_MEMORY_H
 #define MC_UTIL_MEMORY_H
 
-#define ALIGN(TO, VALUE) (((VALUE) + (TO) - 1) & ~((TO) - 1))
+#include <stdalign.h>
+#include <stdint.h>
+
+#define MC_ALIGN(TO, VALUE) (((VALUE) + (TO) - 1) & ~((TO) - 1))
+
+
+#define MC_NEXT_AFTER(PREV_ADDR, PREV_SIZE, NEXT_ALIGNMENT) ((void*)MC_ALIGN(NEXT_ALIGNMENT, (size_t)((uint8_t*)(PREV_ADDR) + (PREV_SIZE))))
+#define MC_NEXT_FIELD_ADDR(PREV_FIELD, NEXT_ALIGNMENT) MC_NEXT_AFTER((PREV_FIELD), sizeof(PREV_FIELD), (NEXT_ALIGNMENT))
+#define MC_NEXT_FIELD(PREV_FIELD, NEXT_TYPE) (NEXT_TYPE*)MC_NEXT_FIELD_ADDR((PREV_FIELD), alignof(NEXT_TYPE))
 
 #endif // MC_UTIL_MEMORY_H
