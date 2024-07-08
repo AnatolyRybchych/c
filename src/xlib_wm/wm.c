@@ -7,7 +7,7 @@ static void destroy(struct MC_TargetWM *wm);
 static MC_Error init_window(struct MC_TargetWM *wm, struct MC_TargetWMWindow *window);
 static void destroy_window(struct MC_TargetWM *wm, struct MC_TargetWMWindow *window);
 static bool poll_event(struct MC_TargetWM *wm, struct MC_TargetWMEvent *event);
-static unsigned translate_event(struct MC_TargetWM *wm, const struct MC_TargetWMEvent *event, MC_WMEvent events[16]);
+static unsigned translate_event(struct MC_TargetWM *wm, const struct MC_TargetWMEvent *event, MC_TargetIndication indications[16]);
 
 static MC_WMVtab vtab = {
     .name = "X11",
@@ -68,9 +68,9 @@ static bool poll_event(struct MC_TargetWM *wm, struct MC_TargetWMEvent *event){
     return true;
 }
 
-static unsigned translate_event(struct MC_TargetWM *wm, const struct MC_TargetWMEvent *event, MC_WMEvent events[16]){
+static unsigned translate_event(struct MC_TargetWM *wm, const struct MC_TargetWMEvent *event, MC_TargetIndication indications[16]){
     (void)wm;
     (void)event;
-    (void)events;
+    (void)indications;
     return 0;
 }

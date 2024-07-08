@@ -1,7 +1,7 @@
 #ifndef MC_XLIBWM_H
 #define MC_XLIBWM_H
 
-#include <mc/wm/wm.h>
+#include <mc/wm/target.h>
 
 #include <X11/Xlib.h>
 

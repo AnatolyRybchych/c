@@ -12,6 +12,7 @@
 #include <mc/util/assert.h>
 
 #include <mc/wm/wm.h>
+#include <mc/wm/event.h>
 #include <mc/xlib_wm/wm.h>
 
 #include <stdbool.h>
