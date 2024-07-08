@@ -3,6 +3,8 @@
 #include <mc/wm/event.h>
 
 #include <mc/data/string.h>
+#include <mc/data/vector.h>
+
 #include <mc/io/file.h>
 #include <mc/util/assert.h>
 #include <mc/util/memory.h>
@@ -14,6 +16,8 @@
 
 #define WM_LOGE(FMT, ...) if(wm->log) mc_fmt(wm->log, "[WM] " FMT "\n", ##__VA_ARGS__)
 #define WM_LOG_DEV(FMT, ...) if(wm->log) mc_fmt(wm->log, "%s() [DEV][WM][%s] " FMT "\n", __func__, wm->vtab.name, ##__VA_ARGS__)
+
+MC_DEFINE_VECTOR(Windows, MC_WMWindow*);
 
 typedef struct indicationNode indicationNode;
 
@@ -34,6 +38,8 @@ struct MC_WM{
 
     unsigned pending_indications;
     MC_TargetIndication indications[INDICATIONS_BUFFER_SIZE];
+
+    Windows *windows;
 
     uint8_t data[];
 };
@@ -86,6 +92,12 @@ void mc_wm_destroy(MC_WM *wm){
         wm->vtab.destroy(wm->target);
     }
 
+    while(!MC_VECTOR_EMPTY(wm->windows)){
+        mc_wm_destroy_window(wm->windows->beg[0]);
+    }
+
+    MC_VECTOR_FREE(wm->windows);
+
     free(wm);
 }
 
@@ -102,9 +114,16 @@ MC_Error mc_wm_init_window(MC_WM *wm, MC_WMWindow **ret_window){
         return MCE_OUT_OF_MEMORY;
     }
 
+    Windows *new_windows = MC_VECTOR_PUSHN(wm->windows, 1, &window);
+    if(new_windows == NULL){
+        free(window);
+        return MCE_OUT_OF_MEMORY;
+    }
+
     window->target = (struct MC_TargetWMWindow*)window->data;
     MC_Error status = v->init_window(wm->target, window->target);
     if(status != MCE_OK){
+        wm->windows->end--;
         free(window);
         return MCE_OUT_OF_MEMORY;
     }
@@ -122,6 +141,18 @@ void mc_wm_destroy_window(MC_WMWindow *window){
     }
 
     free(window);
+
+    size_t idx = 0;
+    MC_WMWindow **w;
+    MC_VECTOR_EACH(wm->windows, w){
+        if(*w == window){
+            break;
+        }
+
+        idx++;
+    }
+
+    MC_VECTOR_ERASE(wm->windows, idx, 1);
 }
 
 MC_Error mc_wm_set_window_title(MC_WMWindow *window, MC_Str title){

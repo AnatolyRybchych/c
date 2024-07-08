@@ -15,7 +15,7 @@
 } NAME
 
 #define MC_VECTOR_SIZE(VECTOR) ((VECTOR) ? (VECTOR)->end - (VECTOR)->beg : 0)
-#define MC_VECTOR_EMPTY(VECTOR) (VECTOR_SIZE(VECTOR) == 0)
+#define MC_VECTOR_EMPTY(VECTOR) ((VECTOR) ? MC_VECTOR_SIZE(VECTOR) == 0 : false)
 #define MC_VECTOR_DATA(VECTOR) ((VECTOR) ? (VECTOR)->beg : NULL)
 
 #define MC_VECTOR_FREE(VECTOR) if((VECTOR) != NULL) free((VECTOR))
@@ -29,6 +29,26 @@
 
 #define MC_VECTOR_PUSH_ARRAY(VECTOR, ARRAY) \
     __vector_push_bytes(VECTOR, sizeof(ARRAY), &ARRAY[0])
+
+#define MC_VECTOR_ERASE(VECTOR, IDX, COUNT) ((VECTOR) ? __vector_erase_bytes((VECTOR), (IDX) * sizeof *(VECTOR)->beg, (COUNT) * sizeof *(VECTOR)->beg) : (void)0)
+
+
+inline void __vector_erase_bytes(void *vector, size_t idx, size_t size){
+    struct{
+        uint8_t *end;
+        uint8_t *capacity_end;
+        uint8_t beg[];
+    } *v = vector;
+
+    if(size > (size_t)(v->end - v->beg)){
+        size = v->end - v->beg;
+    }
+
+    if(size != 0){
+        memmove(v->beg, v->beg + idx, size);
+        v->end -= size;
+    }
+}
 
 inline void *__vector_push_bytes(void *vector, size_t size, const void *data){
     struct{
