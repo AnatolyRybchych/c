@@ -537,8 +537,20 @@ static MC_WMEvent translate_indication(MC_WM *wm){
 }
 
 static MC_WMWindow *window_from_target(MC_WM *wm, struct MC_TargetWMWindow *target){
-    (void)wm;
-    (void)target;
-    MC_ASSERT_FAULT("NOT IMPLEMENTED YET" && 0);
+    if(target == NULL){
+        if(MC_VECTOR_SIZE(wm->windows) == 1){
+            return *wm->windows->beg;
+        }
+
+        return NULL;
+    }
+
+    MC_WMWindow **w;
+    MC_VECTOR_EACH(wm->windows, w){
+        if((*w)->target == target){
+            return *w;
+        } 
+    }
+
     return NULL;
 }
