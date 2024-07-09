@@ -24,7 +24,11 @@ typedef struct indicationNode indicationNode;
 struct MC_WMWindow{
     MC_WM *wm;
     struct MC_TargetWMWindow *target;
-    MC_Rect2IU cached_rect;
+    struct{
+        MC_Rect2IU rect;
+        MC_Point2I mouse_pos;
+        bool mouse_over;
+    } cached;
     MC_Stream *tmp_stream;
     MC_String *cached_title;
     uint8_t data[];
@@ -118,6 +122,7 @@ MC_Error mc_wm_init_window(MC_WM *wm, MC_WMWindow **ret_window){
         free(window);
         return MCE_OUT_OF_MEMORY;
     }
+    wm->windows = new_windows;
 
     window->target = (struct MC_TargetWMWindow*)window->data;
     MC_Error status = v->init_window(wm->target, window->target);
@@ -174,8 +179,8 @@ MC_Error mc_wm_set_window_position(MC_WMWindow *window, MC_Point2I position){
     if(v->set_window_position){
         status = v->set_window_position(wm->target, window->target, position);
         if(status == MCE_OK){
-            window->cached_rect.x = position.x;
-            window->cached_rect.y = position.y;
+            window->cached.rect.x = position.x;
+            window->cached.rect.y = position.y;
             return MCE_OK;
         }
     }
@@ -184,13 +189,13 @@ MC_Error mc_wm_set_window_position(MC_WMWindow *window, MC_Point2I position){
         status = v->set_window_rect(wm->target, window->target, (MC_Rect2IU){
             .x = position.x,
             .y = position.y,
-            .width = window->cached_rect.width,
-            .height = window->cached_rect.height
+            .width = window->cached.rect.width,
+            .height = window->cached.rect.height
         });
 
         if(status == MCE_OK){
-            window->cached_rect.x = position.x;
-            window->cached_rect.y = position.y;
+            window->cached.rect.x = position.x;
+            window->cached.rect.y = position.y;
             return MCE_OK;
         }
     }
@@ -207,23 +212,23 @@ MC_Error mc_wm_set_window_size(MC_WMWindow *window, MC_Size2U size){
     if(v->set_window_size){
         status = v->set_window_size(wm->target, window->target, size);
         if(status == MCE_OK){
-            window->cached_rect.width = size.width;
-            window->cached_rect.height = size.height;
+            window->cached.rect.width = size.width;
+            window->cached.rect.height = size.height;
             return MCE_OK;
         }
     }
 
     if(v->set_window_rect){
         status = v->set_window_rect(wm->target, window->target, (MC_Rect2IU){
-            .x = window->cached_rect.x,
-            .y = window->cached_rect.y,
+            .x = window->cached.rect.x,
+            .y = window->cached.rect.y,
             .width = size.width,
             .height = size.height
         });
 
         if(status == MCE_OK){
-            window->cached_rect.width = size.width;
-            window->cached_rect.height = size.height;
+            window->cached.rect.width = size.width;
+            window->cached.rect.height = size.height;
             return MCE_OK;
         }
     }
@@ -240,7 +245,7 @@ MC_Error mc_wm_set_window_rect(MC_WMWindow *window, MC_Rect2IU rect){
     if(v->set_window_rect){
         status = v->set_window_rect(wm->target, window->target, rect);
         if(status == MCE_OK){
-            window->cached_rect = rect;
+            window->cached.rect = rect;
             return MCE_OK;
         }
     }
@@ -257,13 +262,13 @@ MC_Error mc_wm_set_window_rect(MC_WMWindow *window, MC_Rect2IU rect){
         });
 
         if(position_status == MCE_OK){
-            window->cached_rect.x = rect.x;
-            window->cached_rect.y = rect.y;
+            window->cached.rect.x = rect.x;
+            window->cached.rect.y = rect.y;
         }
 
         if(size_status == MCE_OK){
-            window->cached_rect.width = rect.width;
-            window->cached_rect.height = rect.height;
+            window->cached.rect.width = rect.width;
+            window->cached.rect.height = rect.height;
         }
 
         if(size_status != MCE_OK){
@@ -310,8 +315,8 @@ MC_Error mc_wm_get_window_position(MC_WMWindow *window, MC_Point2I *position){
     if(v->get_window_position){
         MC_Error position_status = v->get_window_position(wm->target, window->target, position);
         if(position_status == MCE_OK){
-            window->cached_rect.x = position->x;
-            window->cached_rect.y = position->y;
+            window->cached.rect.x = position->x;
+            window->cached.rect.y = position->y;
             return MCE_OK;
         }
 
@@ -322,7 +327,7 @@ MC_Error mc_wm_get_window_position(MC_WMWindow *window, MC_Point2I *position){
         MC_Rect2IU rect;
         MC_Error rect_status = v->get_window_rect(wm->target, window->target, &rect);
         if(rect_status == MCE_OK){
-            window->cached_rect = rect;
+            window->cached.rect = rect;
             position->x = rect.x;
             position->y = rect.y;
             return MCE_OK;
@@ -343,8 +348,8 @@ MC_Error mc_wm_get_window_size(MC_WMWindow *window, MC_Size2U *size){
     if(v->get_window_size){
         MC_Error size_status = v->get_window_size(wm->target, window->target, size);
         if(size_status == MCE_OK){
-            window->cached_rect.width = size->width;
-            window->cached_rect.height = size->height;
+            window->cached.rect.width = size->width;
+            window->cached.rect.height = size->height;
             return MCE_OK;
         }
 
@@ -355,7 +360,7 @@ MC_Error mc_wm_get_window_size(MC_WMWindow *window, MC_Size2U *size){
         MC_Rect2IU rect;
         MC_Error rect_status = v->get_window_rect(wm->target, window->target, &rect);
         if(rect_status == MCE_OK){
-            window->cached_rect = rect;
+            window->cached.rect = rect;
             size->width = rect.width;
             size->height = rect.height;
             return MCE_OK;
@@ -376,7 +381,7 @@ MC_Error mc_wm_get_window_rect(MC_WMWindow *window, MC_Rect2IU *rect){
     if(v->get_window_rect){
         MC_Error rect_status = v->get_window_rect(wm->target, window->target, rect);
         if(rect_status == MCE_OK){
-            window->cached_rect = *rect;
+            window->cached.rect = *rect;
             return MCE_OK;
         }
 
@@ -387,8 +392,8 @@ MC_Error mc_wm_get_window_rect(MC_WMWindow *window, MC_Rect2IU *rect){
         MC_Point2I position;
         MC_Error position_status = v->get_window_position(wm->target, window->target, &position);
         if(position_status == MCE_OK){
-            window->cached_rect.x = position.x;
-            window->cached_rect.y = position.y;
+            window->cached.rect.x = position.x;
+            window->cached.rect.y = position.y;
         }
 
         status = position_status;
@@ -398,8 +403,8 @@ MC_Error mc_wm_get_window_rect(MC_WMWindow *window, MC_Rect2IU *rect){
         MC_Size2U size;
         MC_Error size_status = v->get_window_size(wm->target, window->target, &size);
         if(size_status == MCE_OK){
-            window->cached_rect.width = size.width;
-            window->cached_rect.height = size.height;
+            window->cached.rect.width = size.width;
+            window->cached.rect.height = size.height;
         }
 
         status = size_status;
@@ -522,28 +527,91 @@ static MC_WMEvent translate_indication(MC_WM *wm){
     MC_TargetIndication ind = *wm->indications;
     memmove(wm->indications, wm->indications + 1, sizeof(MC_TargetIndication[--wm->pending_indications]));
     
+    MC_WMWindow *window;
+
     switch (ind.type){
     case MC_WMIND_WINDOW_READY:
+        window = window_from_target(wm, ind.as.window_ready.window);
+
         return (MC_WMEvent){
             .type = MC_WME_WINDOW_READY,
             .as.window_ready = {
-                .window = window_from_target(wm, ind.as.window_ready.window),
+                .window = window,
             }
         };
     case MC_WMIND_WINDOW_MOVED:
+        window = window_from_target(wm, ind.as.window_moved.window);
+
         return (MC_WMEvent){
             .type = MC_WME_WINDOW_MOVED,
             .as.window_moved = {
+                .window = window,
                 .new_position = ind.as.window_moved.new_position,
-                .window = window_from_target(wm, ind.as.window_moved.window),
             }
         };
     case MC_WMIND_WINDOW_RESIZED:
+        window = window_from_target(wm, ind.as.window_resized.window);
+
         return (MC_WMEvent){
             .type = MC_WME_WINDOW_RESIZED,
             .as.window_resized = {
+                .window = window,
                 .new_size = ind.as.window_resized.new_size,
-                .window = window_from_target(wm, ind.as.window_resized.window),
+            }
+        };
+    case MC_WMIND_MOUSE_DOWN:
+        window = window_from_target(wm, ind.as.mouse_down.window);
+
+        return (MC_WMEvent){
+            .type = MC_WME_MOUSE_DOWN,
+            .as.mouse_down = {
+                .window = window,
+                .button = ind.as.mouse_down.button,
+                .position = window->cached.mouse_pos,
+            }
+        };
+    case MC_WMIND_MOUSE_UP:
+        window = window_from_target(wm, ind.as.mouse_up.window);
+
+        return (MC_WMEvent){
+            .type = MC_WME_MOUSE_UP,
+            .as.mouse_up = {
+                .window = window,
+                .button = ind.as.mouse_up.button,
+                .position = window->cached.mouse_pos,
+            }
+        };
+    case MC_WMIND_MOUSE_MOVED:
+        window = window_from_target(wm, ind.as.mouse_moved.window);
+        window->cached.mouse_pos = ind.as.mouse_moved.position;
+
+        return (MC_WMEvent){
+            .type = MC_WME_MOUSE_MOVED,
+            .as.mouse_moved = {
+                .window = window,
+                .position = ind.as.mouse_moved.position,
+            }
+        };
+    case MC_WMIND_MOUSE_ENTER:
+        window = window_from_target(wm, ind.as.mouse_enter.window);
+        window->cached.mouse_over = true;
+
+        return (MC_WMEvent){
+            .type = MC_WME_MOUSE_ENTER,
+            .as.mouse_enter = {
+                .window = window,
+                .position = window->cached.mouse_pos,
+            }
+        };
+    case MC_WMIND_MOUSE_LEAVE:
+        window = window_from_target(wm, ind.as.mouse_leave.window);
+        window->cached.mouse_over = false;
+
+        return (MC_WMEvent){
+            .type = MC_WME_MOUSE_LEAVE,
+            .as.mouse_enter = {
+                .window = window,
+                .position = window->cached.mouse_pos,
             }
         };
     default:

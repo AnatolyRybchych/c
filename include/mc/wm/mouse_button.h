@@ -2,6 +2,7 @@
 #define MC_WM_MOUSE_BUTTON_H
 
 #define MC_ITER_MOUSE_BUTTONS() \
+    MOUSE_BUTTON(UNKNOWN, "Unknown") \
     MOUSE_BUTTON(LEFT, "Left") \
     MOUSE_BUTTON(MIDDLE, "Wheel") \
     MOUSE_BUTTON(RIGHT, "Right") \

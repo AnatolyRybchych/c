@@ -87,29 +87,24 @@ struct MC_TargetIndication{
 
         struct MC_WMIND_MouseDown{
             struct MC_TargetWMWindow *window;
-            MC_Point2I position;
             MC_MouseButton button;
         } mouse_down;
 
         struct MC_WMIND_MouseUp{
             struct MC_TargetWMWindow *window;
-            MC_Point2I position;
             MC_MouseButton button;
         } mouse_up;
 
         struct MC_WMIND_MouseEnter{
             struct MC_TargetWMWindow *window;
-            MC_Point2I position;
         } mouse_enter;
 
         struct MC_WMIND_MouseLeave{
             struct MC_TargetWMWindow *window;
-            MC_Point2I position;
         } mouse_leave;
 
         struct MC_WMIND_MouseWheel{
             struct MC_TargetWMWindow *window;
-            MC_Point2I position;
             int up;
             int right;
         } mouse_wheel;

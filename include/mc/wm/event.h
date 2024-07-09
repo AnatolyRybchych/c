@@ -2,6 +2,7 @@
 #define MC_WM_EVENT_H
 
 #include <mc/wm/wm.h>
+#include <mc/wm/mouse_button.h>
 
 #define MC_ITER_WM_EVENTS() \
     MC_EVENT(NONE) \
@@ -13,6 +14,9 @@
     MC_EVENT(MOUSE_DOWN) \
     MC_EVENT(MOUSE_UP) \
     MC_EVENT(MOUSE_CLICK) \
+    MC_EVENT(MOUSE_ENTER) \
+    MC_EVENT(MOUSE_LEAVE) \
+    MC_EVENT(MOUSE_WHEEL) \
 
 typedef unsigned MC_WMEventType;
 enum MC_WMEventType{
@@ -54,6 +58,40 @@ struct MC_WMEvent{
         struct MC_WME_RedrawRequest{
             MC_WMWindow *window;
         } redraw_request;
+
+        struct MC_WME_MouseMoved{
+            struct MC_WMWindow *window;
+            MC_Point2I position;
+        } mouse_moved;
+
+        struct MC_WME_MouseDown{
+            struct MC_WMWindow *window;
+            MC_Point2I position;
+            MC_MouseButton button;
+        } mouse_down;
+
+        struct MC_WME_MouseUp{
+            struct MC_WMWindow *window;
+            MC_Point2I position;
+            MC_MouseButton button;
+        } mouse_up;
+
+        struct MC_WME_MouseEnter{
+            struct MC_WMWindow *window;
+            MC_Point2I position;
+        } mouse_enter;
+
+        struct MC_WME_MouseLeave{
+            struct MC_WMWindow *window;
+            MC_Point2I position;
+        } mouse_leave;
+
+        struct MC_WME_MouseWheel{
+            struct MC_WMWindow *window;
+            MC_Point2I position;
+            int up;
+            int right;
+        } mouse_wheel;
     } as;
 };
 
