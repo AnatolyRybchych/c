@@ -21,6 +21,8 @@ objects			+= io/file.o
 objects			+= io/fd.o
 
 objects			+= wm/wm.o
+objects			+= wm/event.o
+objects			+= wm/mouse_button.o
 
 objects			+= xlib_wm/wm.o
 

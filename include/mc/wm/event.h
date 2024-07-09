@@ -23,6 +23,15 @@ enum MC_WMEventType{
     MC_WME_COUNT
 };
 
+inline const char *mc_wm_event_type_str(MC_WMEventType type){
+    switch (type){
+    #define MC_EVENT(NAME, ...) case MC_WME_##NAME: return #NAME;
+        MC_ITER_WM_EVENTS()
+    #undef MC_EVENT
+    default: return NULL;
+    }
+}
+
 struct MC_WMEvent{
     MC_WMEventType type;
     union {

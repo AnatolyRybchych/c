@@ -27,22 +27,11 @@ int main(){
     MC_WMWindow *window;
     MC_REQUIRE(mc_wm_init_window(wm, &window));
 
-    MC_Time exit_time;
-    MC_REQUIRE(mc_gettime(MC_GETTIME_SINCE_BOOT, &exit_time));
-    mc_timesum(&exit_time, &(MC_Time){.sec = 3}, &exit_time);
-
     while(true){
-        // MC_Time now;
-        // MC_REQUIRE(mc_gettime(MC_GETTIME_SINCE_BOOT, &now));
-        // if(mc_timecmp(&now, &exit_time) >= 0){
-        //     return 0;
-        // }
-
         MC_WMEvent event;
         if(MC_REQUIRE(mc_wm_poll_event(wm, &event)) == MCE_OK){
-            mc_fmt(MC_STDOUT, "event\n");
+            mc_fmt(MC_STDOUT, "event %s\n", mc_wm_event_type_str(event.type));
         }
-        MC_REQUIRE(mc_sleep(&(MC_Time){.nsec = 100000000}));
     }
 
     mc_wm_destroy(wm);
