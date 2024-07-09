@@ -32,6 +32,8 @@ int main(){
         if(MC_REQUIRE(mc_wm_poll_event(wm, &event)) == MCE_OK){
             mc_fmt(MC_STDOUT, "event %s\n", mc_wm_event_type_str(event.type));
         }
+
+        mc_sleep(&(MC_Time){.nsec = 1000000});
     }
 
     mc_wm_destroy(wm);

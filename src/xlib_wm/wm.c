@@ -77,7 +77,33 @@ static bool poll_event(struct MC_TargetWM *wm, struct MC_TargetWMEvent *event){
 
 static unsigned translate_event(struct MC_TargetWM *wm, const struct MC_TargetWMEvent *event, MC_TargetIndication indications[16]){
     (void)wm;
-    (void)event;
-    (void)indications;
-    return 0;
+    const XEvent *e = &event->event;
+
+    switch (e->type){
+    case ConfigureNotify:
+        indications[0] = (MC_TargetIndication){
+            .type = MC_WMIND_WINDOW_MOVED,
+            .as.window_moved = {
+                .window = NULL,
+                .new_position = {
+                    .x = e->xconfigure.x,
+                    .y = e->xconfigure.y,
+                },
+            }
+        };
+
+        indications[1] = (MC_TargetIndication){
+            .type = MC_WMIND_WINDOW_RESIZED,
+            .as.window_moved = {
+                .window = NULL,
+                .new_position = {
+                    .x = e->xconfigure.width,
+                    .y = e->xconfigure.height,
+                },
+            }
+        };
+
+        return 2;
+    default: return 0;
+    }
 }

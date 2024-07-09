@@ -530,6 +530,22 @@ static MC_WMEvent translate_indication(MC_WM *wm){
                 .window = window_from_target(wm, ind.as.window_ready.window),
             }
         };
+    case MC_WMIND_WINDOW_MOVED:
+        return (MC_WMEvent){
+            .type = MC_WME_WINDOW_MOVED,
+            .as.window_moved = {
+                .new_position = ind.as.window_moved.new_position,
+                .window = window_from_target(wm, ind.as.window_moved.window),
+            }
+        };
+    case MC_WMIND_WINDOW_RESIZED:
+        return (MC_WMEvent){
+            .type = MC_WME_WINDOW_RESIZED,
+            .as.window_resized = {
+                .new_size = ind.as.window_resized.new_size,
+                .window = window_from_target(wm, ind.as.window_resized.window),
+            }
+        };
     default:
         MC_ASSERT_FAULT("NOT IMPLEMENTED YET" && 0);
     }
