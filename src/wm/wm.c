@@ -34,14 +34,14 @@ struct MC_WM{
     MC_WMVtab vtab;
     MC_Stream *log;
     struct MC_TargetWM *target;
-    struct MC_TargetWMEvent *last_target_event;
+    struct MC_TargetWMEvent *target_event;
 
     unsigned pending_indications;
     MC_TargetIndication indications[INDICATIONS_BUFFER_SIZE];
 
     Windows *windows;
 
-    uint8_t data[];
+    alignas(void*) uint8_t data[];
 };
 
 static void dump_vtable(MC_WM *wm);
@@ -50,38 +50,37 @@ static MC_WMEvent translate_indication(MC_WM *wm);
 static MC_WMWindow *window_from_target(MC_WM *wm, struct MC_TargetWMWindow *target);
 
 MC_Error mc_wm_init(MC_WM **ret_wm, const MC_WMVtab *vtab){
-    *ret_wm = NULL;
-
     if(!vtab || !vtab->init){
         return MCE_NOT_SUPPORTED;
     }
 
-    MC_WM *wm = malloc(
-        sizeof(MC_WM) + 
-        MC_ALIGN(sizeof(void*), vtab->wm_size) +
-        MC_ALIGN(sizeof(void*), vtab->event_size));
+    MC_WM *wm;
+    struct MC_TargetWMEvent *target_event;
 
-    if(wm == NULL){
-        return MCE_OUT_OF_MEMORY;
+    MC_Error allocation_status = mc_malloc_all(
+        &wm, sizeof(MC_WM) + vtab->wm_size,
+        &target_event, vtab->event_size,
+        NULL);
+
+    if(allocation_status != MCE_OK){
+        return allocation_status;
     }
 
     memset(wm, 0, sizeof(MC_WM) + vtab->wm_size);
-
-    wm->target = MC_NEXT_AFTER(wm->data, 0, alignof(void*));
-    wm->last_target_event = MC_NEXT_FIELD_ADDR(wm->target, alignof(void*));
-
-    wm->log = MC_STDERR;
-
-    MC_Error status = vtab->init(wm->target, wm->log);
-    if(status != MCE_OK){
-        free(wm);
-        return status;
-    }
+    wm->target_event = target_event;
 
     memcpy(&wm->vtab, vtab, sizeof(MC_WMVtab));
+    wm->target = (struct MC_TargetWM*)wm->data;
+    wm->log = MC_STDERR;
+
+    MC_Error init_status = vtab->init(wm->target, wm->log);
+    if(init_status != MCE_OK){
+        free(wm->target_event);
+        free(wm);
+        return init_status;
+    }
 
     *ret_wm = wm;
-
     dump_vtable(wm);
 
     return MCE_OK;
@@ -413,15 +412,15 @@ MC_Error mc_wm_poll_event(MC_WM *wm, MC_WMEvent *event){
     MC_WMVtab *v = &wm->vtab;
 
     if(wm->pending_indications < INDICATIONS_BUFFER_SIZE - MC_WM_MAX_INDICATIONS_PER_EVENT){
-        if(v->poll_event && v->poll_event(wm->target, wm->last_target_event)){
+        if(v->poll_event && v->poll_event(wm->target, wm->target_event)){
             *event = (MC_WMEvent){
                 .type = MC_WME_RAW,
-                .as.raw = wm->last_target_event
+                .as.raw = wm->target_event
             };
 
             if(v->translate_event){
                 unsigned new_indications = v->translate_event(
-                    wm->target, wm->last_target_event,
+                    wm->target, wm->target_event,
                     wm->indications + wm->pending_indications);
 
                 MC_ASSERT_FAULT(new_indications <= MC_WM_MAX_INDICATIONS_PER_EVENT);

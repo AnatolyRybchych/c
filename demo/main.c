@@ -32,14 +32,16 @@ int main(){
     mc_timesum(&exit_time, &(MC_Time){.sec = 3}, &exit_time);
 
     while(true){
-        MC_Time now;
-        MC_REQUIRE(mc_gettime(MC_GETTIME_SINCE_BOOT, &now));
-        if(mc_timecmp(&now, &exit_time) >= 0){
-            return 0;
-        }
+        // MC_Time now;
+        // MC_REQUIRE(mc_gettime(MC_GETTIME_SINCE_BOOT, &now));
+        // if(mc_timecmp(&now, &exit_time) >= 0){
+        //     return 0;
+        // }
 
         MC_WMEvent event;
-        MC_REQUIRE(mc_wm_poll_event(wm, &event));
+        if(MC_REQUIRE(mc_wm_poll_event(wm, &event)) == MCE_OK){
+            mc_fmt(MC_STDOUT, "event\n");
+        }
         MC_REQUIRE(mc_sleep(&(MC_Time){.nsec = 100000000}));
     }
 

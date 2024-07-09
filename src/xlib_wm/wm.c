@@ -50,6 +50,13 @@ static MC_Error init_window(struct MC_TargetWM *wm, struct MC_TargetWMWindow *wi
     window->window_id = XCreateSimpleWindow(wm->dpy, root, 0, 0, 800, 600, 0,
         BlackPixel(wm->dpy, screen), WhitePixel(wm->dpy, screen));
 
+    XSelectInput(wm->dpy, window->window_id,
+        KeyPressMask | KeyReleaseMask | ButtonPressMask | ButtonReleaseMask | EnterWindowMask
+        | LeaveWindowMask | PointerMotionMask | PointerMotionHintMask | ButtonMotionMask
+        | KeymapStateMask | ExposureMask | VisibilityChangeMask | StructureNotifyMask | ResizeRedirectMask
+        | SubstructureNotifyMask | SubstructureRedirectMask | FocusChangeMask | PropertyChangeMask
+        | ColormapChangeMask | OwnerGrabButtonMask);
+
     XMapWindow(wm->dpy, window->window_id);
 
     return MCE_OK;
