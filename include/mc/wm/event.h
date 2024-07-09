@@ -10,6 +10,7 @@
     MC_EVENT(WINDOW_READY) \
     MC_EVENT(WINDOW_RESIZED) \
     MC_EVENT(WINDOW_MOVED) \
+    MC_EVENT(WINDOW_REDRAW_REQUESTED) \
     MC_EVENT(MOUSE_MOVED) \
     MC_EVENT(MOUSE_DOWN) \
     MC_EVENT(MOUSE_UP) \
@@ -57,7 +58,7 @@ struct MC_WMEvent{
 
         struct MC_WME_RedrawRequest{
             MC_WMWindow *window;
-        } redraw_request;
+        } redraw_requested;
 
         struct MC_WME_MouseMoved{
             struct MC_WMWindow *window;

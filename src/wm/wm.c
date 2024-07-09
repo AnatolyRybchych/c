@@ -104,6 +104,10 @@ void mc_wm_destroy(MC_WM *wm){
     free(wm);
 }
 
+struct MC_TargetWM *mc_wm_get_target(MC_WM *wm){
+    return wm->target;
+}
+
 MC_Error mc_wm_window_init(MC_WM *wm, MC_WMWindow **ret_window){
     *ret_window = NULL;
     MC_WMVtab *v = &wm->vtab;
@@ -157,6 +161,10 @@ void mc_wm_window_destroy(MC_WMWindow *window){
     }
 
     MC_VECTOR_ERASE(wm->windows, idx, 1);
+}
+
+struct MC_TargetWMWindow *mc_wm_window_get_target(MC_WMWindow *wm){
+    return wm->target;
 }
 
 MC_Error mc_wm_window_set_title(MC_WMWindow *window, MC_Str title){
@@ -583,6 +591,15 @@ static MC_WMEvent translate_indication(MC_WM *wm){
             .as.window_resized = {
                 .window = window,
                 .new_size = ind.as.window_resized.new_size,
+            }
+        };
+    case MC_WMIND_WINDOW_REDRAW_REQUESTED:
+        window = window_from_target(wm, ind.as.redraw_requested.window);
+
+        return (MC_WMEvent){
+            .type = MC_WME_WINDOW_REDRAW_REQUESTED,
+            .as.redraw_requested = {
+                .window = window,
             }
         };
     case MC_WMIND_MOUSE_DOWN:

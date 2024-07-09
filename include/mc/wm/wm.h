@@ -14,11 +14,16 @@ typedef struct MC_WMWindow MC_WMWindow;
 typedef struct MC_WMVtab MC_WMVtab;
 typedef struct MC_WMEvent MC_WMEvent;
 
+typedef struct MC_TargetWM MC_TargetWM;
+typedef struct MC_TargetWMWindow MC_TargetWMWindow;
+
 MC_Error mc_wm_init(MC_WM **wm, const MC_WMVtab *vtab);
 void mc_wm_destroy(MC_WM *wm);
+struct MC_TargetWM *mc_wm_get_target(MC_WM *wm);
 
 MC_Error mc_wm_window_init(MC_WM *wm, MC_WMWindow **window);
 void mc_wm_window_destroy(MC_WMWindow *window);
+struct MC_TargetWMWindow *mc_wm_window_get_target(MC_WMWindow *wm);
 
 MC_Error mc_wm_window_set_title(MC_WMWindow *window, MC_Str title);
 MC_Error mc_wm_window_set_position(MC_WMWindow *window, MC_Point2I position);

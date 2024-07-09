@@ -2,6 +2,19 @@
 
 #define LOG(FMT, ...) mc_fmt(wm->log, "[WM][XLIB] " FMT "\n", ##__VA_ARGS__)
 
+struct MC_TargetWM{
+    MC_Stream *log;
+    Display *dpy;
+};
+
+struct MC_TargetWMWindow{
+    Window window_id;
+};
+
+struct MC_TargetWMEvent{
+    XEvent event;
+};
+
 static MC_Error init(struct MC_TargetWM *wm, MC_Stream *log);
 static void destroy(struct MC_TargetWM *wm);
 static MC_Error init_window(struct MC_TargetWM *wm, struct MC_TargetWMWindow *window);
@@ -31,6 +44,14 @@ static MC_WMVtab vtab = {
 
 const MC_WMVtab *mc_xlib_wm_vtab = &vtab;
 
+Display *mc_wm_xlib_get_display(MC_TargetWM *wm){
+    return wm->dpy;
+}
+
+Window mc_wm_xlib_window_get_xid(MC_TargetWMWindow *window){
+    return window->window_id;
+}
+
 static MC_Error init(struct MC_TargetWM *wm, MC_Stream *log){
     wm->log = log;
 
@@ -51,15 +72,18 @@ static MC_Error init_window(struct MC_TargetWM *wm, struct MC_TargetWMWindow *wi
     int screen = DefaultScreen(wm->dpy);
     Window root = RootWindow(wm->dpy, screen);
 
-    window->window_id = XCreateSimpleWindow(wm->dpy, root, 0, 0, 800, 600, 0,
-        BlackPixel(wm->dpy, screen), WhitePixel(wm->dpy, screen));
+    XSetWindowAttributes attributes;
+    attributes.background_pixmap = None;
+
+    window->window_id = XCreateWindow(wm->dpy, root, 0, 0, 800, 600, 0,
+        DefaultDepth(wm->dpy, screen), CopyFromParent, DefaultVisual(wm->dpy, screen), CWBackPixmap, &attributes);
 
     XSelectInput(wm->dpy, window->window_id,
         KeyPressMask | KeyReleaseMask | ButtonPressMask | ButtonReleaseMask | EnterWindowMask
-        | LeaveWindowMask | PointerMotionMask | PointerMotionHintMask | ButtonMotionMask
-        | KeymapStateMask | ExposureMask | VisibilityChangeMask | StructureNotifyMask | ResizeRedirectMask
-        | SubstructureNotifyMask | SubstructureRedirectMask | FocusChangeMask | PropertyChangeMask
-        | ColormapChangeMask | OwnerGrabButtonMask);
+        | LeaveWindowMask | PointerMotionMask | ButtonMotionMask | KeymapStateMask | ExposureMask
+        | VisibilityChangeMask | StructureNotifyMask | SubstructureNotifyMask | FocusChangeMask
+        | PropertyChangeMask);
+    
 
     XMapWindow(wm->dpy, window->window_id);
 
@@ -150,6 +174,15 @@ static unsigned translate_event(struct MC_TargetWM *wm, const struct MC_TargetWM
         indications[0] = (MC_TargetIndication){
             .type = MC_WMIND_MOUSE_LEAVE,
             .as.mouse_enter = {
+                .window = get_window(wm, e->xany.window),
+            }
+        };
+
+        return 1;
+    case Expose:
+        indications[0] = (MC_TargetIndication){
+            .type = MC_WMIND_WINDOW_REDRAW_REQUESTED,
+            .as.redraw_requested = {
                 .window = get_window(wm, e->xany.window),
             }
         };

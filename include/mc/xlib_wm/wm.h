@@ -7,18 +7,7 @@
 
 extern const MC_WMVtab *mc_xlib_wm_vtab;
 
-struct MC_TargetWM{
-    MC_Stream *log;
-    Display *dpy;
-};
-
-struct MC_TargetWMWindow{
-    Window window_id;
-};
-
-struct MC_TargetWMEvent{
-    XEvent event;
-};
-
+Display *mc_wm_xlib_get_display(MC_TargetWM *wm);
+Window mc_wm_xlib_window_get_xid(MC_TargetWMWindow *window);
 
 #endif // MC_XLIBWM_H
