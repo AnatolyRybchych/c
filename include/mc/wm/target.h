@@ -38,6 +38,15 @@ enum MC_TargetIndicationDuplicateAction{
 
 typedef struct MC_TargetIndication MC_TargetIndication;
 
+inline const char *mc_wm_target_indication_type_str(MC_WMIndicationType ind){
+    switch (ind){
+    #define MC_WMIDN(NAME, ...) case MC_WMIND_##NAME: return #NAME;
+        MC_ITER_INDICATIONS()
+    #undef MC_WMIDN
+    default: return NULL;
+    }
+}
+
 struct MC_TargetWM;
 struct MC_TargetWMWindow;
 struct MC_TargetWMEvent;
