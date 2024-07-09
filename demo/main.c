@@ -25,7 +25,7 @@ int main(){
     MC_REQUIRE(mc_wm_init(&wm, mc_xlib_wm_vtab));
 
     MC_WMWindow *window;
-    MC_REQUIRE(mc_wm_init_window(wm, &window));
+    MC_REQUIRE(mc_wm_window_init(wm, &window));
 
     while(true){
         MC_WMEvent event;

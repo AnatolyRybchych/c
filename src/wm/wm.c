@@ -28,9 +28,9 @@ struct MC_WMWindow{
         MC_Rect2IU rect;
         MC_Point2I mouse_pos;
         bool mouse_over;
+        MC_String *title;
     } cached;
-    MC_Stream *tmp_stream;
-    MC_String *cached_title;
+    MC_Stream *title_stream;
     uint8_t data[];
 };
 
@@ -96,7 +96,7 @@ void mc_wm_destroy(MC_WM *wm){
     }
 
     while(!MC_VECTOR_EMPTY(wm->windows)){
-        mc_wm_destroy_window(wm->windows->beg[0]);
+        mc_wm_window_destroy(wm->windows->beg[0]);
     }
 
     MC_VECTOR_FREE(wm->windows);
@@ -104,7 +104,7 @@ void mc_wm_destroy(MC_WM *wm){
     free(wm);
 }
 
-MC_Error mc_wm_init_window(MC_WM *wm, MC_WMWindow **ret_window){
+MC_Error mc_wm_window_init(MC_WM *wm, MC_WMWindow **ret_window){
     *ret_window = NULL;
     MC_WMVtab *v = &wm->vtab;
 
@@ -136,7 +136,7 @@ MC_Error mc_wm_init_window(MC_WM *wm, MC_WMWindow **ret_window){
     return MCE_OK;
 }
 
-void mc_wm_destroy_window(MC_WMWindow *window){
+void mc_wm_window_destroy(MC_WMWindow *window){
     MC_WM *wm = window->wm;
     MC_WMVtab *v = &wm->vtab;
 
@@ -159,7 +159,7 @@ void mc_wm_destroy_window(MC_WMWindow *window){
     MC_VECTOR_ERASE(wm->windows, idx, 1);
 }
 
-MC_Error mc_wm_set_window_title(MC_WMWindow *window, MC_Str title){
+MC_Error mc_wm_window_set_title(MC_WMWindow *window, MC_Str title){
     MC_WM *wm = window->wm;
     MC_WMVtab *v = &wm->vtab;
 
@@ -170,7 +170,7 @@ MC_Error mc_wm_set_window_title(MC_WMWindow *window, MC_Str title){
     return MCE_NOT_SUPPORTED;
 }
 
-MC_Error mc_wm_set_window_position(MC_WMWindow *window, MC_Point2I position){
+MC_Error mc_wm_window_set_position(MC_WMWindow *window, MC_Point2I position){
     MC_WM *wm = window->wm;
     MC_WMVtab *v = &wm->vtab;
 
@@ -203,7 +203,7 @@ MC_Error mc_wm_set_window_position(MC_WMWindow *window, MC_Point2I position){
     return status;
 }
 
-MC_Error mc_wm_set_window_size(MC_WMWindow *window, MC_Size2U size){
+MC_Error mc_wm_window_set_size(MC_WMWindow *window, MC_Size2U size){
     MC_WM *wm = window->wm;
     MC_WMVtab *v = &wm->vtab;
 
@@ -236,7 +236,7 @@ MC_Error mc_wm_set_window_size(MC_WMWindow *window, MC_Size2U size){
     return status;
 }
 
-MC_Error mc_wm_set_window_rect(MC_WMWindow *window, MC_Rect2IU rect){
+MC_Error mc_wm_window_set_rect(MC_WMWindow *window, MC_Rect2IU rect){
     MC_WM *wm = window->wm;
     MC_WMVtab *v = &wm->vtab;
 
@@ -283,21 +283,21 @@ MC_Error mc_wm_set_window_rect(MC_WMWindow *window, MC_Rect2IU rect){
 }
 
 
-MC_Error mc_wm_get_window_title(MC_WMWindow *window, MC_Str *title){
+MC_Error mc_wm_window_get_title(MC_WMWindow *window, MC_Str *title){
     MC_WM *wm = window->wm;
     MC_WMVtab *v = &wm->vtab;
 
     MC_Error status = MCE_NOT_SUPPORTED;
 
     if(v->get_window_title){
-        status = v->get_window_title(wm->target, window->target, window->tmp_stream);
+        status = v->get_window_title(wm->target, window->target, window->title_stream);
         if(status == MCE_OK){
-            // window->cached_title = mc_read_to_end(window->tmp_stream);
-            if(window->cached_title == NULL){
+            // window->cached.title = mc_read_to_end(window->title_stream);
+            if(window->cached.title == NULL){
                 return MCE_OUT_OF_MEMORY;
             }
 
-            *title = mc_string_str(window->cached_title);
+            *title = mc_string_str(window->cached.title);
         }
 
         return status;
@@ -306,7 +306,7 @@ MC_Error mc_wm_get_window_title(MC_WMWindow *window, MC_Str *title){
     return status;
 }
 
-MC_Error mc_wm_get_window_position(MC_WMWindow *window, MC_Point2I *position){
+MC_Error mc_wm_window_get_position(MC_WMWindow *window, MC_Point2I *position){
     MC_WM *wm = window->wm;
     MC_WMVtab *v = &wm->vtab;
 
@@ -339,7 +339,7 @@ MC_Error mc_wm_get_window_position(MC_WMWindow *window, MC_Point2I *position){
     return status;
 }
 
-MC_Error mc_wm_get_window_size(MC_WMWindow *window, MC_Size2U *size){
+MC_Error mc_wm_window_get_size(MC_WMWindow *window, MC_Size2U *size){
     MC_WM *wm = window->wm;
     MC_WMVtab *v = &wm->vtab;
 
@@ -372,7 +372,7 @@ MC_Error mc_wm_get_window_size(MC_WMWindow *window, MC_Size2U *size){
     return status;
 }
 
-MC_Error mc_wm_get_window_rect(MC_WMWindow *window, MC_Rect2IU *rect){
+MC_Error mc_wm_window_get_rect(MC_WMWindow *window, MC_Rect2IU *rect){
     MC_WM *wm = window->wm;
     MC_WMVtab *v = &wm->vtab;
 
@@ -411,6 +411,32 @@ MC_Error mc_wm_get_window_rect(MC_WMWindow *window, MC_Rect2IU *rect){
     }
 
     return status;
+}
+
+MC_Str mc_wm_window_cached_get_title(MC_WMWindow *window){
+    return mc_string_str(window->cached.title);
+}
+
+MC_Point2I mc_wm_window_cached_get_position(MC_WMWindow *window){
+    return (MC_Point2I){
+        .x = window->cached.rect.x,
+        .y = window->cached.rect.y
+    };
+}
+
+MC_Size2U mc_wm_window_cached_get_size(MC_WMWindow *window){
+    return (MC_Size2U){
+        .width = window->cached.rect.width,
+        .height = window->cached.rect.height
+    };
+}
+
+MC_Rect2IU mc_wm_window_cached_get_rect(MC_WMWindow *window){
+    return window->cached.rect;
+}
+
+bool mc_wm_window_cached_is_mouse_over(MC_WMWindow *window){
+    return window->cached.mouse_over;
 }
 
 MC_Error mc_wm_poll_event(MC_WM *wm, MC_WMEvent *event){
