@@ -17,6 +17,8 @@ typedef struct MC_WMEvent MC_WMEvent;
 typedef struct MC_TargetWM MC_TargetWM;
 typedef struct MC_TargetWMWindow MC_TargetWMWindow;
 
+struct MC_Graphics;
+
 MC_Error mc_wm_init(MC_WM **wm, const MC_WMVtab *vtab);
 void mc_wm_destroy(MC_WM *wm);
 struct MC_TargetWM *mc_wm_get_target(MC_WM *wm);
@@ -34,6 +36,8 @@ MC_Error mc_wm_window_get_title(MC_WMWindow *window, MC_Str *title);
 MC_Error mc_wm_window_get_position(MC_WMWindow *window, MC_Point2I *position);
 MC_Error mc_wm_window_get_size(MC_WMWindow *window, MC_Size2U *size);
 MC_Error mc_wm_window_get_rect(MC_WMWindow *window, MC_Rect2IU *rect);
+
+MC_Error mc_wm_window_get_graphic(MC_WMWindow *window, struct MC_Graphics **g);
 
 MC_Str mc_wm_window_cached_get_title(MC_WMWindow *window);
 MC_Point2I mc_wm_window_cached_get_position(MC_WMWindow *window);

@@ -28,8 +28,7 @@ objects			+= wm/mouse_button.o
 objects			+= graphics/graphics.o
 
 objects			+= xlib_wm/wm.o
-
-objects			+= graphics_xlib/graphics.o
+objects			+= xlib_wm/graphics.o
 
 DEMO_BIN		:= bin/demo
 DEMO_OBJ_DIR	:= build/demo/obj

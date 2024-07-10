@@ -1,4 +1,5 @@
 #include <mc/xlib_wm/wm.h>
+#include <mc/xlib_wm/graphics.h>
 
 #define LOG(FMT, ...) mc_fmt(wm->log, "[WM][XLIB] " FMT "\n", ##__VA_ARGS__)
 
@@ -19,6 +20,7 @@ static MC_Error init(struct MC_TargetWM *wm, MC_Stream *log);
 static void destroy(struct MC_TargetWM *wm);
 static MC_Error init_window(struct MC_TargetWM *wm, struct MC_TargetWMWindow *window);
 static void destroy_window(struct MC_TargetWM *wm, struct MC_TargetWMWindow *window);
+static MC_Error create_window_graphic(struct MC_TargetWM *wm, struct MC_TargetWMWindow *window, struct MC_Graphics **g);
 static bool poll_event(struct MC_TargetWM *wm, struct MC_TargetWMEvent *event);
 static unsigned translate_event(struct MC_TargetWM *wm, const struct MC_TargetWMEvent *event, MC_TargetIndication indications[MC_WM_MAX_INDICATIONS_PER_EVENT]);
 
@@ -37,6 +39,7 @@ static MC_WMVtab vtab = {
 
     .init_window = init_window,
     .destroy_window = destroy_window,
+    .create_window_graphic = create_window_graphic,
 
     .poll_event = poll_event,
     .translate_event = translate_event,
@@ -92,6 +95,10 @@ static MC_Error init_window(struct MC_TargetWM *wm, struct MC_TargetWMWindow *wi
 
 static void destroy_window(struct MC_TargetWM *wm, struct MC_TargetWMWindow *window){
     XDestroyWindow(wm->dpy, window->window_id);
+}
+
+static MC_Error create_window_graphic(struct MC_TargetWM *wm, struct MC_TargetWMWindow *window, struct MC_Graphics **g){
+    return mc_xlib_graphics_init(g, wm->dpy, window->window_id);
 }
 
 static bool poll_event(struct MC_TargetWM *wm, struct MC_TargetWMEvent *event){

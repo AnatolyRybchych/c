@@ -16,7 +16,7 @@
 #include <mc/xlib_wm/wm.h>
 
 #include <mc/graphics/graphics.h>
-#include <mc/graphics_xlib/graphics.h>
+#include <mc/xlib_wm/graphics.h>
 
 #include <stdbool.h>
 #include <ctype.h>
@@ -30,14 +30,8 @@ int main(){
     MC_WMWindow *window;
     MC_REQUIRE(mc_wm_window_init(wm, &window));
 
-    MC_TargetWM *target_wm = mc_wm_get_target(wm);
-    MC_TargetWMWindow *target_window = mc_wm_window_get_target(window);
-
-    Display *dpy = mc_wm_xlib_get_display(target_wm);
-    Window xid = mc_wm_xlib_window_get_xid(target_window);
-
     MC_Graphics *g;
-    MC_REQUIRE(mc_xlib_graphics_init(&g, dpy, xid));
+    MC_REQUIRE(mc_wm_window_get_graphic(window, &g));
 
     while(true){
         MC_WMEvent event;

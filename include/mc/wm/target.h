@@ -124,6 +124,8 @@ struct MC_WMVtab{
     MC_Error (*init_window)(struct MC_TargetWM *wm, struct MC_TargetWMWindow *window);
     void (*destroy_window)(struct MC_TargetWM *wm, struct MC_TargetWMWindow *window);
 
+    MC_Error (*create_window_graphic)(struct MC_TargetWM *wm, struct MC_TargetWMWindow *window, struct MC_Graphics **g);
+
     MC_Error (*set_window_title)(struct MC_TargetWM *wm, struct MC_TargetWMWindow *window, MC_Str title);
     MC_Error (*set_window_position)(struct MC_TargetWM *wm, struct MC_TargetWMWindow *window, MC_Point2I position);
     MC_Error (*set_window_size)(struct MC_TargetWM *wm, struct MC_TargetWMWindow *window, MC_Size2U size);

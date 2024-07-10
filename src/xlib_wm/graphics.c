@@ -1,4 +1,4 @@
-#include <mc/graphics_xlib/graphics.h>
+#include <mc/xlib_wm/graphics.h>
 
 #include <stdint.h>
 

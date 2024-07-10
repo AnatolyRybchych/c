@@ -31,7 +31,8 @@ struct MC_WMWindow{
         MC_String *title;
     } cached;
     MC_Stream *title_stream;
-    uint8_t data[];
+    struct MC_Graphics *g;
+    alignas(void*) uint8_t data[];
 };
 
 struct MC_WM{
@@ -121,6 +122,10 @@ MC_Error mc_wm_window_init(MC_WM *wm, MC_WMWindow **ret_window){
         return MCE_OUT_OF_MEMORY;
     }
 
+    memset(window, 0, sizeof(MC_WMWindow) + v->window_size);
+    window->wm = wm;
+    window->target = (struct MC_TargetWMWindow*)window->data;
+
     Windows *new_windows = MC_VECTOR_PUSHN(wm->windows, 1, &window);
     if(new_windows == NULL){
         free(window);
@@ -128,13 +133,13 @@ MC_Error mc_wm_window_init(MC_WM *wm, MC_WMWindow **ret_window){
     }
     wm->windows = new_windows;
 
-    window->target = (struct MC_TargetWMWindow*)window->data;
     MC_Error status = v->init_window(wm->target, window->target);
     if(status != MCE_OK){
         wm->windows->end--;
         free(window);
         return MCE_OUT_OF_MEMORY;
     }
+
 
     *ret_window = window;
     return MCE_OK;
@@ -417,6 +422,26 @@ MC_Error mc_wm_window_get_rect(MC_WMWindow *window, MC_Rect2IU *rect){
 
         status = size_status;
     }
+
+    return status;
+}
+
+MC_Error mc_wm_window_get_graphic(MC_WMWindow *window, struct MC_Graphics **g){
+    MC_WM *wm = window->wm;
+    MC_WMVtab *v = &wm->vtab;
+    
+    if(window->g){
+        *g = window->g;
+        return MCE_OK;
+    }
+
+    if(!v->create_window_graphic){
+        *g = NULL;
+        return MCE_NOT_SUPPORTED;
+    }
+
+    MC_Error status = v->create_window_graphic(wm->target, window->target, &window->g);
+    *g = status == MCE_OK ? window->g : NULL;
 
     return status;
 }

@@ -1,5 +1,5 @@
-#ifndef MC_GRAPHICS_XLIBGC_H
-#define MC_GRAPHICS_XLIBGC_H
+#ifndef MC_XLIBWM_GRAPHICS_H
+#define MC_XLIBWM_GRAPHICS_H
 
 #include <mc/graphics/target.h>
 
@@ -7,4 +7,4 @@
 
 MC_Error mc_xlib_graphics_init(MC_Graphics **g, Display *dpy, Drawable drawable);
 
-#endif // MC_GRAPHICS_XLIBGC_H
+#endif // MC_XLIBWM_GRAPHICS_H
