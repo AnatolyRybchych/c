@@ -33,6 +33,20 @@ int main(){
     MC_Graphics *g;
     MC_REQUIRE(mc_wm_window_get_graphic(window, &g));
 
+    MC_AColor pixels[16][16];
+    for(size_t y = 0; y < 16; y++){
+        for(size_t x = 0; x < 16; x++){
+            pixels[y][x] = (MC_AColor){
+                .color = {
+                    .r = 1,
+                    .g = 0,
+                    .b = 0
+                }
+            };
+        }
+    }
+    
+
     while(true){
         MC_WMEvent event;
         if(MC_REQUIRE(mc_wm_poll_event(wm, &event)) != MCE_OK){
@@ -46,6 +60,7 @@ int main(){
         case MC_WME_WINDOW_REDRAW_REQUESTED:
             MC_REQUIRE(mc_graphics_begin(g));
             MC_REQUIRE(mc_graphics_clear(g, (MC_Color){.r = 0.1, .g = 0.07, .b = 0.05}));
+            MC_REQUIRE(mc_graphics_write_pixels(g, (MC_Point2I){.x = 100, .y = 100}, (MC_Size2U){.width = 16, .height = 16}, (void*)pixels, (MC_Point2I){0, 0}));
             MC_REQUIRE(mc_graphics_end(g));
             break;
         }
