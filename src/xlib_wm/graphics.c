@@ -40,7 +40,7 @@ static MC_Error clear(MC_TargetGraphics *g, MC_Color color);
 static MC_Error get_size(MC_TargetGraphics *g, MC_Size2U *size);
 
 static uint32_t get_color(MC_Color color);
-static uint8_t u8_clamp(uint32_t val);
+static uint8_t u8_clamp(int val);
 
 const MC_GraphicsVtab vtab = {
     .buffer_ctx_size = sizeof(MC_TargetBuffer),
@@ -186,6 +186,14 @@ static uint32_t get_color(MC_Color color){
          | ((uint32_t)(color.r * 255) << 16);
 }
 
-static uint8_t u8_clamp(uint32_t val){
-    return val >= 0xFF ? 0xFF : val;
+static uint8_t u8_clamp(int val){
+    if(val <= 0){
+        return val;
+    }
+
+    if(val >= 0xFF){
+        return 0xFF;
+    }
+
+    return val;
 }
