@@ -57,21 +57,27 @@ MC_Error mc_graphics_end(MC_Graphics *g){
 }
 
 MC_Error mc_graphics_create_buffer(MC_Graphics *g, MC_GBuffer **ret_buffer, MC_Size2U size_px){
+    *ret_buffer = NULL;
+
     if(g->vtab.init_buffer == NULL){
-        *ret_buffer = NULL;
         return MCE_NOT_SUPPORTED;
     }
 
     MC_GBuffer *buffer = malloc(sizeof(MC_GBuffer) + g->vtab.buffer_ctx_size);
     if(buffer == NULL){
-        *ret_buffer = NULL;
         return MCE_OUT_OF_MEMORY;
     }
 
+    memset(buffer, 0, sizeof(buffer) + g->vtab.buffer_ctx_size);
+    buffer->target = (MC_TargetBuffer*)buffer->data;
+    buffer->g = g;
+
     MC_Error status = g->vtab.init_buffer(g->target, buffer->target, size_px);
     if(status != MCE_OK){
-        *ret_buffer = buffer;
         free(buffer);
+    }
+    else{
+        *ret_buffer = buffer;
     }
 
     return status;
@@ -90,27 +96,37 @@ void mc_graphics_destroy_buffer(MC_GBuffer *buffer){
 }
 
 MC_Error mc_graphics_select_buffer(MC_Graphics *g, MC_GBuffer *buffer){
-    if(!g->vtab.select_buffer){
-        return buffer ? MCE_NOT_SUPPORTED : MCE_OK;
+    if(buffer){
+        if(!g->vtab.select_buffer){
+            return buffer ? MCE_NOT_SUPPORTED : MCE_OK;
+        }
+
+        if(buffer->g != g){
+            return MCE_INVALID_INPUT;
+        }
+
+        return g->vtab.select_buffer(g->target, buffer->target);
     }
 
-    if(buffer->g != g){
-        return MCE_INVALID_INPUT;
-    }
-
-    return g->vtab.select_buffer(g->target, buffer->target);
+    return g->vtab.select_buffer
+        ? g->vtab.select_buffer(g->target, NULL) 
+        :MCE_OK;
 }
 
-MC_Error mc_graphics_write(MC_Graphics *g, MC_Point2I pos, MC_GBuffer *buffer, MC_Point2I src_pos, MC_Size2U size){
-    if(!g->vtab.write){
-        return MCE_NOT_SUPPORTED;
+MC_Error mc_graphics_write(MC_Graphics *g, MC_Point2I pos, MC_Size2U size, MC_GBuffer *buffer, MC_Point2I src_pos){
+    if(buffer){
+        if(!g->vtab.write){
+            return buffer ? MCE_NOT_SUPPORTED : MCE_OK;
+        }
+
+        if(buffer->g != g){
+            return MCE_INVALID_INPUT;
+        }
+
+        return g->vtab.write(g->target, pos, size, buffer->target, src_pos);
     }
 
-    if(buffer->g != g){
-        return MCE_INVALID_INPUT;
-    }
-
-    return g->vtab.write(g->target, pos, size, buffer->target, src_pos);
+    return g->vtab.write ? g->vtab.write(g->target, pos, size, NULL, src_pos)  :MCE_OK;
 }
 
 MC_Error mc_graphics_write_pixels(MC_Graphics *g, MC_Point2I pos, MC_Size2U size, const MC_AColor pixels[size.height][size.width], MC_Point2I src_pos){

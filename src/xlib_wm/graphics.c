@@ -10,6 +10,7 @@ struct MC_TargetGraphics{
     void *tmp;
 
     int screen;
+    int depth;
     Visual *visual;
 
     MC_TargetBuffer *buffer;
@@ -57,17 +58,20 @@ const MC_GraphicsVtab vtab = {
     .write = write,
     .write_pixels = write_pixels,
 
-    .clear = clear
+    .clear = clear,
+    .get_size = get_size,
 };
 
 MC_Error mc_xlib_graphics_init(MC_Graphics **g, Display *dpy, Drawable drawable){
     int screen = DefaultScreen(dpy);
+    int depth = DefaultDepth(dpy, screen);
 
     MC_TargetGraphics target = {
         .tmp_size = 0,
         .tmp = NULL,
 
         .screen = screen,
+        .depth = depth,
         .visual = DefaultVisual(dpy, screen),
 
         .buffer = NULL,
@@ -96,7 +100,7 @@ static MC_Error end(MC_TargetGraphics *g){
 }
 
 static MC_Error init_buffer(MC_TargetGraphics *g, MC_TargetBuffer *buffer, MC_Size2U size_px){
-    buffer->pixmap = XCreatePixmap(g->dpy, g->drawable, size_px.width, size_px.height, 24);
+    buffer->pixmap = XCreatePixmap(g->dpy, g->drawable, size_px.width, size_px.height, g->depth);
     return MCE_OK;
 }
 
@@ -146,7 +150,7 @@ static MC_Error write_pixels(MC_TargetGraphics *g, MC_Point2I pos, MC_Size2U siz
         }
     }
 
-    XImage *image = XCreateImage(g->dpy, g->visual, 24, ZPixmap, 0, (char*)pixel_data, size.width, size.height, 32, 0);
+    XImage *image = XCreateImage(g->dpy, g->visual, g->depth, ZPixmap, 0, (char*)pixel_data, size.width, size.height, 32, 0);
     if(image == NULL){
         return MCE_OUT_OF_MEMORY;
     }
