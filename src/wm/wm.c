@@ -682,6 +682,22 @@ static MC_WMEvent translate_indication(MC_WM *wm){
                 .position = window->cached.mouse_pos,
             }
         };
+    case MC_WMIND_KEY_DOWN:
+        return (MC_WMEvent){
+            .type = MC_WME_KEY_DOWN,
+            .as.key_down = {
+                .window = NULL,
+                .key = ind.as.key_down.key,
+            }
+        };
+    case MC_WMIND_KEY_UP:
+        return (MC_WMEvent){
+            .type = MC_WME_KEY_UP,
+            .as.key_up = {
+                .window = NULL,
+                .key = ind.as.key_up.key,
+            }
+        };
     default:
         MC_ASSERT_FAULT("NOT IMPLEMENTED YET" && 0);
     }

@@ -3,6 +3,7 @@
 
 #include <mc/wm/wm.h>
 #include <mc/wm/mouse_button.h>
+#include <mc/wm/key.h>
 
 #define MC_ITER_WM_EVENTS() \
     MC_EVENT(NONE) \
@@ -18,6 +19,8 @@
     MC_EVENT(MOUSE_ENTER) \
     MC_EVENT(MOUSE_LEAVE) \
     MC_EVENT(MOUSE_WHEEL) \
+    MC_EVENT(KEY_DOWN,                  USE_ALL) \
+    MC_EVENT(KEY_UP,                    USE_ALL) \
 
 typedef unsigned MC_WMEventType;
 enum MC_WMEventType{
@@ -93,6 +96,18 @@ struct MC_WMEvent{
             int up;
             int right;
         } mouse_wheel;
+
+        struct MC_WME_KeyDown{
+            // optional
+            struct MC_WMWindow *window;
+            MC_Key key;
+        } key_down;
+
+        struct MC_WME_KeyUp{
+            // optional
+            struct MC_WMWindow *window;
+            MC_Key key;
+        } key_up;
     } as;
 };
 

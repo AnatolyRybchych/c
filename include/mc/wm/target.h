@@ -3,6 +3,7 @@
 
 #include <mc/wm/wm.h>
 #include <mc/wm/mouse_button.h>
+#include <mc/wm/key.h>
 
 #define MC_WM_MAX_INDICATIONS_PER_EVENT 16
 
@@ -19,6 +20,8 @@
     MC_WMIDN(MOUSE_ENTER,               USE_ALL) \
     MC_WMIDN(MOUSE_LEAVE,               USE_ALL) \
     MC_WMIDN(MOUSE_WHEEL,               USE_ALL) \
+    MC_WMIDN(KEY_DOWN,                  USE_ALL) \
+    MC_WMIDN(KEY_UP,                    USE_ALL) \
 
 typedef unsigned MC_WMIndicationType;
 enum MC_WMIndicationType{
@@ -108,6 +111,14 @@ struct MC_TargetIndication{
             int up;
             int right;
         } mouse_wheel;
+
+        struct MC_WMIND_KeyDown{
+            MC_Key key;
+        } key_down;
+
+        struct MC_WMIND_KeyUp{
+            MC_Key key;
+        } key_up;
     } as;
 };
 

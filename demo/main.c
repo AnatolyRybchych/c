@@ -73,14 +73,21 @@ int main(){
             continue;
         }
 
-        mc_fmt(MC_STDOUT, "event %s\n", mc_wm_event_type_str(event.type));
-
         switch (event.type){
         case MC_WME_WINDOW_REDRAW_REQUESTED:
             MC_REQUIRE(mc_graphics_begin(g));
             MC_REQUIRE(mc_graphics_clear(g, (MC_Color){0}));
             MC_REQUIRE(mc_graphics_write(g, (MC_Point2I){.x = 0, .y = 0}, size, buffer, (MC_Point2I){0, 0}));
             MC_REQUIRE(mc_graphics_end(g));
+            break;
+        case MC_WME_KEY_DOWN:
+            mc_fmt(MC_STDOUT, "KEY_DOWN %s\n", mc_key_str(event.as.key_down.key));
+            break;
+        case MC_WME_KEY_UP:
+            mc_fmt(MC_STDOUT, "KEY_UP %s\n", mc_key_str(event.as.key_up.key));
+            break;
+        default:
+            mc_fmt(MC_STDOUT, "event %s\n", mc_wm_event_type_str(event.type));
             break;
         }
     }

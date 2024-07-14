@@ -1,5 +1,9 @@
 #include <mc/xlib_wm/wm.h>
 #include <mc/xlib_wm/graphics.h>
+#include <mc/xlib_wm/key.h>
+#include <mc/io/file.h>
+
+#include <X11/keysym.h>
 
 #define LOG(FMT, ...) mc_fmt(wm->log, "[WM][XLIB] " FMT "\n", ##__VA_ARGS__)
 
@@ -25,6 +29,7 @@ static bool poll_event(struct MC_TargetWM *wm, struct MC_TargetWMEvent *event);
 static unsigned translate_event(struct MC_TargetWM *wm, const struct MC_TargetWMEvent *event, MC_TargetIndication indications[MC_WM_MAX_INDICATIONS_PER_EVENT]);
 
 static MC_MouseButton get_mouse_button(int x11_mouse_button);
+static MC_Key get_key(const XKeyEvent *xk);
 
 static struct MC_TargetWMWindow *get_window(struct MC_TargetWM *wm, Window xid);
 
@@ -195,6 +200,24 @@ static unsigned translate_event(struct MC_TargetWM *wm, const struct MC_TargetWM
         };
 
         return 1;
+    case KeyPress:
+        indications[0] = (MC_TargetIndication){
+            .type = MC_WMIND_KEY_DOWN,
+            .as.key_down = {
+                .key = get_key(&e->xkey),
+            }
+        };
+
+        return 1;
+    case KeyRelease:
+        indications[0] = (MC_TargetIndication){
+            .type = MC_WMIND_KEY_UP,
+            .as.key_up = {
+                .key = get_key(&e->xkey),
+            }
+        };
+
+        return 1;
     default: return 0;
     }
 }
@@ -207,6 +230,19 @@ static MC_MouseButton get_mouse_button(int x11_mouse_button){
     case Button4: return MC_MOUSE_BUTTON4;
     case Button5: return MC_MOUSE_BUTTON5;
     default: return MC_MOUSE_UNKNOWN;
+    }
+}
+
+static MC_Key get_key(const XKeyEvent *xk){
+    XKeyEvent mut_xk = *xk;
+    KeySym sym = XLookupKeysym(&mut_xk, 0);
+    switch (sym){
+    #define MC_XKEY(XNAME, NAME) case XK_##XNAME: return MC_KEY_##NAME;
+    MC_X11_ITER_KEYS()
+    #undef MC_XKEY
+    default:
+        mc_fmt(MC_STDERR, "unknown key %X\n", (unsigned)sym);
+        return MC_KEY_UNKNOWN;
     }
 }
 

@@ -25,6 +25,7 @@ objects			+= wm/wm.o
 objects			+= wm/event.o
 objects			+= wm/target.o
 objects			+= wm/mouse_button.o
+objects			+= wm/key.o
 
 objects			+= graphics/graphics.o
 
