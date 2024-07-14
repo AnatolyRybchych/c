@@ -61,7 +61,7 @@ int main(){
 
     MC_Stream *f;
     MC_REQUIRE(mc_fopen(&f, MC_STRC("dump.bmp"), MC_OPEN_WRITE));
-    MC_REQUIRE(mc_graphics_dump(g, f));
+    MC_REQUIRE(mc_graphics_dump_bmp(g, f));
     mc_close(f);
 
     MC_REQUIRE(mc_graphics_select_buffer(g, NULL));

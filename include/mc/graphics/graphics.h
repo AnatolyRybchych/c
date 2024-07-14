@@ -45,7 +45,7 @@ MC_Error mc_graphics_get_size(MC_Graphics *g, MC_Size2U *size);
 
 MC_Error mc_graphics_clear(MC_Graphics *g, MC_Color color);
 
-MC_Error mc_graphics_dump(MC_Graphics *g, struct MC_Stream *stream);
+MC_Error mc_graphics_dump_bmp(MC_Graphics *g, struct MC_Stream *stream);
 
 inline uint8_t mc_u8_clamp(int val){
         if(val <= 0){

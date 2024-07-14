@@ -170,7 +170,7 @@ MC_Error mc_graphics_clear(MC_Graphics *g, MC_Color color){
     return MCE_NOT_SUPPORTED;
 }
 
-MC_Error mc_graphics_dump(MC_Graphics *g, struct MC_Stream *stream){
+MC_Error mc_graphics_dump_bmp(MC_Graphics *g, struct MC_Stream *stream){
     if(g->vtab.get_size == NULL || g->vtab.read_pixels == NULL){
         return MCE_NOT_SUPPORTED;
     }
