@@ -1,5 +1,6 @@
 #include <mc/graphics/graphics.h>
 #include <mc/graphics/target.h>
+#include <mc/data/img/bmp.h>
 
 #include <malloc.h>
 #include <stdalign.h>
@@ -9,6 +10,10 @@
 struct MC_Graphics{
     MC_GraphicsVtab vtab;
     MC_TargetGraphics *target;
+
+    size_t tmp_size;
+    void *tmp;
+
     alignas(void*) uint8_t data[];
 };
 
@@ -17,6 +22,8 @@ struct MC_GBuffer{
     MC_TargetBuffer *target;
     alignas(void*) uint8_t data[];
 };
+
+extern inline uint8_t mc_u8_clamp(int val);
 
 MC_Error mc_graphics_init(MC_Graphics **ret_g, const MC_GraphicsVtab *vtab, size_t ctx_size, const void *ctx){
     MC_Graphics *g = malloc(sizeof(MC_Graphics) + ctx_size);
@@ -30,6 +37,8 @@ MC_Error mc_graphics_init(MC_Graphics **ret_g, const MC_GraphicsVtab *vtab, size
 
     g->vtab = *vtab;
     g->target = (MC_TargetGraphics*)g->data;
+    g->tmp = NULL;
+    g->tmp_size = 0;
 
     *ret_g = g;
     return MCE_OK;
@@ -163,4 +172,50 @@ MC_Error mc_graphics_clear(MC_Graphics *g, MC_Color color){
     }
 
     return MCE_NOT_SUPPORTED;
+}
+
+MC_Error mc_graphics_dump(MC_Graphics *g, struct MC_Stream *stream){
+    if(g->vtab.get_size == NULL || g->vtab.read_pixels == NULL){
+        return MCE_NOT_SUPPORTED;
+    }
+
+    MC_Size2U size;
+    MC_RETURN_ERROR(g->vtab.get_size(g->target, &size));
+
+    size_t payload_size = size.width * size.height * sizeof(MC_AColor);
+
+    if(g->tmp_size < payload_size){
+        void *tmp = realloc(g->tmp, payload_size);
+        if(tmp == NULL){
+            return MCE_OUT_OF_MEMORY;
+        }
+
+        g->tmp_size = payload_size;
+        g->tmp = tmp;
+    }
+
+    MC_AColor (*pixels)[size.height][size.width] = g->tmp;
+    uint8_t (*payload)[size.height][size.width][3] = g->tmp;
+
+    MC_RETURN_ERROR(g->vtab.read_pixels(g->target, (MC_Point2I){0}, size, (void*)pixels));
+    
+    for(size_t y = 0; y < size.height; y++){
+        for(size_t x = 0; x < size.width; x++){
+            MC_Color c = (*pixels)[y][x].color;
+            // float a = (*pixels)[y][x].alpha;
+            (*payload)[y][x][0] = mc_u8_clamp(c.b * 255.0);
+            (*payload)[y][x][1] = mc_u8_clamp(c.g * 255.0);
+            (*payload)[y][x][2] = mc_u8_clamp(c.r * 255.0);
+            // (*payload)[y][x][3] = mc_u8_clamp(a * 255.0);
+        }
+    }
+
+    MC_BmpHdr hdr;
+    MC_BmpDIBHdr dib;
+    //TODO: fix alpha
+    MC_RETURN_ERROR(mc_bmp_infohdr_init(&hdr, &dib.info, MC_BMPI_COMP_RGB, size.width, size.height, 24));
+
+    MC_RETURN_ERROR(mc_bmp_save(stream, &hdr, &dib, pixels));
+
+    return MCE_OK;
 }

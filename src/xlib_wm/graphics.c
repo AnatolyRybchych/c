@@ -34,14 +34,13 @@ static void destroy_buffer(MC_TargetGraphics *g, MC_TargetBuffer *buffer);
 static MC_Error select_buffer(MC_TargetGraphics *g, MC_TargetBuffer *buffer);
 static MC_Error write(MC_TargetGraphics *g, MC_Point2I pos, MC_Size2U size, MC_TargetBuffer *src, MC_Point2I src_pos);
 static MC_Error write_pixels(MC_TargetGraphics *g, MC_Point2I pos, MC_Size2U size, const MC_AColor pixels[size.height][size.width], MC_Point2I src_pos);
-// static MC_Error read_pixels(MC_TargetGraphics *g, MC_Point2I pos, MC_Size2U size, MC_AColor pixels[size.height][size.width]);
+static MC_Error read_pixels(MC_TargetGraphics *g, MC_Point2I pos, MC_Size2U size, MC_AColor pixels[size.height][size.width]);
 
 static MC_Error clear(MC_TargetGraphics *g, MC_Color color);
 
 static MC_Error get_size(MC_TargetGraphics *g, MC_Size2U *size);
 
 static uint32_t get_color(MC_Color color);
-static uint8_t u8_clamp(int val);
 
 const MC_GraphicsVtab vtab = {
     .buffer_ctx_size = sizeof(MC_TargetBuffer),
@@ -57,6 +56,7 @@ const MC_GraphicsVtab vtab = {
     .select_buffer = select_buffer,
     .write = write,
     .write_pixels = write_pixels,
+    .read_pixels = read_pixels,
 
     .clear = clear,
     .get_size = get_size,
@@ -143,10 +143,10 @@ static MC_Error write_pixels(MC_TargetGraphics *g, MC_Point2I pos, MC_Size2U siz
 
     for(size_t y = 0; y < size.height; y++){
         for(size_t x = 0; x < size.width; x++){
-            (*pixel_data)[y][x][0] = u8_clamp((*px)[y][x].color.b * 255);
-            (*pixel_data)[y][x][1] = u8_clamp((*px)[y][x].color.g * 255);
-            (*pixel_data)[y][x][2] = u8_clamp((*px)[y][x].color.r * 255);
-            (*pixel_data)[y][x][3] = u8_clamp((*px)[y][x].alpha * 255);
+            (*pixel_data)[y][x][0] = mc_u8_clamp((*px)[size.height - y - 1][x].color.b * 255);
+            (*pixel_data)[y][x][1] = mc_u8_clamp((*px)[size.height - y - 1][x].color.g * 255);
+            (*pixel_data)[y][x][2] = mc_u8_clamp((*px)[size.height - y - 1][x].color.r * 255);
+            (*pixel_data)[y][x][3] = mc_u8_clamp((*px)[size.height - y - 1][x].alpha * 255);
         }
     }
 
@@ -163,9 +163,25 @@ static MC_Error write_pixels(MC_TargetGraphics *g, MC_Point2I pos, MC_Size2U siz
     return MCE_OK;
 }
 
-// static MC_Error read_pixels(MC_TargetGraphics *g, MC_Point2I pos, MC_Size2U size, MC_AColor pixels[size.height][size.width]){
+static MC_Error read_pixels(MC_TargetGraphics *g, MC_Point2I pos, MC_Size2U size, MC_AColor pixels[size.height][size.width]){
+    XImage *img = XGetImage(g->dpy, g->drawing_target, pos.x, pos.y, size.width, size.height, AllPlanes, ZPixmap);
+    if(img == NULL){
+        return MCE_OUT_OF_MEMORY;
+    }
 
-// }
+    uint8_t (*img_data)[size.height][size.width][4] = (void*)img->data;
+    for (size_t y = 0; y < size.height; y++){
+        for (size_t x = 0; x < size.width; x++){
+            pixels[size.height - y - 1][x].color.b = (*img_data)[y][x][0] / 255.0;
+            pixels[size.height - y - 1][x].color.g = (*img_data)[y][x][1] / 255.0;
+            pixels[size.height - y - 1][x].color.r = (*img_data)[y][x][2] / 255.0;
+            pixels[size.height - y - 1][x].alpha = (*img_data)[y][x][3] / 255.0;
+        }
+    }
+
+    XDestroyImage(img);
+    return MCE_OK;
+}
 
 static MC_Error clear(MC_TargetGraphics *g, MC_Color color){
     MC_Size2U size;
@@ -188,16 +204,4 @@ static uint32_t get_color(MC_Color color){
     return ((uint32_t)(color.b * 255) << 0)
          | ((uint32_t)(color.g * 255) << 8)
          | ((uint32_t)(color.r * 255) << 16);
-}
-
-static uint8_t u8_clamp(int val){
-    if(val <= 0){
-        return val;
-    }
-
-    if(val >= 0xFF){
-        return 0xFF;
-    }
-
-    return val;
 }

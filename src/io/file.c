@@ -38,8 +38,8 @@ MC_Error mc_fopen(MC_Stream **file, MC_Str path, MC_OpenMode mode){
 static int open_flags(MC_OpenMode mode){
     switch (mode){
     case MC_OPEN_READ: return O_RDONLY;
-    case MC_OPEN_WRITE: return O_RDWR;
-    case MC_OPEN_APPEND: return O_RDWR | O_APPEND;
+    case MC_OPEN_WRITE: return O_RDWR | O_CREAT;
+    case MC_OPEN_APPEND: return O_RDWR | O_APPEND | O_CREAT;
     default: return -1;
     }
 }

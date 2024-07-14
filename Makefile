@@ -16,6 +16,7 @@ objects			+= data/vector.o
 objects			+= data/pqueue.o
 objects			+= data/list.o
 objects			+= data/struct.o
+objects			+= data/img/bmp.o
 objects			+= io/stream.o
 objects			+= io/file.o
 objects			+= io/fd.o

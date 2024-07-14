@@ -16,6 +16,9 @@ typedef unsigned MC_Error;
     MC_ERROR(TIMEOUT) \
     MC_ERROR(AGAIN) \
 
+#define MC_RETURN_ERROR(...) for(MC_Error status = (__VA_ARGS__); status != MCE_OK;) return status
+#define MC_RETURN_INVALID(...) if(__VA_ARGS__) return MCE_INVALID_INPUT
+
 enum MC_Error{
     #define MC_ERROR(ERROR, ...) MCE_##ERROR,
     MC_ITER_ERRORS()

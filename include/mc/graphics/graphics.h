@@ -5,6 +5,7 @@
 #include <mc/error.h>
 
 #include <stddef.h>
+#include <stdint.h>
 
 typedef struct MC_Graphics MC_Graphics;
 typedef struct MC_GBuffer MC_GBuffer;
@@ -24,6 +25,8 @@ struct MC_AColor{
     float alpha;
 };
 
+struct MC_Stream;
+
 MC_Error mc_graphics_init(MC_Graphics **g, const MC_GraphicsVtab *vtab, size_t ctx_size, const void *ctx);
 void mc_graphics_destroy(MC_Graphics *g);
 
@@ -41,5 +44,19 @@ MC_Error mc_graphics_read_pixels(MC_Graphics *g, MC_Point2I pos, MC_Size2U size,
 MC_Error mc_graphics_get_size(MC_Graphics *g, MC_Size2U *size);
 
 MC_Error mc_graphics_clear(MC_Graphics *g, MC_Color color);
+
+MC_Error mc_graphics_dump(MC_Graphics *g, struct MC_Stream *stream);
+
+inline uint8_t mc_u8_clamp(int val){
+        if(val <= 0){
+        return val;
+    }
+
+    if(val >= 0xFF){
+        return 0xFF;
+    }
+
+    return val;
+}
 
 #endif // MC_GRAPHICS_H

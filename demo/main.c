@@ -37,15 +37,34 @@ int main(){
     for(size_t y = 0; y < 16; y++){
         for(size_t x = 0; x < 16; x++){
             pixels[y][x] = (MC_AColor){
+                .alpha = 1,
                 .color = {
                     .r = 1,
-                    .g = 0,
-                    .b = 0
+                    .g = 1,
+                    .b = 1
                 }
             };
         }
     }
-    
+
+    MC_GBuffer *buffer;
+    MC_Size2U size;
+
+    MC_REQUIRE(mc_graphics_get_size(g, &size));
+    MC_REQUIRE(mc_graphics_create_buffer(g, &buffer, size));
+    MC_REQUIRE(mc_graphics_select_buffer(g, buffer));
+
+    MC_REQUIRE(mc_graphics_begin(g));
+    MC_REQUIRE(mc_graphics_clear(g, (MC_Color){0.2,0.1,0.05}));
+    MC_REQUIRE(mc_graphics_write_pixels(g, (MC_Point2I){.x = 100, .y = 100}, (MC_Size2U){.width = 16, .height = 16}, (void*)pixels, (MC_Point2I){0, 0}));
+    MC_REQUIRE(mc_graphics_end(g));
+
+    MC_Stream *f;
+    MC_REQUIRE(mc_fopen(&f, MC_STRC("dump.bmp"), MC_OPEN_WRITE));
+    MC_REQUIRE(mc_graphics_dump(g, f));
+    mc_close(f);
+
+    MC_REQUIRE(mc_graphics_select_buffer(g, NULL));
 
     while(true){
         MC_WMEvent event;
@@ -59,8 +78,8 @@ int main(){
         switch (event.type){
         case MC_WME_WINDOW_REDRAW_REQUESTED:
             MC_REQUIRE(mc_graphics_begin(g));
-            MC_REQUIRE(mc_graphics_clear(g, (MC_Color){.r = 0.1, .g = 0.07, .b = 0.05}));
-            MC_REQUIRE(mc_graphics_write_pixels(g, (MC_Point2I){.x = 100, .y = 100}, (MC_Size2U){.width = 16, .height = 16}, (void*)pixels, (MC_Point2I){0, 0}));
+            MC_REQUIRE(mc_graphics_clear(g, (MC_Color){0}));
+            MC_REQUIRE(mc_graphics_write(g, (MC_Point2I){.x = 0, .y = 0}, size, buffer, (MC_Point2I){0, 0}));
             MC_REQUIRE(mc_graphics_end(g));
             break;
         }
