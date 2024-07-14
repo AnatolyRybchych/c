@@ -7,27 +7,25 @@ static MC_Error validate_info(const MC_BmpHdr *hdr, const MC_BmpInfohdr *dib, co
 MC_Error mc_bmp_infohdr_init(MC_BmpHdr *hdr, MC_BmpInfohdr *dib,
     MC_BmpInfohdrCompression compression, uint32_t width, uint32_t height, uint16_t bpp)
 {
-    if(width == 0 || height == 0){
-        return MCE_INVALID_INPUT;
-    }
+    MC_RETURN_INVALID(width == 0 || height == 0);
 
     switch (compression){
     case MC_BMPI_COMP_RGB:
-        if(bpp % 3 != 0) return MCE_INVALID_INPUT;
-        else break;
+        MC_RETURN_INVALID(bpp % 3 != 0);
+        break;
     case MC_BMPI_COMP_RLE8:
-        if(bpp != 8) return MCE_INVALID_INPUT;
-        else return MCE_NOT_IMPLEMENTED;
+        MC_RETURN_INVALID(bpp != 8);
+        return MCE_NOT_IMPLEMENTED;
     case MC_BMPI_COMP_RLE4:
-        if(bpp != 4) return MCE_INVALID_INPUT;
-        else return MCE_NOT_IMPLEMENTED;
+        MC_RETURN_INVALID(bpp != 4);
+        return MCE_NOT_IMPLEMENTED;
     case MC_BMPI_COMP_BITFIELDS:
     case MC_BMPI_COMP_JPEG:
     case MC_BMPI_COMP_PNG:
         return MCE_NOT_IMPLEMENTED;
     case MC_BMPI_COMP_ALPHABITFIELDS:
-        if(bpp % 4 != 0) return MCE_INVALID_INPUT;
-        else break;
+        MC_RETURN_INVALID(bpp % 4 != 0);
+        break;
     case MC_BMPI_COMP_CMYK:
     case MC_BMPI_COMP_CMYKRLE4:
     case MC_BMPI_COMP_CMYKRLE8:

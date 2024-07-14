@@ -11,9 +11,7 @@ static int open_flags(MC_OpenMode mode);
 
 MC_Error mc_fopen(MC_Stream **file, MC_Str path, MC_OpenMode mode){
     int flags = open_flags(mode);
-    if(flags < 0){
-        return MCE_INVALID_INPUT;
-    }
+    MC_RETURN_INVALID(flags < 0);
 
     MC_String *path_string = mc_string(path);
     if(path_string == NULL){

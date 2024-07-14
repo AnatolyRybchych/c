@@ -134,9 +134,7 @@ MC_Error mc_fmt(MC_Stream *stream, const char *fmt, ...){
 
 MC_Error mc_packv(MC_Stream *stream, const char *fmt, va_list args){
     int size = mc_struct_calcsize(fmt);
-    if(size < 0){
-        return MCE_INVALID_INPUT;
-    }
+    MC_RETURN_INVALID(size < 0);
 
     if(size <= 512){
         char buffer[size];

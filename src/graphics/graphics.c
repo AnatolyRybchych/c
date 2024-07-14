@@ -110,9 +110,7 @@ MC_Error mc_graphics_select_buffer(MC_Graphics *g, MC_GBuffer *buffer){
             return buffer ? MCE_NOT_SUPPORTED : MCE_OK;
         }
 
-        if(buffer->g != g){
-            return MCE_INVALID_INPUT;
-        }
+        MC_RETURN_INVALID(buffer->g != g);
 
         return g->vtab.select_buffer(g->target, buffer->target);
     }
@@ -128,9 +126,7 @@ MC_Error mc_graphics_write(MC_Graphics *g, MC_Point2I pos, MC_Size2U size, MC_GB
             return buffer ? MCE_NOT_SUPPORTED : MCE_OK;
         }
 
-        if(buffer->g != g){
-            return MCE_INVALID_INPUT;
-        }
+        MC_RETURN_INVALID(buffer->g != g);
 
         return g->vtab.write(g->target, pos, size, buffer->target, src_pos);
     }
