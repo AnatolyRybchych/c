@@ -121,7 +121,7 @@ static MC_Error select_buffer(MC_TargetGraphics *g, MC_TargetBuffer *buffer){
 static MC_Error write(MC_TargetGraphics *g, MC_Point2I pos, MC_Size2U size, MC_TargetBuffer *src, MC_Point2I src_pos){
     Drawable src_drawable = src ? src->pixmap : g->drawable;
 
-    XCopyArea(g->dpy, g->drawing_target, src_drawable, g->gc,
+    XCopyArea(g->dpy, src_drawable, g->drawing_target, g->gc,
         src_pos.x, src_pos.y, size.width, size.height, pos.x, pos.y);
 
     return MCE_OK;
