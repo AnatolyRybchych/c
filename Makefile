@@ -28,6 +28,7 @@ objects			+= wm/mouse_button.o
 objects			+= wm/key.o
 
 objects			+= graphics/graphics.o
+objects			+= graphics/di.o
 
 objects			+= xlib_wm/wm.o
 objects			+= xlib_wm/graphics.o
