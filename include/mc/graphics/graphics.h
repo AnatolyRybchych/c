@@ -17,12 +17,11 @@ typedef struct MC_AColor MC_AColor;
 struct MC_TargetGraphics;
 
 struct MC_Color{
-    float r, g, b;
+    uint8_t r, g, b;
 };
 
 struct MC_AColor{
-    MC_Color color;
-    float alpha;
+    uint8_t r, g, b, a;
 };
 
 struct MC_Stream;

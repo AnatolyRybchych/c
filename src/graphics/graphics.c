@@ -197,12 +197,10 @@ MC_Error mc_graphics_dump_bmp(MC_Graphics *g, struct MC_Stream *stream){
     
     for(size_t y = 0; y < size.height; y++){
         for(size_t x = 0; x < size.width; x++){
-            MC_Color c = (*pixels)[y][x].color;
-            // float a = (*pixels)[y][x].alpha;
-            (*payload)[y][x][0] = mc_u8_clamp(c.b * 255.0);
-            (*payload)[y][x][1] = mc_u8_clamp(c.g * 255.0);
-            (*payload)[y][x][2] = mc_u8_clamp(c.r * 255.0);
-            // (*payload)[y][x][3] = mc_u8_clamp(a * 255.0);
+            MC_AColor c = (*pixels)[y][x];
+            (*payload)[y][x][0] = c.b;
+            (*payload)[y][x][1] = c.g;
+            (*payload)[y][x][2] = c.r;
         }
     }
 

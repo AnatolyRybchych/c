@@ -143,10 +143,10 @@ static MC_Error write_pixels(MC_TargetGraphics *g, MC_Point2I pos, MC_Size2U siz
 
     for(size_t y = 0; y < size.height; y++){
         for(size_t x = 0; x < size.width; x++){
-            (*pixel_data)[y][x][0] = mc_u8_clamp((*px)[size.height - y - 1][x].color.b * 255);
-            (*pixel_data)[y][x][1] = mc_u8_clamp((*px)[size.height - y - 1][x].color.g * 255);
-            (*pixel_data)[y][x][2] = mc_u8_clamp((*px)[size.height - y - 1][x].color.r * 255);
-            (*pixel_data)[y][x][3] = mc_u8_clamp((*px)[size.height - y - 1][x].alpha * 255);
+            (*pixel_data)[y][x][0] = (*px)[size.height - y - 1][x].b;
+            (*pixel_data)[y][x][1] = (*px)[size.height - y - 1][x].g;
+            (*pixel_data)[y][x][2] = (*px)[size.height - y - 1][x].r;
+            (*pixel_data)[y][x][3] = (*px)[size.height - y - 1][x].a;
         }
     }
 
@@ -172,10 +172,10 @@ static MC_Error read_pixels(MC_TargetGraphics *g, MC_Point2I pos, MC_Size2U size
     uint8_t (*img_data)[size.height][size.width][4] = (void*)img->data;
     for (size_t y = 0; y < size.height; y++){
         for (size_t x = 0; x < size.width; x++){
-            pixels[size.height - y - 1][x].color.b = (*img_data)[y][x][0] / 255.0;
-            pixels[size.height - y - 1][x].color.g = (*img_data)[y][x][1] / 255.0;
-            pixels[size.height - y - 1][x].color.r = (*img_data)[y][x][2] / 255.0;
-            pixels[size.height - y - 1][x].alpha = (*img_data)[y][x][3] / 255.0;
+            pixels[size.height - y - 1][x].b = (*img_data)[y][x][0];
+            pixels[size.height - y - 1][x].g = (*img_data)[y][x][1];
+            pixels[size.height - y - 1][x].r = (*img_data)[y][x][2];
+            pixels[size.height - y - 1][x].a = (*img_data)[y][x][3];
         }
     }
 

@@ -55,7 +55,7 @@ int main(){
 
         switch (event.type){
         case MC_WME_WINDOW_REDRAW_REQUESTED:
-            mc_di_clear(di, &buf, (MC_AColor){.color = {.r = 0.05, .g = 0.02, .b = 0.01}});
+            mc_di_clear(di, &buf, (MC_AColor){.r = 10, .g = 4, .b = 2});
 
             MC_REQUIRE(mc_graphics_begin(g));
             MC_REQUIRE(mc_graphics_write_pixels(g, (MC_Point2I){.x = 0, .y = 0}, buf.size, (void*)buf.pixels, (MC_Point2I){0, 0}));
