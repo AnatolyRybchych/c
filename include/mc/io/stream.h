@@ -23,6 +23,8 @@ MC_Error mc_fmt(MC_Stream *stream, const char *fmt, ...);
 
 MC_Error mc_packv(MC_Stream *stream, const char *fmt, va_list args);
 MC_Error mc_pack(MC_Stream *stream, const char *fmt, ...);
+MC_Error mc_unpackv(MC_Stream *stream, const char *fmt, va_list args);
+MC_Error mc_unpack(MC_Stream *stream, const char *fmt, ...);
 MC_Error mc_flush(MC_Stream *stream);
 
 MC_Error mc_get_cursor(MC_Stream *stream, size_t *cursor);

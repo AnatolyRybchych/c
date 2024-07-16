@@ -161,6 +161,42 @@ MC_Error mc_pack(MC_Stream *stream, const char *fmt, ...){
     return res;
 }
 
+MC_Error mc_unpackv(MC_Stream *stream, const char *fmt, va_list args){
+    int size = mc_struct_calcsize(fmt);
+    MC_RETURN_INVALID(size < 0);
+
+    if(size <= 512){
+        char buffer[size];
+        MC_RETURN_ERROR(mc_read_all(stream, size, buffer));
+        mc_struct_vnunpack(buffer, ~(unsigned)0, fmt, args);
+        return MCE_OK;
+    }
+
+    char *buffer = malloc(size);
+    if(buffer == NULL){
+        return MCE_OUT_OF_MEMORY;
+    }
+
+    MC_Error status = mc_read_all(stream, size, buffer);
+    if(status != MCE_OK){
+        free(buffer);
+        return status;
+    }
+
+    mc_struct_vnunpack(buffer, ~(unsigned)0, fmt, args);
+    free(buffer);
+    return MCE_OK;
+}
+
+MC_Error mc_unpack(MC_Stream *stream, const char *fmt, ...){
+    va_list args;
+    va_start(args, fmt);
+    size_t res = mc_unpackv(stream, fmt, args);
+    va_end(args);
+    return res;
+}
+
+
 MC_Error mc_flush(MC_Stream *stream){
     if(stream && stream->vtab.flush){
         return stream->vtab.flush(stream->data);

@@ -22,32 +22,33 @@
 #define GET_BOOL(ARGS) (GET_INT(ARGS) ? 1 : 0)
 #define GET_PTR(ARGS) va_arg(ARGS, void*)
 #define GET_SIZE(ARGS) va_arg(ARGS, size_t)
+#define GET_NULL(ARGS) (NULL)
 
 #define ITER_BASIC_FMT() \
-    FMT('x', uint8_t,   uint8_t,                GET_ZERO) \
-    FMT('c', uint8_t,   char,                   GET_INT) \
-    FMT('b', uint8_t,   signed char,            GET_INT) \
-    FMT('B', int8_t,    unsigned char,          GET_INT) \
-    FMT('?', uint8_t,   bool,                   GET_BOOL) \
-    FMT('h', int16_t,   short,                  GET_INT) \
-    FMT('H', uint16_t,  unsigned short,         GET_INT) \
-    FMT('e', uint16_t,  uint16_t,               GET_DOUBLE) \
-    FMT('i', int32_t,   int,                    GET_INT) \
-    FMT('I', uint32_t,  unsigned int,           GET_UINT) \
-    FMT('l', int32_t,   long int,               GET_LONG) \
-    FMT('L', uint32_t,  unsigned long int,      GET_LONG) \
-    FMT('f', float,     float,                  GET_DOUBLE) \
-    FMT('q', int64_t,   long long int,          GET_LONG_LONG) \
-    FMT('Q', uint64_t,  unsigned long long int, GET_ULONG_LONG) \
-    FMT('d', double,    double,                 GET_DOUBLE) \
+    FMT('x', uint8_t,   uint8_t,                GET_ZERO,       GET_NULL) \
+    FMT('c', uint8_t,   char,                   GET_INT,        GET_PTR) \
+    FMT('b', uint8_t,   signed char,            GET_INT,        GET_PTR) \
+    FMT('B', int8_t,    unsigned char,          GET_INT,        GET_PTR) \
+    FMT('?', uint8_t,   bool,                   GET_BOOL,       GET_PTR) \
+    FMT('h', int16_t,   short,                  GET_INT,        GET_PTR) \
+    FMT('H', uint16_t,  unsigned short,         GET_INT,        GET_PTR) \
+    FMT('e', uint16_t,  uint16_t,               GET_DOUBLE,     GET_PTR) \
+    FMT('i', int32_t,   int,                    GET_INT,        GET_PTR) \
+    FMT('I', uint32_t,  unsigned int,           GET_UINT,       GET_PTR) \
+    FMT('l', int32_t,   long int,               GET_LONG,       GET_PTR) \
+    FMT('L', uint32_t,  unsigned long int,      GET_LONG,       GET_PTR) \
+    FMT('f', float,     float,                  GET_DOUBLE,     GET_PTR) \
+    FMT('q', int64_t,   long long int,          GET_LONG_LONG,  GET_PTR) \
+    FMT('Q', uint64_t,  unsigned long long int, GET_ULONG_LONG, GET_PTR) \
+    FMT('d', double,    double,                 GET_DOUBLE,     GET_PTR) \
 
 #define ITER_ARR_FMT() \
-    FMT('s', uint8_t,   char,   GET_INT) \
-    FMT('p', uint8_t,   char,   GET_INT) 
+    FMT('s', uint8_t,   char,   GET_INT,    GET_PTR) \
+    FMT('p', uint8_t,   char,   GET_INT,    GET_PTR) 
 
 #define ITER_NATIVE_FMT() \
-    FMT('n',,           size_t, GET_SIZE) \
-    FMT('P',,           void*,  GET_PTR) \
+    FMT('n',,           size_t, GET_SIZE,   GET_PTR) \
+    FMT('P',,           void*,  GET_PTR,    GET_PTR) \
 
 #define ITER_FMT() \
     ITER_BASIC_FMT() \
@@ -58,12 +59,8 @@ static int calcsize_aligned_native(const char *fmt);
 static int calcsize_unaligned(const char *fmt);
 static int calcsize_unaligned_native(const char *fmt);
 
-static int pack_aligned_native(void *buffer, unsigned buffer_size, const char *fmt, va_list args);
-static int pack_unaligned_native(void *buffer, unsigned buffer_size, const char *fmt, va_list args);
-static int pack_unaligned_native_inverse_endian(void *buffer, unsigned buffer_size, const char *fmt, va_list args);
-static int pack_lsb(void *buffer, unsigned buffer_size, const char *fmt, va_list args);
-static int pack_msb(void *buffer, unsigned buffer_size, const char *fmt, va_list args);
-
+static int pack(void *buffer, unsigned buffer_size, const char *fmt, va_list args, bool align, bool inverse);
+static int unpack(void *buffer, unsigned buffer_size, const char *fmt, va_list args, bool align, bool inverse);
 static void inverse_endian(void *data, size_t size);
 
 int mc_struct_calcsize(const char *fmt){
@@ -79,12 +76,20 @@ int mc_struct_calcsize(const char *fmt){
 
 int mc_struct_vnpack(void *buffer, unsigned buffer_size, const char *fmt, va_list args){
     switch (*fmt){
-    case '@': return pack_aligned_native(buffer, buffer_size, fmt + 1, args);
-    case '=': return pack_unaligned_native(buffer, buffer_size, fmt + 1, args);
-    case '<': return pack_lsb(buffer, buffer_size, fmt + 1, args);
-    case '>': return pack_msb(buffer, buffer_size, fmt + 1, args);
-    case '!': return pack_msb(buffer, buffer_size, fmt + 1, args);
-    default : return pack_aligned_native(buffer, buffer_size, fmt, args);
+    case '@': return pack(buffer, buffer_size, fmt + 1, args, true, false);
+    case '=': return pack(buffer, buffer_size, fmt + 1, args, false, false);
+#if __BYTE_ORDER__ == __ORDER_LITTLE_ENDIAN__
+    case '<': return pack(buffer, buffer_size, fmt + 1, args, false, false);
+    case '>': return pack(buffer, buffer_size, fmt + 1, args, false, true);
+    case '!': return pack(buffer, buffer_size, fmt + 1, args, false, true);
+#elif __BYTE_ORDER__ == __ORDER_BIG_ENDIAN__
+    case '<': return pack(buffer, buffer_size, fmt + 1, args, false, true);
+    case '>': return pack(buffer, buffer_size, fmt + 1, args, false, false);
+    case '!': return pack(buffer, buffer_size, fmt + 1, args, false, false);
+#else
+    static_assert(false, "unpack is not implemented for this byte order");
+#endif
+    default : return pack(buffer, buffer_size, fmt, args, true, false);
     }
 }
 
@@ -103,6 +108,42 @@ int mc_struct_pack(void *buffer, const char *fmt, ...){
     va_end(args);
     return res;
 }
+
+int mc_struct_vnunpack(void *buffer, unsigned buffer_size, const char *fmt, va_list args){
+    switch (*fmt){
+    case '@': return unpack(buffer, buffer_size, fmt + 1, args, true, false);
+    case '=': return unpack(buffer, buffer_size, fmt + 1, args, false, false);
+#if __BYTE_ORDER__ == __ORDER_LITTLE_ENDIAN__
+    case '<': return unpack(buffer, buffer_size, fmt + 1, args, false, false);
+    case '>': return unpack(buffer, buffer_size, fmt + 1, args, false, true);
+    case '!': return unpack(buffer, buffer_size, fmt + 1, args, false, true);
+#elif __BYTE_ORDER__ == __ORDER_BIG_ENDIAN__
+    case '<': return unpack(buffer, buffer_size, fmt + 1, args, false, true);
+    case '>': return unpack(buffer, buffer_size, fmt + 1, args, false, false);
+    case '!': return unpack(buffer, buffer_size, fmt + 1, args, false, false);
+#else
+    static_assert(false, "unpack is not implemented for this byte order");
+#endif
+    default : return unpack(buffer, buffer_size, fmt, args, true, false);
+    }
+}
+
+int mc_struct_nunpack(void *buffer, unsigned buffer_size, const char *fmt, ...){
+    va_list args;
+    va_start(args, fmt);
+    int res = mc_struct_vnunpack(buffer, buffer_size, fmt, args);
+    va_end(args);
+    return res;
+}
+
+int mc_struct_unpack(void *buffer, const char *fmt, ...){
+    va_list args;
+    va_start(args, fmt);
+    int res = mc_struct_vnunpack(buffer, ~(unsigned)0, fmt, args);
+    va_end(args);
+    return res;
+}
+
 
 static int calcsize_aligned_native(const char *fmt){
     int size = 0;
@@ -191,13 +232,13 @@ static int calcsize_unaligned_native(const char *fmt){
     return repeat ? -1 : size;
 }
 
-static int pack_aligned_native(void *buffer, unsigned buffer_size, const char *fmt, va_list args){
+static int pack(void *buffer, unsigned buffer_size, const char *fmt, va_list args, bool align, bool inverse){
     int size = calcsize_aligned_native(fmt);
     if(size < 0 || (unsigned)size > buffer_size){
         return size;
     }
 
-    int cur_size;
+    int cur_size = 0;
     int repeat = 0;
     int mul = 1;
 
@@ -215,9 +256,10 @@ static int pack_aligned_native(void *buffer, unsigned buffer_size, const char *f
         #define FMT(CH, _, NATIVE_TYPE, VA_GET, ...) \
         case CH:{ \
             for(int i = 0; i < mul; i++){ \
+                if(align) cur_size = MC_ALIGN(alignof(NATIVE_TYPE), cur_size); \
                 NATIVE_TYPE val = VA_GET(args); \
-                cur_size = MC_ALIGN(alignof(NATIVE_TYPE), cur_size); \
                 memcpy(&U8(buffer)[cur_size], &val, sizeof(NATIVE_TYPE)); \
+                if(inverse) inverse_endian(&U8(buffer)[cur_size], sizeof(NATIVE_TYPE)); \
                 cur_size += sizeof(NATIVE_TYPE); \
             } \
         } break;
@@ -245,13 +287,13 @@ static int pack_aligned_native(void *buffer, unsigned buffer_size, const char *f
     return size;
 }
 
-static int pack_unaligned_native(void *buffer, unsigned buffer_size, const char *fmt, va_list args){
-    int size = calcsize_unaligned_native(fmt);
+static int unpack(void *buffer, unsigned buffer_size, const char *fmt, va_list args, bool align, bool inverse){
+    int size = calcsize_aligned_native(fmt);
     if(size < 0 || (unsigned)size > buffer_size){
         return size;
     }
 
-    uint8_t *buf = buffer;
+    int cur_size = 0;
     int repeat = 0;
     int mul = 1;
 
@@ -266,108 +308,31 @@ static int pack_unaligned_native(void *buffer, unsigned buffer_size, const char 
         repeat = 0;
 
         switch (ch){
-        #define FMT(CH, _, NATIVE_TYPE, VA_GET, ...) \
+        #define FMT(CH, _, NATIVE_TYPE, __, VA_GET_LOCATION, ...) \
         case CH:{ \
             for(int i = 0; i < mul; i++){ \
-                NATIVE_TYPE val = VA_GET(args); \
-                memcpy(buf, &val, sizeof(NATIVE_TYPE)); \
-                buf += sizeof(NATIVE_TYPE);\
+                if(align) cur_size = MC_ALIGN(alignof(NATIVE_TYPE), cur_size); \
+                void *location = VA_GET_LOCATION(args); \
+                if(location == NULL) continue; \
+                memcpy(location, &U8(buffer)[cur_size], sizeof(NATIVE_TYPE)); \
+                if(inverse) inverse_endian(location, sizeof(NATIVE_TYPE)); \
+                cur_size += sizeof(NATIVE_TYPE); \
             } \
         } break;
         ITER_BASIC_FMT()
         ITER_NATIVE_FMT()
         #undef FMT
 
-        case 's':{ \
-            const char *val = va_arg(args, char*); \
-            int len = strnlen(val, mul); \
-            memcpy(buf, val, sizeof(char) * len); \
-            memset(buf + len, 0, mul - len); \
-            buf += sizeof(char) * mul; \
-        } break;
+        case 's':
         case 'p':{ \
-            uint8_t *val = va_arg(args, uint8_t*); \
-            memcpy(buf, val, sizeof(uint8_t) * mul); \
-            buf += sizeof(uint8_t) * mul; \
+            memcpy(va_arg(args, void*), &U8(buffer)[cur_size], mul); \
+            cur_size += mul; \
         } break;
         default: return -1;
         }
     }
 
     return size;
-}
-
-static int pack_unaligned_native_inverse_endian(void *buffer, unsigned buffer_size, const char *fmt, va_list args){
-    int size = calcsize_unaligned_native(fmt);
-    if(size < 0 || (unsigned)size > buffer_size){
-        return size;
-    }
-
-    uint8_t *buf = buffer;
-    int repeat = 0;
-    int mul = 1;
-
-    for(char ch = *fmt; ch; ch = *++fmt){
-        if(isdigit(ch)){
-            repeat *= 10;
-            repeat += ch - '0';
-            continue;
-        }
-
-        mul = repeat ? repeat : 1;
-        repeat = 0;
-
-        switch (ch){
-        #define FMT(CH, _, NATIVE_TYPE, VA_GET, ...) \
-        case CH:{ \
-            for(int i = 0; i < mul; i++){ \
-                NATIVE_TYPE val = VA_GET(args); \
-                memcpy(buf, &val, sizeof(NATIVE_TYPE)); \
-                inverse_endian(buf, sizeof(NATIVE_TYPE)); \
-                buf += sizeof(NATIVE_TYPE); \
-            } \
-        } break;
-        ITER_BASIC_FMT()
-        ITER_NATIVE_FMT()
-        #undef FMT
-
-        case 's':{ \
-            const char *val = va_arg(args, char*); \
-            int len = strnlen(val, mul); \
-            memcpy(buf, val, sizeof(char) * len); \
-            memset(buf + len, 0, mul - len); \
-            buf += sizeof(char) * mul; \
-        } break;
-        case 'p':{ \
-            uint8_t *val = va_arg(args, uint8_t*); \
-            memcpy(buf, val, sizeof(uint8_t) * mul); \
-            buf += sizeof(uint8_t) * mul; \
-        } break;
-        default: return -1;
-        }
-    }
-
-    return size;
-}
-
-static int pack_lsb(void *buffer, unsigned buffer_size, const char *fmt, va_list args){
-#if __BYTE_ORDER__ == __ORDER_LITTLE_ENDIAN__
-    return pack_unaligned_native(buffer, buffer_size, fmt, args);
-#elif __BYTE_ORDER__ == __ORDER_BIG_ENDIAN__
-    return pack_unaligned_native_inverse_endian(buffer, buffer_size, fmt, args);
-#else
-    static_assert(false, "pack is not implemented for this byte order");
-#endif
-}
-
-static int pack_msb(void *buffer, unsigned buffer_size, const char *fmt, va_list args){
-    #if __BYTE_ORDER__ == __ORDER_LITTLE_ENDIAN__
-    return pack_unaligned_native_inverse_endian(buffer, buffer_size, fmt, args);
-#elif __BYTE_ORDER__ == __ORDER_BIG_ENDIAN__
-    return pack_unaligned_native(buffer, buffer_size, fmt, args);
-#else
-    static_assert(false, "pack is not implemented for this byte order");
-#endif
 }
 
 static void inverse_endian(void *data, size_t size){
