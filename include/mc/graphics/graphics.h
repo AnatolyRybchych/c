@@ -1,7 +1,8 @@
 #ifndef MC_GRAPHICS_H
 #define MC_GRAPHICS_H
 
-#include <mc/geometry.h>
+#include <mc/geometry/size.h>
+#include <mc/geometry/point.h>
 #include <mc/error.h>
 
 #include <stddef.h>

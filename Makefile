@@ -16,7 +16,10 @@ objects			+= data/vector.o
 objects			+= data/pqueue.o
 objects			+= data/list.o
 objects			+= data/struct.o
+objects			+= data/arena.o
 objects			+= data/img/bmp.o
+objects			+= geometry/point.o
+objects			+= geometry/bezier.o
 objects			+= io/stream.o
 objects			+= io/file.o
 objects			+= io/fd.o
@@ -37,7 +40,7 @@ DEMO_BIN		:= bin/demo
 DEMO_OBJ_DIR	:= build/demo/obj
 DEMO_SRC_DIR	:= demo
 DEMO_CARGS		:= -ggdb -Wall -Wextra -Werror -pedantic -Iinclude
-DEMO_LDARGS		:= -L$(LIB_DIR) -l$(LIBMC) -lX11
+DEMO_LDARGS		:= -L$(LIB_DIR) -l$(LIBMC) -lX11 -lm
 
 demo_objects	+= main.o
 

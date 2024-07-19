@@ -3,7 +3,9 @@
 
 #include <mc/io/stream.h>
 #include <mc/error.h>
-#include <mc/geometry.h>
+#include <mc/geometry/size.h>
+#include <mc/geometry/point.h>
+#include <mc/geometry/rect.h>
 #include <mc/data/str.h>
 
 #include <stddef.h>

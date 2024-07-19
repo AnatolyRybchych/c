@@ -37,6 +37,25 @@ int main(){
         .pixels = buf_pixels
     };
 
+    float (*heatmap)[buf.size.height][buf.size.width] = malloc(sizeof(*heatmap));
+    mc_di_curve_dst_heatmap(di, buf.size, *heatmap, MC_POINT2F(100, 100), 1, &(MC_SemiBezier4F){
+        .c1 = {200, 100},
+        .c2 = {100, 200},
+        .p2 = {200, 200}
+    });
+
+    MC_AColor (*pixels)[buf.size.height][buf.size.width] = (void*)buf.pixels;
+
+    mc_di_clear(di, &buf, (MC_AColor){.r = 10, .g = 4, .b = 2});
+    for(size_t y = 0; y < buf.size.height; y++){
+        for(size_t x = 0; x < buf.size.width; x++){
+            (*pixels)[y][x] = (MC_AColor){
+                .r =  (1.0 - mc_clampf((*heatmap)[y][x], 0, 1)) * 255
+            };
+        }
+    }
+
+
     MC_WM *wm;
     MC_REQUIRE(mc_wm_init(&wm, mc_xlib_wm_vtab));
 
@@ -54,13 +73,12 @@ int main(){
         }
 
         switch (event.type){
-        case MC_WME_WINDOW_REDRAW_REQUESTED:
-            mc_di_clear(di, &buf, (MC_AColor){.r = 10, .g = 4, .b = 2});
+        case MC_WME_WINDOW_REDRAW_REQUESTED:{
 
             MC_REQUIRE(mc_graphics_begin(g));
             MC_REQUIRE(mc_graphics_write_pixels(g, (MC_Point2I){.x = 0, .y = 0}, buf.size, (void*)buf.pixels, (MC_Point2I){0, 0}));
             MC_REQUIRE(mc_graphics_end(g));
-            break;
+        }break;
         case MC_WME_KEY_DOWN:
             mc_fmt(MC_STDOUT, "KEY_DOWN %s\n", mc_key_str(event.as.key_down.key));
             break;

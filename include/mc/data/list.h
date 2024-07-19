@@ -42,6 +42,26 @@ inline void mc_list_add(void *own_location, void *node){
     *(MC_List**)own_location = node;
 }
 
+inline void *mc_list_add_after(void *prev, void *node){
+    if(prev == NULL){
+        return node;
+    }
+
+    if(node == NULL){
+        return prev;
+    }
+
+    MC_List *node_last = node;
+    while(node_last->next){
+        node_last->next = node_last->next->next;
+    }
+
+    MC_List *p = (MC_List*)prev;
+    node_last->next = p->next;
+    p->next = node;
+    return node;
+}
+
 inline void *mc_list_remove(void *node_in_owner){
     MC_List *to_remove = *(MC_List**)node_in_owner;
     if(to_remove){
