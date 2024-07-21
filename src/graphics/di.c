@@ -20,8 +20,11 @@ struct MC_Di{
     MC_Arena *arena;
 };
 
-static MC_Error _mc_di_curve_dst_heatmap(MC_Di *di, MC_Size2U size,
+static MC_Error _mc_di_curve_dst_inverse_heatmap(MC_Di *di, MC_Size2U size,
     float heatmap[size.height][size.width], MC_Point2F beg, size_t n, const MC_SemiBezier4F curve[n]);
+
+static MC_Error _mc_di_contour_dst_inverse_heatmap(MC_Di *di, MC_Size2U size,
+    float heatmap[size.height][size.width], MC_Point2F beg, size_t n, const MC_SemiBezier4F contour[n]);
 
 MC_Error mc_di_init(MC_Di **ret_di){
     MC_Arena *arena;
@@ -56,15 +59,23 @@ void mc_di_clear(MC_Di *di, MC_DiBuffer *buffer, MC_AColor color){
     }
 }
 
-MC_Error mc_di_curve_dst_heatmap(MC_Di *di, MC_Size2U size,
+MC_Error mc_di_curve_dst_inverse_heatmap(MC_Di *di, MC_Size2U size,
     float heatmap[size.height][size.width], MC_Point2F beg, size_t n, const MC_SemiBezier4F curve[n])
 {
-    MC_Error status = _mc_di_curve_dst_heatmap(di, size, heatmap, beg, n, curve);
+    MC_Error status = _mc_di_curve_dst_inverse_heatmap(di, size, heatmap, beg, n, curve);
     mc_arena_reset(di->arena);
     return status;
 }
 
-static MC_Error _mc_di_curve_dst_heatmap(MC_Di *di, MC_Size2U size,
+MC_Error mc_di_contour_dst_inverse_heatmap(MC_Di *di, MC_Size2U size,
+    float heatmap[size.height][size.width], MC_Point2F beg, size_t n, const MC_SemiBezier4F contour[n])
+{
+    MC_Error status = _mc_di_contour_dst_inverse_heatmap(di, size, heatmap, beg, n, contour);
+    mc_arena_reset(di->arena);
+    return status;
+}
+
+static MC_Error _mc_di_curve_dst_inverse_heatmap(MC_Di *di, MC_Size2U size,
     float heatmap[size.height][size.width], MC_Point2F beg, size_t n, const MC_SemiBezier4F curve[n])
 {
     //TODO: consider using array based queue
@@ -151,5 +162,29 @@ static MC_Error _mc_di_curve_dst_heatmap(MC_Di *di, MC_Size2U size,
     }
 
     return MCE_OK;
+}
+
+static MC_Error _mc_di_contour_dst_inverse_heatmap(MC_Di *di, MC_Size2U size,
+    float heatmap[size.height][size.width], MC_Point2F beg, size_t n, const MC_SemiBezier4F contour[n])
+{
+    size_t contour_size = n;
+    const MC_SemiBezier4F *full_contour = contour;
+
+    if(n && !MC_POINT_EQU(beg, contour[n-1].p2)){
+        contour_size = n + 1;
+        MC_SemiBezier4F *c;
+        MC_RETURN_ERROR(mc_arena_alloc(di->arena, sizeof(MC_SemiBezier4F[contour_size]), (void*)&c));
+        memcpy(c, contour, sizeof(MC_SemiBezier4F[n]));
+
+        c[n] = (MC_SemiBezier4F){
+            .c1 = contour[n-1].p2,
+            .c2 = beg,
+            .p2 = beg
+        };
+
+        full_contour = c;
+    }
+
+    return _mc_di_curve_dst_inverse_heatmap(di, size, heatmap, beg, contour_size, full_contour);
 }
 

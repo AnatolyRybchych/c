@@ -38,7 +38,7 @@ int main(){
     };
 
     float (*heatmap)[buf.size.height][buf.size.width] = malloc(sizeof(*heatmap));
-    mc_di_curve_dst_heatmap(di, buf.size, *heatmap, MC_POINT2F(100, 100), 1, &(MC_SemiBezier4F){
+    mc_di_contour_dst_inverse_heatmap(di, buf.size, *heatmap, MC_POINT2F(100, 100), 1, &(MC_SemiBezier4F){
         .c1 = {200, 100},
         .c2 = {100, 200},
         .p2 = {200, 200}
@@ -50,7 +50,7 @@ int main(){
     for(size_t y = 0; y < buf.size.height; y++){
         for(size_t x = 0; x < buf.size.width; x++){
             (*pixels)[y][x] = (MC_AColor){
-                .r =  (1.0 - mc_clampf((*heatmap)[y][x], 0, 1)) * 255
+                .r =  (2.0 - mc_clampf((*heatmap)[y][x], 0, 2)) * 125.5
             };
         }
     }
