@@ -27,6 +27,9 @@ MC_Error mc_di_curve_dst_inverse_heatmap(MC_Di *di, MC_Size2U size,
 MC_Error mc_di_contour_dst_inverse_heatmap(MC_Di *di, MC_Size2U size,
     float heatmap[size.height][size.width], MC_Point2F beg, size_t n, const MC_SemiBezier4F contour[n]);
 
+MC_Error mc_di_curve_nearest_points_map(MC_Di *di, MC_Size2U size,
+    MC_Point2F nearest[size.height][size.width], MC_Point2F beg, size_t n, const MC_SemiBezier4F curve[n]);
+
 struct MC_DiBuffer{
     MC_Size2U size;
     MC_AColor *pixels;

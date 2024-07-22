@@ -45,7 +45,7 @@ void mc_arena_destroy(MC_Arena *arena){
 MC_Error mc_arena_alloc(MC_Arena *arena, size_t size, void **mem){
     size = MC_ALIGN(alignof(void*), size);
 
-    if((size_t)(arena->buffer->capacity_end - arena->buffer->available) < size){
+    if(arena->buffer->available + size > arena->buffer->capacity_end){
         size_t capacity = arena->buffer->capacity_end - arena->buffer->beg;
         size_t exp_capacity = capacity * 2 + 1;
         size_t new_capacity = MAX(exp_capacity, size);
