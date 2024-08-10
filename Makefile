@@ -24,6 +24,8 @@ objects			+= io/stream.o
 objects			+= io/file.o
 objects			+= io/fd.o
 
+objects			+= os/process.o
+
 objects			+= wm/wm.o
 objects			+= wm/event.o
 objects			+= wm/target.o
