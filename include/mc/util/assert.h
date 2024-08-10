@@ -2,7 +2,7 @@
 #define MC_ASSERT_H
 
 #include <mc/error.h>
-#include <mc/io/file.h>
+#include <mc/os/file.h>
 
 #include <assert.h>
 #include <stdlib.h>

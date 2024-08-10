@@ -1,9 +1,16 @@
-#include "_stream.h"
+#include <mc/io/stream.h>
 
 #include <mc/data/struct.h>
+#include <mc/data/string.h>
+#include <mc/data/str.h>
 
 #include <malloc.h>
 #include <memory.h>
+
+struct MC_Stream{
+    MC_StreamVtab vtab;
+    uint8_t data[];
+};
 
 MC_Error mc_open(MC_Stream **stream, const MC_StreamVtab *vtab, size_t ctx_size, const void *ctx){
     MC_Stream *res = malloc(sizeof(MC_Stream) + ctx_size);
@@ -14,7 +21,6 @@ MC_Error mc_open(MC_Stream **stream, const MC_StreamVtab *vtab, size_t ctx_size,
     }
 
     res->vtab = *vtab;
-    res->type = STREAM_GENERAL;
 
     if(ctx){
         memcpy(res->data, ctx, ctx_size);

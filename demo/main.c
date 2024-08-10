@@ -8,7 +8,7 @@
 #include <mc/data/string.h>
 #include <mc/data/struct.h>
 #include <mc/io/stream.h>
-#include <mc/io/file.h>
+#include <mc/os/file.h>
 #include <mc/util/assert.h>
 #include <mc/os/process.h>
 

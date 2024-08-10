@@ -21,8 +21,9 @@ objects			+= data/img/bmp.o
 objects			+= geometry/point.o
 objects			+= geometry/bezier.o
 objects			+= io/stream.o
-objects			+= io/file.o
-objects			+= io/fd.o
+
+objects			+= os/file.o
+objects			+= os/fd.o
 
 objects			+= os/process.o
 

@@ -1,13 +1,26 @@
-#include <mc/io/file.h>
-#include "_stream.h"
+#include <mc/os/file.h>
 
-#include <sys/file.h>
-#include <unistd.h>
-#include <limits.h>
+#include <mc/data/string.h>
+
+#ifdef __linux__
+#include "_fd.h"
+#endif
+
 #include <errno.h>
 #include <malloc.h>
 
+typedef struct FileCtx FileCtx;
+
+struct FileCtx{
+#ifdef __linux__
+    FdCtx fd_ctx;
+#endif
+    MC_String *path;
+};
+
 static int open_flags(MC_OpenMode mode);
+
+static MC_Error open_fd(MC_Stream **stream, int fd, MC_String *path);
 
 MC_Error mc_fopen(MC_Stream **file, MC_Str path, MC_OpenMode mode){
     int flags = open_flags(mode);
@@ -18,19 +31,7 @@ MC_Error mc_fopen(MC_Stream **file, MC_Str path, MC_OpenMode mode){
         return MCE_OUT_OF_MEMORY;
     }
 
-    int fd = open(path_string->data, flags);
-    if(fd < 0){
-        free(path_string);
-        return mc_error_from_errno(errno);
-    }
-
-    MC_Error error = open_fd_stream(file, fd, path_string);
-    if(error){
-        close(fd);
-        free(path_string);
-    }
-
-    return error;
+    return open_fd(file, open(path_string->data, open_flags(mode)), path_string);
 }
 
 static int open_flags(MC_OpenMode mode){
@@ -40,6 +41,31 @@ static int open_flags(MC_OpenMode mode){
     case MC_OPEN_APPEND: return O_RDWR | O_APPEND | O_CREAT;
     default: return -1;
     }
+}
+
+static MC_Error open_fd(MC_Stream **stream, int fd, MC_String *path){
+    if(path == NULL){
+        return MCE_OUT_OF_MEMORY;
+    }
+
+    FileCtx ctx = {
+        .path = path
+    };
+
+    MC_Error status = fd_open(&ctx.fd_ctx, fd);
+    if(status != MCE_OK){
+        free(ctx.path);
+        return status;
+    }
+
+    MC_StreamVtab file_vtab = vtbl_fd;
+    MC_Error error = mc_open(stream, &file_vtab, sizeof(FileCtx), &ctx);
+    if(error != MCE_OK){
+        fd_close(&ctx.fd_ctx);
+        free(ctx.path);
+    }
+
+    return MCE_OK;
 }
 
 MC_Stream *mc_get_stdin(void){
@@ -53,7 +79,7 @@ MC_Stream *mc_get_stdin(void){
 
     static MC_Stream *stdin_stream = NULL;
     if(stdin_stream == NULL){
-        MC_Error error = open_fd_stream(&stdin_stream, STDIN_FILENO, stdin_string);
+        MC_Error error = open_fd(&stdin_stream, STDIN_FILENO, stdin_string);
         if(error){
             return NULL;
         }
@@ -73,7 +99,7 @@ MC_Stream *mc_get_stdout(void){
 
     static MC_Stream *stdout_stream = NULL;
     if(stdout_stream == NULL){
-        MC_Error error = open_fd_stream(&stdout_stream, STDOUT_FILENO, stdout_string);
+        MC_Error error = open_fd(&stdout_stream, STDOUT_FILENO, stdout_string);
         if(error){
             return NULL;
         }
@@ -93,7 +119,7 @@ MC_Stream *mc_get_stderr(void){
 
     static MC_Stream *stderr_stream = NULL;
     if(stderr_stream == NULL){
-        MC_Error error = open_fd_stream(&stderr_stream, STDERR_FILENO, stderr_string);
+        MC_Error error = open_fd(&stderr_stream, STDERR_FILENO, stderr_string);
         if(error){
             return NULL;
         }
@@ -101,4 +127,3 @@ MC_Stream *mc_get_stderr(void){
 
     return stderr_stream;
 }
-

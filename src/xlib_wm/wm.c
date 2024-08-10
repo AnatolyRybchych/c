@@ -1,7 +1,7 @@
 #include <mc/xlib_wm/wm.h>
 #include <mc/xlib_wm/graphics.h>
 #include <mc/xlib_wm/key.h>
-#include <mc/io/file.h>
+#include <mc/os/file.h>
 
 #include <X11/keysym.h>
 
