@@ -9,6 +9,7 @@
 #include <mc/data/struct.h>
 #include <mc/io/stream.h>
 #include <mc/os/file.h>
+#include <mc/os/socket.h>
 #include <mc/util/assert.h>
 #include <mc/os/process.h>
 
@@ -26,10 +27,18 @@
 #include <stdlib.h>
 
 int main(){
-    mc_fmt(MC_STDOUT, "TEST\n");
-    mc_sleep(&(MC_Time){.sec = 1});
-    MC_Process *proc;
-    MC_REQUIRE(mc_process_program(&proc, MC_STRC("/home/anatolii/Desktop/c/bin/demo"), 0, NULL));
-    mc_process_wait(proc);
+    MC_Stream *sock;
+    MC_REQUIRE(mc_socket_connect(&sock, &(MC_SocketEndpoint){
+        .transport = {
+            .network = {
+                .type = MC_SOCKET_IPV4 | MC_SOCKET_STREAM,
+                .as.ipv4.addr = {127, 0, 0, 1},
+            },
+            .as.tcp.port = 4321
+        }
+    }));
+
+    mc_fmt(sock, "test123\n");
+    mc_close(sock);
 }
 

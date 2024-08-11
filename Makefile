@@ -22,8 +22,9 @@ objects			+= geometry/point.o
 objects			+= geometry/bezier.o
 objects			+= io/stream.o
 
-objects			+= os/file.o
 objects			+= os/fd.o
+objects			+= os/file.o
+objects			+= os/socket.o
 
 objects			+= os/process.o
 

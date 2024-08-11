@@ -15,6 +15,7 @@ typedef unsigned MC_Error;
     MC_ERROR(OVERFLOW) \
     MC_ERROR(TIMEOUT) \
     MC_ERROR(AGAIN) \
+    MC_ERROR(CONNECTION_REFUSED) \
 
 #define MC_RETURN_ERROR(...) for(MC_Error status = (__VA_ARGS__); status != MCE_OK && status != MCE_AGAIN;) return status
 #define MC_RETURN_INVALID(...) if(__VA_ARGS__) return MCE_INVALID_INPUT
