@@ -59,13 +59,77 @@ MC_Error mc_socket_connect(MC_Stream **sock, const MC_SocketEndpoint *endpoint){
     return MCE_OK;
 }
 
-// MC_Error mc_socket_listen(MC_Stream **sock, const MC_SocketEndpoint *endpoint, unsigned queue){
+MC_Error mc_socket_listen(MC_Stream **sock, const MC_SocketEndpoint *endpoint, unsigned queue){
+    SocketCtx ctx = {
+        .local = *endpoint
+    };
 
-// }
+    int domain, type, protocol;
+    MC_RETURN_ERROR(endpoint_type(ctx.local.type, &domain, &type, &protocol));
 
-// MC_Error mc_socket_accept(MC_Stream **client, MC_Stream *sock){
+    struct sockaddr_storage addr;
+    socklen_t addrlen;
+    MC_RETURN_ERROR(endpoint_sockaddr(&ctx.local, (struct sockaddr *)&addr, &addrlen));
 
-// }
+    MC_Error status = fd_open(&ctx.fd_ctx, socket(domain, type, protocol));
+    if(status != MCE_OK){
+        fd_close(&ctx.fd_ctx);
+        return mc_error_from_errno(errno);
+    }
+
+    if(bind(ctx.fd_ctx.fd, (struct sockaddr*)&addr, addrlen)){
+        fd_close(&ctx.fd_ctx);
+        return mc_error_from_errno(errno);
+    }
+
+    if(listen(ctx.fd_ctx.fd, queue)){
+        fd_close(&ctx.fd_ctx);
+        return mc_error_from_errno(errno);
+    }
+
+    MC_StreamVtab vtab = vtbl_fd;
+    vtab.close = socket_close;
+
+    status = mc_open(sock, &vtab, sizeof(SocketCtx), &ctx);
+    if(status != MCE_OK){
+        fd_close(&ctx.fd_ctx);
+        return status;
+    }
+
+    return MCE_OK;
+}
+
+MC_Error mc_socket_accept(MC_Stream **client, MC_Stream *sock){
+    SocketCtx *ctx = mc_ctx(sock);
+    SocketCtx client_ctx = {
+        .local = ctx->local
+    };
+
+    struct sockaddr_storage addr;
+    socklen_t addrlen;
+
+    int client_fd = accept(ctx->fd_ctx.fd, (struct sockaddr*)&addr, &addrlen);
+    if(client_fd < 0){
+        return mc_error_from_errno(errno);
+    }
+
+    MC_Error status = fd_open(&client_ctx.fd_ctx, client_fd);
+    if(status != MCE_OK){
+        fd_close(&client_ctx.fd_ctx);
+        return mc_error_from_errno(errno);
+    }
+
+    MC_StreamVtab vtab = vtbl_fd;
+    vtab.close = socket_close;
+
+    status = mc_open(client, &vtab, sizeof(SocketCtx), &client_ctx);
+    if(status != MCE_OK){
+        fd_close(&client_ctx.fd_ctx);
+        return status;
+    }
+
+    return MCE_OK;
+}
 
 static MC_Error endpoint_type(MC_SocketType socket_type, int *domain, int *type, int *protocol){
     switch (socket_type){

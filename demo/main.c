@@ -27,18 +27,27 @@
 #include <stdlib.h>
 
 int main(){
-    MC_Stream *sock;
-    MC_REQUIRE(mc_socket_connect(&sock, &(MC_SocketEndpoint){
+    MC_Stream *server;
+    MC_REQUIRE(mc_socket_listen(&server, &(MC_SocketEndpoint){
         .transport = {
             .network = {
                 .type = MC_SOCKET_IPV4 | MC_SOCKET_STREAM,
-                .as.ipv4.addr = {127, 0, 0, 1},
+                .as.ipv4.addr = {0, 0, 0, 0},
             },
             .as.tcp.port = 4321
         }
-    }));
+    }, 10));
 
-    mc_fmt(sock, "test123\n");
-    mc_close(sock);
+    MC_Stream *client;
+    MC_REQUIRE(mc_socket_accept(&client, server));
+
+    char buf[32] = {0};
+    size_t read;
+    MC_REQUIRE(mc_read(client, 31, buf, &read));
+
+    mc_fmt(MC_STDOUT, "%s\n", buf);
+
+    mc_close(client);
+    mc_close(server);
 }
 

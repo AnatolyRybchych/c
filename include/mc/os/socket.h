@@ -49,8 +49,8 @@ typedef struct MC_SocketTransport MC_SocketTransport;
 typedef struct MC_SocketEndpoint MC_SocketEndpoint;
 
 MC_Error mc_socket_connect(MC_Stream **socket, const MC_SocketEndpoint *endpoint);
-// MC_Error mc_socket_listen(MC_Stream **socket, const MC_SocketEndpoint *endpoint, unsigned queue);
-// MC_Error mc_socket_accept(MC_Stream **client, MC_Stream *socket);
+MC_Error mc_socket_listen(MC_Stream **socket, const MC_SocketEndpoint *endpoint, unsigned queue);
+MC_Error mc_socket_accept(MC_Stream **client, MC_Stream *socket);
 
 struct MC_MAC{
     uint8_t addr[6];
