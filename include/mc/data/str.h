@@ -9,7 +9,7 @@ typedef struct MC_Str MC_Str;
 
 #define MC_STR_LEN(STR) ((STR).end - (STR).beg)
 #define MC_STR(BEG, END) ((MC_Str){.beg = BEG, .end = END})
-#define MC_STRC(CSTR) MC_STR("" CSTR, CSTR + sizeof(CSTR))
+#define MC_STRC(CSTR) MC_STR("" CSTR, CSTR + sizeof(CSTR) - 1)
 
 
 bool mc_str_matchv(MC_Str str, const char *fmt, MC_Str *whole, va_list args);
@@ -24,7 +24,7 @@ inline size_t mc_str_len(MC_Str str){
     return str.end - str.beg;
 }
 
-inline bool mc_starts_with(MC_Str str, MC_Str substr){
+inline bool mc_str_starts_with(MC_Str str, MC_Str substr){
     while(substr.beg != substr.end){
         if(str.beg == str.end){
             return false;
