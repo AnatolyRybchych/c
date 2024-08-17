@@ -9,7 +9,7 @@
 inline void mc_bit_set(void *dst, size_t bit, bool value){
     uint8_t *u8dst = dst;
     uint8_t *byte = u8dst + (bit >> 3);
-    uint8_t bit_in_byte = 1 << ((bit & 0x07) - 1);
+    uint8_t bit_in_byte = 0x80 >> (bit & 0x07);
 
     *byte = value 
         ? (*byte | bit_in_byte)
@@ -27,8 +27,8 @@ inline void mc_bit_set_range(void *dst, size_t bit_beg, size_t bit_end, bool val
     uint8_t *byte_first = u8dst + (bit_beg >> 3);
     uint8_t *byte_last = u8dst + (bit_last >> 3);
 
-    uint8_t first_bit_in_first_byte = 1 << (bit_beg & 0x07);
-    uint8_t last_bit_in_last_byte = 1 << (bit_last & 0x07);
+    uint8_t first_bit_in_first_byte = 0x80 >> (bit_beg & 0x07);
+    uint8_t last_bit_in_last_byte = 0x80 >> (bit_last & 0x07);
 
     *byte_first = value
         ? *byte_first | ((first_bit_in_first_byte << 1) - 1)
@@ -46,7 +46,7 @@ inline void mc_bit_set_range(void *dst, size_t bit_beg, size_t bit_end, bool val
 inline bool mc_bit(const void *src, size_t bit){
     const uint8_t *u8src = src;
     const uint8_t byte = *(u8src + (bit >> 3));
-    const uint8_t bit_in_byte = 1 << (bit & 0x07);
+    const uint8_t bit_in_byte = 0x80 >> (bit & 0x07);
     return byte & bit_in_byte;
 }
 
