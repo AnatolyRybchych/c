@@ -178,15 +178,6 @@ static MC_Error curve_nearest_points_map(MC_Di *di, MC_Size2U size,
 
     DstHeatmapStep *steps = first_step.next;
     while(!mc_list_empty(steps)){
-        float dst = mc_sqrdst2f(steps->src, MC_POINT_TO2F(steps->dst));
-        float cur_dst = mc_sqrdst2f(nearest[steps->dst.y][steps->dst.x], MC_POINT_TO2F(steps->dst));
-        if(cur_dst <= dst){
-            mc_list_remove(&steps);
-            continue;
-        }
-
-        nearest[steps->dst.y][steps->dst.x] = steps->src;
-
         static const MC_Point2I offsets[4] = {
             {-1, 0},
             {1, 0},
@@ -200,6 +191,14 @@ static MC_Error curve_nearest_points_map(MC_Di *di, MC_Size2U size,
             || p.y < 0 || p.y >= (int)size.height){
                 continue;
             }
+
+            float dst = mc_sqrdst2f(steps->src, MC_POINT_TO2F(p));
+            float cur_dst = mc_sqrdst2f(nearest[p.y][p.x], MC_POINT_TO2F(p));
+            if(cur_dst <= dst){
+                continue;
+            }
+
+            nearest[p.y][p.x] = steps->src;
 
             DstHeatmapStep *new = mc_list_empty(reuse) ? NULL : mc_list_remove(&reuse);
             if(new == NULL){
