@@ -10,9 +10,29 @@
 
 typedef unsigned MC_OpenMode;
 enum MC_OpenMode{
-    MC_OPEN_READ,
-    MC_OPEN_WRITE,
-    MC_OPEN_APPEND,
+    // Open the file to read
+    MC_OPEN_READ = 1 << 0,
+
+    // Open the file to write
+    MC_OPEN_WRITE = 1 << 1,
+
+    // Open file in non-blocking mode if its possible
+    MC_OPEN_ASYNC = 1 << 2,
+
+    // Open clear the file if its not empty
+    MC_OPEN_CLEAR = 1 << 3,
+
+    // Open with the cursor at the end of the file
+    MC_OPEN_END = 1 << 4,
+
+    // Do not open the file if it does not exists
+    MC_OPEN_EXISTING = 1 << 5,
+
+    // Do not open the file if it is already exists
+    MC_OPEN_NEW = 1 << 5,
+
+    // Create file if it does not exists
+    MC_OPEN_CREATE = 1 << 6,
 };
 
 MC_Error mc_fopen(MC_Stream **file, MC_Str path, MC_OpenMode mode);

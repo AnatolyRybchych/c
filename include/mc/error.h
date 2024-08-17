@@ -5,6 +5,7 @@ typedef unsigned MC_Error;
 
 #define MC_ITER_ERRORS() \
     MC_ERROR(OK) \
+    MC_ERROR(UNKNOWN) \
     MC_ERROR(INVALID_INPUT) \
     MC_ERROR(NOT_IMPLEMENTED) \
     MC_ERROR(NOT_SUPPORTED) \
@@ -16,6 +17,7 @@ typedef unsigned MC_Error;
     MC_ERROR(TIMEOUT) \
     MC_ERROR(AGAIN) \
     MC_ERROR(CONNECTION_REFUSED) \
+    MC_ERROR(NOT_PERMITTED) \
 
 #define MC_RETURN_ERROR(...) for(MC_Error status = (__VA_ARGS__); status != MCE_OK && status != MCE_AGAIN;) return status
 #define MC_RETURN_INVALID(...) if(__VA_ARGS__) return MCE_INVALID_INPUT

@@ -12,6 +12,8 @@ MC_Error mc_error_from_errno(int err_no){
     case EINVAL: return MCE_INVALID_INPUT;
     case EAGAIN: return MCE_AGAIN;
     case ECONNREFUSED: return MCE_CONNECTION_REFUSED;
-    default: return MCE_NOT_IMPLEMENTED;
+    case EPERM: return MCE_NOT_PERMITTED;
+    case EACCES: return MCE_NOT_PERMITTED;
+    default: return MCE_UNKNOWN;
     }
 }

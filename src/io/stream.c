@@ -233,10 +233,10 @@ MC_Error mc_get_cursor(MC_Stream *stream, size_t *cursor){
     return stream->vtab.get_cursor(stream->data, cursor);
 }
 
-MC_Error mc_set_cursor(MC_Stream *stream, size_t cursor){
+MC_Error mc_set_cursor(MC_Stream *stream, size_t cursor, MC_CursorFrom from){
     if(stream == NULL || stream->vtab.set_cursor == NULL){
         return MCE_NOT_SUPPORTED;
     }
 
-    return stream->vtab.set_cursor(stream->data, cursor);
+    return stream->vtab.set_cursor(stream->data, cursor, from);
 }

@@ -21,7 +21,7 @@ MC_Error fd_read(void *ctx, size_t size, void *data, size_t *read);
 MC_Error fd_write(void *ctx, size_t size, const void *data, size_t *written);
 MC_Error fd_flush(void *ctx);
 MC_Error fd_get_cursor(void *ctx, size_t *cursor);
-MC_Error fd_set_cursor(void *ctx, size_t cursor);
+MC_Error fd_set_cursor(void *ctx, size_t cursor, MC_CursorFrom from);
 void fd_close(void *ctx);
 
 

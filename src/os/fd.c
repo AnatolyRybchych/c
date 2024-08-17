@@ -28,6 +28,7 @@ MC_Error fd_read(void *ctx, size_t size, void *data, size_t *read_size){
 
     ssize_t sz_read = read(fd_ctx->fd, data, size);
     if(sz_read < 0){
+        *read_size = 0;
         return mc_error_from_errno(errno);
     }
 
@@ -40,6 +41,7 @@ MC_Error fd_write(void *ctx, size_t size, const void *data, size_t *written){
 
     ssize_t sz_written = write(fd_ctx->fd, data, size);
     if(sz_written < 0){
+        *written = 0;
         return mc_error_from_errno(errno);
     }
 
@@ -63,9 +65,16 @@ MC_Error fd_get_cursor(void *ctx, size_t *cursor){
     return MCE_OK;
 }
 
-MC_Error fd_set_cursor(void *ctx, size_t cursor){
+MC_Error fd_set_cursor(void *ctx, size_t cursor, MC_CursorFrom from){
     FdCtx *fd_ctx = ctx;
-    off_t pos = lseek(fd_ctx->fd, cursor, SEEK_SET);
+
+    int seek = from == MC_CURSOR_FROM_BEG
+        ? SEEK_SET
+        : from == MC_CURSOR_FROM_END
+            ? SEEK_END
+            : SEEK_CUR;
+
+    off_t pos = lseek(fd_ctx->fd, cursor, seek);
     if (pos == (off_t)-1) {
         return mc_error_from_errno(errno);
     }

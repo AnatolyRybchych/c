@@ -21,8 +21,8 @@ struct FileCtx{
 static void file_close(void *ctx);
 
 static int open_flags(MC_OpenMode mode);
+static int open_permissions(MC_OpenMode mode);
 static MC_Error open_fd(MC_Stream **stream, int fd, MC_String *path);
-
 
 MC_Error mc_fopen(MC_Stream **file, MC_Str path, MC_OpenMode mode){
     int flags = open_flags(mode);
@@ -33,15 +33,53 @@ MC_Error mc_fopen(MC_Stream **file, MC_Str path, MC_OpenMode mode){
         return MCE_OUT_OF_MEMORY;
     }
 
-    return open_fd(file, open(path_string->data, open_flags(mode)), path_string);
+    MC_Error status;
+    if(mode & MC_OPEN_CREATE){
+        status = open_fd(file, open(path_string->data, open_flags(mode), open_permissions(mode)), path_string);
+    }
+    else{
+        status = open_fd(file, open(path_string->data, open_flags(mode)), path_string);
+    }
+
+    if(status == MCE_OK){
+        if(mode & MC_OPEN_END){
+            mc_set_cursor(*file, 0, MC_CURSOR_FROM_END);
+        }
+    }
+
+    return status;
 }
 
 static int open_flags(MC_OpenMode mode){
-    switch (mode){
-    case MC_OPEN_READ: return O_RDONLY;
-    case MC_OPEN_WRITE: return O_RDWR | O_CREAT;
-    case MC_OPEN_APPEND: return O_RDWR | O_APPEND | O_CREAT;
-    default: return -1;
+    int flags = 0;
+
+    switch (mode & (MC_OPEN_READ | MC_OPEN_WRITE) ){
+    case MC_OPEN_READ:
+        flags = O_RDONLY;
+        break;
+    case MC_OPEN_WRITE:
+        flags = O_WRONLY;
+        break;
+    case MC_OPEN_READ | MC_OPEN_WRITE:
+        flags = O_RDWR;
+        break;
+    }
+
+    if(mode & MC_OPEN_CREATE) flags |= O_CREAT;
+    if(mode & MC_OPEN_NEW) flags |= O_EXCL;
+    if(mode & MC_OPEN_ASYNC) flags |= O_NONBLOCK;
+    if(mode & MC_OPEN_CLEAR) flags |= O_TRUNC;
+    if(mode & MC_OPEN_EXISTING) flags &= ~O_CREAT;
+
+    return flags;
+}
+
+static int open_permissions(MC_OpenMode mode){
+    switch (mode & (MC_OPEN_READ | MC_OPEN_WRITE)){
+    case MC_OPEN_READ: return 0444;
+    case MC_OPEN_WRITE: return 0222;
+    case MC_OPEN_READ | MC_OPEN_WRITE: return 0666;
+    default: return 0;
     }
 }
 

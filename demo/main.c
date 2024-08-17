@@ -27,27 +27,19 @@
 #include <stdlib.h>
 
 int main(){
-    MC_Stream *server;
-    MC_REQUIRE(mc_socket_listen(&server, &(MC_SocketEndpoint){
-        .transport = {
-            .network = {
-                .type = MC_SOCKET_IPV4 | MC_SOCKET_STREAM,
-                .as.ipv4.addr = {0, 0, 0, 0},
-            },
-            .as.tcp.port = 4321
-        }
-    }, 10));
+    MC_Stream *file;
+    MC_REQUIRE(mc_fopen(&file, MC_STRC("/dev/urandom"), MC_OPEN_READ | MC_OPEN_ASYNC));
 
-    MC_Stream *client;
-    MC_REQUIRE(mc_socket_accept(&client, server));
-
-    char buf[32] = {0};
+    char buffer[256] = {0};
     size_t read;
-    MC_REQUIRE(mc_read_async(client, 31, buf, &read));
+    while(true){
+        MC_REQUIRE(mc_read_async(file, sizeof(buffer) - 1, buffer, &read));
+        if(read){
+            MC_REQUIRE(mc_write(MC_STDOUT, read, buffer, NULL));
+        }
+    }
 
-    mc_fmt(MC_STDOUT, "%s\n", buf);
 
-    mc_close(client);
-    mc_close(server);
+    mc_close(file);
 }
 
