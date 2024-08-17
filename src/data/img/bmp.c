@@ -97,7 +97,7 @@ MC_Error mc_bmp_save(MC_Stream *stream, const MC_BmpHdr *hdr, const MC_BmpDIBHdr
 
     MC_RETURN_INVALID(data_size == 0);
 
-    return mc_write_all(stream, data_size, data);
+    return mc_write(stream, data_size, data, NULL);
 }
 
 static MC_Error validate(const MC_BmpHdr *hdr, const MC_BmpDIBHdr *dib, const void *data){

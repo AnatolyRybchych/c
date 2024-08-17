@@ -43,7 +43,7 @@ int main(){
 
     char buf[32] = {0};
     size_t read;
-    MC_REQUIRE(mc_read(client, 31, buf, &read));
+    MC_REQUIRE(mc_read_async(client, 31, buf, &read));
 
     mc_fmt(MC_STDOUT, "%s\n", buf);
 

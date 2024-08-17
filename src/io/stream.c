@@ -7,6 +7,8 @@
 #include <malloc.h>
 #include <memory.h>
 
+#define OPTIONAL_SET(DST, ...) if(DST) *(DST) = (__VA_ARGS__)
+
 struct MC_Stream{
     MC_StreamVtab vtab;
     uint8_t data[];
@@ -49,55 +51,67 @@ void *mc_ctx(MC_Stream *stream){
     return stream->data;
 }
 
-MC_Error mc_read(MC_Stream *stream, size_t size, void *data, size_t *read){
+MC_Error mc_read_async(MC_Stream *stream, size_t size, void *data, size_t *read){
     if(stream == NULL || stream->vtab.read == NULL){
         return MCE_NOT_SUPPORTED;
     }
 
-    return stream->vtab.read(stream->data, size, data, read);
+    size_t dummy;
+    return stream->vtab.read(stream->data, size, data, read ? read : &dummy);
 }
 
-MC_Error mc_read_all(MC_Stream *stream, size_t size, void *data){
-    while(size){
-        size_t read;
-        MC_Error error = mc_read(stream, size, data, &read);
-        if(error != MCE_OK && error != MCE_AGAIN){
-            return mc_error_from_errno(error);
-        }
+MC_Error mc_read(MC_Stream *stream, size_t size, void *data, size_t *ret_read){
+    size_t read = 0;
 
-        if(size < read){
+    while(true){
+        size_t cur_read;
+        MC_Error error = mc_read_async(stream, size, data, &cur_read);
+        read += cur_read;
+        if(size < cur_read){
+            OPTIONAL_SET(ret_read, read);
             return MCE_OVERFLOW;
         }
 
-        data = (uint8_t*)data + read;
-        size -= read;
-    }
+        size -= cur_read;
 
-    return MCE_OK;
+        if(error == MCE_AGAIN){
+            continue;
+        }
+
+        OPTIONAL_SET(ret_read, read);
+        return error;
+    }
 }
 
-MC_Error mc_write(MC_Stream *stream, size_t size, const void *data, size_t *written){
+MC_Error mc_write_async(MC_Stream *stream, size_t size, const void *data, size_t *written){
     if(stream == NULL || stream->vtab.write == NULL){
         return MCE_NOT_SUPPORTED;
     }
 
-    return stream->vtab.write(stream->data, size, data, written);
+    size_t dummy;
+    return stream->vtab.write(stream->data, size, data, written ? written : &dummy);
 }
 
-MC_Error mc_write_all(MC_Stream *stream, size_t size, const void *data){
-    while(size){
-        size_t written;
-        MC_Error error = mc_write(stream, size, data, &written);
-        if(error != MCE_OK && error != MCE_AGAIN){
-            return mc_error_from_errno(error);
-        }
+MC_Error mc_write(MC_Stream *stream, size_t size, const void *data, size_t *ret_written){
+    size_t written = 0;
 
-        if(size < written){
+    while(true){
+        size_t cur_written;
+        MC_Error error = mc_write_async(stream, size, data, &cur_written);
+        written += cur_written;
+        if(size > cur_written){
+            OPTIONAL_SET(ret_written, written);
             return MCE_OVERFLOW;
         }
 
-        data = (uint8_t*)data + written;
-        size -= written;
+        size -= cur_written;
+
+        if(error == MCE_AGAIN){
+            continue;
+        }
+
+        OPTIONAL_SET(ret_written, written);
+        return error;
     }
 
     return MCE_OK;
@@ -114,12 +128,12 @@ MC_Error mc_fmtv(MC_Stream *stream, const char *fmt, va_list args){
     if(len < 512){
         char buffer[len + 1];
         vsnprintf(buffer, sizeof(buffer), fmt, args_cp);
-        status = mc_write_all(stream, len, buffer);
+        status = mc_write(stream, len, buffer, NULL);
     }
     else{
         MC_String *buffer = mc_string_fmtv(fmt, args);
         if(buffer){
-            status = mc_write_all(stream, buffer->len, buffer->data);
+            status = mc_write(stream, buffer->len, buffer->data, NULL);
             free(buffer);
         }
         else{
@@ -145,7 +159,7 @@ MC_Error mc_packv(MC_Stream *stream, const char *fmt, va_list args){
     if(size <= 512){
         char buffer[size];
         mc_struct_vnpack(buffer, ~(unsigned)0, fmt, args);
-        return mc_write_all(stream, size, buffer);
+        return mc_write(stream, size, buffer, NULL);
     }
 
     char *buffer = malloc(size);
@@ -154,7 +168,7 @@ MC_Error mc_packv(MC_Stream *stream, const char *fmt, va_list args){
     }
 
     mc_struct_vnpack(buffer, ~(unsigned)0, fmt, args);
-    MC_Error status = mc_write_all(stream, size, buffer);
+    MC_Error status = mc_write(stream, size, buffer, NULL);
     free(buffer);
     return status;
 }
@@ -173,7 +187,7 @@ MC_Error mc_unpackv(MC_Stream *stream, const char *fmt, va_list args){
 
     if(size <= 512){
         char buffer[size];
-        MC_RETURN_ERROR(mc_read_all(stream, size, buffer));
+        MC_RETURN_ERROR(mc_read(stream, size, buffer, NULL));
         mc_struct_vnunpack(buffer, ~(unsigned)0, fmt, args);
         return MCE_OK;
     }
@@ -183,7 +197,7 @@ MC_Error mc_unpackv(MC_Stream *stream, const char *fmt, va_list args){
         return MCE_OUT_OF_MEMORY;
     }
 
-    MC_Error status = mc_read_all(stream, size, buffer);
+    MC_Error status = mc_read(stream, size, buffer, NULL);
     if(status != MCE_OK){
         free(buffer);
         return status;
