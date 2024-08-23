@@ -37,24 +37,13 @@ int main(){
         .pixels = buf_pixels
     };
 
-    float (*heatmap)[buf.size.height][buf.size.width] = malloc(sizeof(*heatmap));
-    mc_di_contour_dst_inverse_heatmap(di, buf.size, *heatmap, MC_POINT2F(100, 100), 1, &(MC_SemiBezier4F){
-        .c1 = {200, 100},
-        .c2 = {100, 200},
-        .p2 = {200, 200}
-    });
+    MC_DiShape *shape;
+    mc_di_shape_create(di, &shape, (MC_Size2U){.width = 800, .height = 600});
 
-    MC_AColor (*pixels)[buf.size.height][buf.size.width] = (void*)buf.pixels;
+    mc_di_shape_circle(di, shape, MC_POINT2I(200, 200), 100);
 
-    mc_di_clear(di, &buf, (MC_AColor){.r = 10, .g = 4, .b = 2});
-    for(size_t y = 0; y < buf.size.height; y++){
-        for(size_t x = 0; x < buf.size.width; x++){
-            (*pixels)[y][x] = (MC_AColor){
-                .r =  (1.0 - mc_clampf((*heatmap)[y][x], 0, 1)) * 255
-            };
-        }
-    }
-
+    mc_di_fill(di, &buf, shape);
+    mc_di_shape_delete(di, shape);
 
     MC_WM *wm;
     MC_REQUIRE(mc_wm_init(&wm, mc_xlib_wm_vtab));
@@ -74,7 +63,6 @@ int main(){
 
         switch (event.type){
         case MC_WME_WINDOW_REDRAW_REQUESTED:{
-
             MC_REQUIRE(mc_graphics_begin(g));
             MC_REQUIRE(mc_graphics_write_pixels(g, (MC_Point2I){.x = 0, .y = 0}, buf.size, (void*)buf.pixels, (MC_Point2I){0, 0}));
             MC_REQUIRE(mc_graphics_end(g));

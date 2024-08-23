@@ -8,6 +8,7 @@
 #include <mc/error.h>
 
 typedef struct MC_DiBuffer MC_DiBuffer;
+typedef struct MC_DiShape MC_DiShape;
 typedef struct MC_Di MC_Di;
 typedef unsigned MC_Blend;
 enum MC_Blend{
@@ -20,6 +21,13 @@ MC_Error mc_di_init(MC_Di **di);
 void mc_di_destroy(MC_Di *di);
 
 void mc_di_clear(MC_Di *di, MC_DiBuffer *buffer, MC_AColor color);
+
+MC_Error mc_di_shape_create(MC_Di *di, MC_DiShape **shape, MC_Size2U size);
+void mc_di_shape_delete(MC_Di *di, MC_DiShape *shape);
+
+MC_Error mc_di_shape_circle(MC_Di *di, MC_DiShape *shape, MC_Point2I pos, float radius);
+
+MC_Error mc_di_fill(MC_Di *di, MC_DiBuffer *buffer, const MC_DiShape *shape);
 
 MC_Error mc_di_curve_dst_inverse_heatmap(MC_Di *di, MC_Size2U size,
     float heatmap[size.height][size.width], MC_Point2F beg, size_t n, const MC_SemiBezier4F curve[n]);
