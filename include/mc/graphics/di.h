@@ -22,9 +22,9 @@ void mc_di_clear(MC_Di *di, MC_DiBuffer *buffer, MC_AColor color);
 MC_Error mc_di_shape_create(MC_Di *di, MC_DiShape **shape, MC_Size2U size);
 void mc_di_shape_delete(MC_Di *di, MC_DiShape *shape);
 
-MC_Error mc_di_shape_circle(MC_Di *di, MC_DiShape *shape, MC_Vec2i pos, float radius);
+MC_Error mc_di_shape_circle(MC_Di *di, MC_DiShape *shape, MC_Vec2f pos, float radius);
 
-MC_Error mc_di_fill(MC_Di *di, MC_DiBuffer *buffer, const MC_DiShape *shape, MC_Rect2IU dst);
+MC_Error mc_di_fill(MC_Di *di, MC_DiBuffer *buffer, const MC_DiShape *shape, MC_Rect2IU dst, MC_AColor fill_color);
 
 MC_Error mc_di_curve_dst_inverse_heatmap(MC_Di *di, MC_Size2U size,
     float heatmap[size.height][size.width], MC_Vec2f beg, size_t n, const MC_SemiBezier4f curve[n]);
@@ -93,14 +93,44 @@ inline MC_AColor mc_di_getpx(const MC_DiBuffer *buf, MC_Vec2i pos){
     return (*pixels)[pos.y][pos.x];
 }
 
-// /// @param pos є [-1; 1]
-// inline float mc_shape_get_nearest(const MC_DiShape *shape, MC_Vec2f pos){
+inline float mc_shape_getpx_unsafe(const MC_DiShape *shape, MC_Vec2i pos){
+    float (*pixels)[shape->size.height][shape->size.width] = (void*)shape->pixels;
+    return (*pixels)[pos.y][pos.x];
+}
+
+inline float mc_shape_getpx(const MC_DiShape *shape, MC_Vec2i pos){
+    if(pos.x < 0 || pos.y < 0 || pos.x >= (int)shape->size.width || pos.y >= (int)shape->size.height)
+        return -1;
+    return mc_shape_getpx_unsafe(shape, pos);
+}
+
+/// @param pos є [0; 1]
+inline float mc_shape_get_nearest_unsafe(const MC_DiShape *shape, MC_Vec2f pos){
+    return mc_shape_getpx_unsafe(shape, mc_vec2i(pos.y * shape->size.height, pos.x * shape->size.width));
+}
+
+/// @param pos є [0; 1]
+inline float mc_shape_get_nearest(const MC_DiShape *shape, MC_Vec2f pos){
+    return mc_shape_get_nearest_unsafe(shape, mc_vec2f_clamp(pos, mc_vec2f(0, 0), mc_vec2f(1, 1)));
+}
+
+/// @param pos є [-1; 1]
+inline float mc_shape_get_linear(const MC_DiShape *shape, MC_Vec2f pos){
+    MC_Vec2f absolute = mc_vec2f_mul(pos, mc_vec2f(shape->size.width, shape->size.height));
+    MC_Vec2i iabsolute = mc_vec2i(absolute.x, absolute.y);
+
+    MC_Vec2f displacement = mc_vec2f(absolute.x - iabsolute.x, absolute.y - iabsolute.y);
     
-// }
+    float px00 = mc_shape_getpx(shape, mc_vec2i(iabsolute.x, iabsolute.y));
+    float px01 = mc_shape_getpx(shape, mc_vec2i(iabsolute.x, iabsolute.y + 1));
+    float px10 = mc_shape_getpx(shape, mc_vec2i(iabsolute.x + 1, iabsolute.y));
+    float px11 = mc_shape_getpx(shape, mc_vec2i(iabsolute.x + 1, iabsolute.y + 1));
 
-// /// @param pos є [-1; 1]
-// inline float mc_shape_get_linear(const MC_DiShape *shape, MC_Vec2f pos){
-
-// }
+    return mc_lerpf(
+        mc_lerpf(px00, px01, displacement.y),
+        mc_lerpf(px10, px11, displacement.y),
+        displacement.x
+    );
+}
 
 #endif // MC_DI_H

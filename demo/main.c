@@ -38,11 +38,19 @@ int main(){
     };
 
     MC_DiShape *shape;
-    mc_di_shape_create(di, &shape, (MC_Size2U){.width = 800, .height = 600});
+    mc_di_shape_create(di, &shape, (MC_Size2U){.width = 100, .height = 100});
 
-    mc_di_shape_circle(di, shape, mc_vec2i(200, 200), 100);
+    for(float x = 0.1; x < 0.9; x += 0.01 ){
+        mc_di_shape_circle(di, shape, mc_vec2f(x,x), 0.05);
+        mc_di_shape_circle(di, shape, mc_vec2f(x, 1.0 - x), 0.05);
+    }
 
-    mc_di_fill(di, &buf, shape, MC_RECT2IU(0, 0, 100, 100));
+    mc_di_fill(di, &buf, shape, MC_RECT2IU(100, 100, 300, 300), (MC_AColor){
+        .a = 255,
+        .r = 120,
+        .g = 60,
+        .b = 30,
+    });
     mc_di_shape_delete(di, shape);
 
     MC_WM *wm;
@@ -68,13 +76,13 @@ int main(){
             MC_REQUIRE(mc_graphics_end(g));
         }break;
         case MC_WME_KEY_DOWN:
-            mc_fmt(MC_STDOUT, "KEY_DOWN %s\n", mc_key_str(event.as.key_down.key));
+            // mc_fmt(MC_STDOUT, "KEY_DOWN %s\n", mc_key_str(event.as.key_down.key));
             break;
         case MC_WME_KEY_UP:
-            mc_fmt(MC_STDOUT, "KEY_UP %s\n", mc_key_str(event.as.key_up.key));
+            // mc_fmt(MC_STDOUT, "KEY_UP %s\n", mc_key_str(event.as.key_up.key));
             break;
         default:
-            mc_fmt(MC_STDOUT, "event %s\n", mc_wm_event_type_str(event.type));
+            // mc_fmt(MC_STDOUT, "event %s\n", mc_wm_event_type_str(event.type));
             break;
         }
     }

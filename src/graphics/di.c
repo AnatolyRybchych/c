@@ -17,6 +17,11 @@ extern inline void mc_di_setpx(MC_DiBuffer *buf, MC_Vec2i pos, MC_AColor color);
 extern inline void mc_di_drawpx_unsafe(MC_DiBuffer *buf, MC_Vec2i pos, MC_AColor color);
 extern inline void mc_di_drawpx(MC_DiBuffer *buf, MC_Vec2i pos, MC_AColor color);
 extern inline MC_AColor mc_di_getpx(const MC_DiBuffer *buf, MC_Vec2i pos);
+extern inline float mc_shape_getpx_unsafe(const MC_DiShape *shape, MC_Vec2i pos);
+extern inline float mc_shape_getpx(const MC_DiShape *shape, MC_Vec2i pos);
+extern inline float mc_shape_get_nearest_unsafe(const MC_DiShape *shape, MC_Vec2f pos);
+extern inline float mc_shape_get_nearest(const MC_DiShape *shape, MC_Vec2f pos);
+extern inline float mc_shape_get_linear(const MC_DiShape *shape, MC_Vec2f pos);
 
 typedef struct DstHeatmapStep DstHeatmapStep;
 typedef struct CntHeatmapStep CntHeatmapStep;
@@ -71,7 +76,7 @@ static MC_Error contour_dst_inverse_heatmap(MC_Di *di, MC_Size2U size,
 static MC_Error curve_nearest_points_map(MC_Di *di, MC_Size2U size,
     MC_Vec2f nearest[size.height][size.width], MC_Vec2f beg, size_t n, const MC_SemiBezier4f curve[n]);
 
-MC_Error shape_circle(MC_Di *di, MC_DiShape *shape, MC_Vec2i pos, float radius);
+static MC_Error shape_circle(MC_Di *di, MC_DiShape *shape, MC_Vec2f pos, float radius);
 
 static MC_Error bfs_rect(MC_Arena *arena, MC_Rect2IU rect, RectBFS *bfs,
     BfsStep (*next)(MC_Vec2i cur, void *step, void *ctx), void *ctx, size_t step_data_size);
@@ -138,22 +143,35 @@ void mc_di_shape_delete(MC_Di *di, MC_DiShape *shape){
     free(shape);
 }
 
-MC_Error mc_di_shape_circle(MC_Di *di, MC_DiShape *shape, MC_Vec2i pos, float radius){
+MC_Error mc_di_shape_circle(MC_Di *di, MC_DiShape *shape, MC_Vec2f pos, float radius){
     MC_Error status = shape_circle(di, shape, pos, radius);
     mc_arena_reset(di->arena);
     return status;
 }
 
-MC_Error mc_di_fill(MC_Di *di, MC_DiBuffer *buffer, const MC_DiShape *shape, MC_Rect2IU dst){
-    // (void)di;
-
-    // MC_AColor (*pixels)[buffer->size.height][buffer->size.width] = (void*)buffer->pixels;
-    // float (*shape_pixels)[shape->size.height][shape->size.width] = (void*)shape->pixels;
-
+MC_Error mc_di_fill(MC_Di *di, MC_DiBuffer *buffer, const MC_DiShape *shape, MC_Rect2IU dst, MC_AColor fill_color){
     (void)di;
-    (void)buffer;
-    (void)shape;
-    (void)dst;
+
+    MC_Vec2i dst_left_top = mc_vec2i(dst.x, dst.y);
+    MC_Vec2i dst_right_bottom = mc_vec2i(dst.x + dst.width, dst.y + dst.height);
+
+    MC_Vec2i avail_left_top = mc_vec2i_clamp(dst_left_top, mc_vec2i(0, 0), mc_vec2i(buffer->size.width, buffer->size.height));
+    MC_Vec2i avail_right_bottom = mc_vec2i_clamp(dst_right_bottom, mc_vec2i(0, 0), mc_vec2i(buffer->size.width, buffer->size.height));
+
+    float scale = dst.width / (float)shape->size.width;
+
+    // MC_Vec2f shape_size = mc_vec2f(shape->size.width, shape->size.height);
+
+    for(MC_Vec2i dst_pos = {.y = avail_left_top.y}; dst_pos.y != avail_right_bottom.y; dst_pos.y++){
+        MC_Vec2f norm_pos = {.y = (dst_pos.y - dst_left_top.y) / (float)dst.height};
+        for(dst_pos.x = avail_left_top.x; dst_pos.x != avail_right_bottom.x; dst_pos.x++){
+            norm_pos.x = (dst_pos.x - dst_left_top.x) / (float)dst.width;
+
+            float mag = mc_shape_get_linear(shape, norm_pos);
+
+            mc_di_drawpx_unsafe(buffer, dst_pos, mc_acolor(mc_color(fill_color), fill_color.a * mc_clampf(mag * scale, 0, 1)));
+        }
+    }
 
     return MCE_OK;
 }
@@ -308,7 +326,7 @@ static MC_Error curve_nearest_points_map(MC_Di *di, MC_Size2U size,
 }
 
 struct ShapeCircleCtx{
-    MC_Vec2i pos;
+    MC_Vec2f pos;
     float radius;
     MC_DiShape *shape;
 };
@@ -329,21 +347,23 @@ static BfsStep shape_circle_step(MC_Vec2i cur, void *_step, void *_ctx){
     return BFS_NEXT;
 }
 
-MC_Error shape_circle(MC_Di *di, MC_DiShape *shape, MC_Vec2i pos, float radius){
+MC_Error shape_circle(MC_Di *di, MC_DiShape *shape, MC_Vec2f pos, float radius){
     MC_Rect2IU bounds = {
         .width = shape->size.width,
         .height = shape->size.height
     };
 
+    pos = mc_vec2f(shape->size.width * pos.x, shape->size.height * pos.y);
+
     struct ShapeCircleCtx ctx = {
         .pos = pos,
-        .radius = radius,
+        .radius = shape->size.width * radius,
         .shape = shape
     };
 
     RectBFS bfs;
     MC_RETURN_ERROR(bfs_rect(di->arena, bounds, &bfs, shape_circle_step, &ctx, 0));
-    MC_RETURN_ERROR(bfs_step(&bfs, pos, NULL));
+    MC_RETURN_ERROR(bfs_step(&bfs, mc_vec2i(pos.x, pos.y), NULL));
     return bfs_run(&bfs);
 }
 
