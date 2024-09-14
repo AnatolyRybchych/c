@@ -40,9 +40,9 @@ int main(){
     MC_DiShape *shape;
     mc_di_shape_create(di, &shape, (MC_Size2U){.width = 800, .height = 600});
 
-    mc_di_shape_circle(di, shape, MC_POINT2I(200, 200), 100);
+    mc_di_shape_circle(di, shape, mc_vec2i(200, 200), 100);
 
-    mc_di_fill(di, &buf, shape);
+    mc_di_fill(di, &buf, shape, MC_RECT2IU(0, 0, 100, 100));
     mc_di_shape_delete(di, shape);
 
     MC_WM *wm;
@@ -64,7 +64,7 @@ int main(){
         switch (event.type){
         case MC_WME_WINDOW_REDRAW_REQUESTED:{
             MC_REQUIRE(mc_graphics_begin(g));
-            MC_REQUIRE(mc_graphics_write_pixels(g, (MC_Point2I){.x = 0, .y = 0}, buf.size, (void*)buf.pixels, (MC_Point2I){0, 0}));
+            MC_REQUIRE(mc_graphics_write_pixels(g, (MC_Vec2i){.x = 0, .y = 0}, buf.size, (void*)buf.pixels, (MC_Vec2i){0, 0}));
             MC_REQUIRE(mc_graphics_end(g));
         }break;
         case MC_WME_KEY_DOWN:

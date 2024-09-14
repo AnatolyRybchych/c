@@ -18,9 +18,9 @@ struct MC_GraphicsVtab{
     MC_Error (*init_buffer)(MC_TargetGraphics *g, MC_TargetBuffer *buffer, MC_Size2U size_px);
     void (*destroy_buffer)(MC_TargetGraphics *g, MC_TargetBuffer *buffer);
     MC_Error (*select_buffer)(MC_TargetGraphics *g, MC_TargetBuffer *buffer);
-    MC_Error (*write)(MC_TargetGraphics *g, MC_Point2I pos, MC_Size2U size, MC_TargetBuffer *src, MC_Point2I src_pos);
-    MC_Error (*write_pixels)(MC_TargetGraphics *g, MC_Point2I pos, MC_Size2U size, const MC_AColor pixels[size.height][size.width], MC_Point2I src_pos);
-    MC_Error (*read_pixels)(MC_TargetGraphics *g, MC_Point2I pos, MC_Size2U size, MC_AColor pixels[size.height][size.width]);
+    MC_Error (*write)(MC_TargetGraphics *g, MC_Vec2i pos, MC_Size2U size, MC_TargetBuffer *src, MC_Vec2i src_pos);
+    MC_Error (*write_pixels)(MC_TargetGraphics *g, MC_Vec2i pos, MC_Size2U size, const MC_AColor pixels[size.height][size.width], MC_Vec2i src_pos);
+    MC_Error (*read_pixels)(MC_TargetGraphics *g, MC_Vec2i pos, MC_Size2U size, MC_AColor pixels[size.height][size.width]);
 
     MC_Error (*clear)(MC_TargetGraphics *g, MC_Color color);
     MC_Error (*get_size)(MC_TargetGraphics *g, MC_Size2U *size);

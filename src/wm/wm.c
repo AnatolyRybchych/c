@@ -26,7 +26,7 @@ struct MC_WMWindow{
     struct MC_TargetWMWindow *target;
     struct{
         MC_Rect2IU rect;
-        MC_Point2I mouse_pos;
+        MC_Vec2i mouse_pos;
         bool mouse_over;
         MC_String *title;
     } cached;
@@ -183,7 +183,7 @@ MC_Error mc_wm_window_set_title(MC_WMWindow *window, MC_Str title){
     return MCE_NOT_SUPPORTED;
 }
 
-MC_Error mc_wm_window_set_position(MC_WMWindow *window, MC_Point2I position){
+MC_Error mc_wm_window_set_position(MC_WMWindow *window, MC_Vec2i position){
     MC_WM *wm = window->wm;
     MC_WMVtab *v = &wm->vtab;
 
@@ -264,7 +264,7 @@ MC_Error mc_wm_window_set_rect(MC_WMWindow *window, MC_Rect2IU rect){
     }
 
     if(v->set_window_position && v->set_window_size){
-        MC_Error position_status = v->set_window_position(wm->target, window->target, (MC_Point2I){
+        MC_Error position_status = v->set_window_position(wm->target, window->target, (MC_Vec2i){
             .x = rect.x,
             .y = rect.y,
         });
@@ -319,7 +319,7 @@ MC_Error mc_wm_window_get_title(MC_WMWindow *window, MC_Str *title){
     return status;
 }
 
-MC_Error mc_wm_window_get_position(MC_WMWindow *window, MC_Point2I *position){
+MC_Error mc_wm_window_get_position(MC_WMWindow *window, MC_Vec2i *position){
     MC_WM *wm = window->wm;
     MC_WMVtab *v = &wm->vtab;
 
@@ -402,7 +402,7 @@ MC_Error mc_wm_window_get_rect(MC_WMWindow *window, MC_Rect2IU *rect){
     }
 
     if(v->get_window_position){
-        MC_Point2I position;
+        MC_Vec2i position;
         MC_Error position_status = v->get_window_position(wm->target, window->target, &position);
         if(position_status == MCE_OK){
             window->cached.rect.x = position.x;
@@ -450,8 +450,8 @@ MC_Str mc_wm_window_cached_get_title(MC_WMWindow *window){
     return mc_string_str(window->cached.title);
 }
 
-MC_Point2I mc_wm_window_cached_get_position(MC_WMWindow *window){
-    return (MC_Point2I){
+MC_Vec2i mc_wm_window_cached_get_position(MC_WMWindow *window){
+    return (MC_Vec2i){
         .x = window->cached.rect.x,
         .y = window->cached.rect.y
     };

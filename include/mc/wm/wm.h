@@ -4,7 +4,7 @@
 #include <mc/io/stream.h>
 #include <mc/error.h>
 #include <mc/geometry/size.h>
-#include <mc/geometry/point.h>
+#include <mc/geometry/lina.h>
 #include <mc/geometry/rect.h>
 #include <mc/data/str.h>
 
@@ -30,19 +30,19 @@ void mc_wm_window_destroy(MC_WMWindow *window);
 struct MC_TargetWMWindow *mc_wm_window_get_target(MC_WMWindow *wm);
 
 MC_Error mc_wm_window_set_title(MC_WMWindow *window, MC_Str title);
-MC_Error mc_wm_window_set_position(MC_WMWindow *window, MC_Point2I position);
+MC_Error mc_wm_window_set_position(MC_WMWindow *window, MC_Vec2i position);
 MC_Error mc_wm_window_set_size(MC_WMWindow *window, MC_Size2U size);
 MC_Error mc_wm_window_set_rect(MC_WMWindow *window, MC_Rect2IU rect);
 
 MC_Error mc_wm_window_get_title(MC_WMWindow *window, MC_Str *title);
-MC_Error mc_wm_window_get_position(MC_WMWindow *window, MC_Point2I *position);
+MC_Error mc_wm_window_get_position(MC_WMWindow *window, MC_Vec2i *position);
 MC_Error mc_wm_window_get_size(MC_WMWindow *window, MC_Size2U *size);
 MC_Error mc_wm_window_get_rect(MC_WMWindow *window, MC_Rect2IU *rect);
 
 MC_Error mc_wm_window_get_graphic(MC_WMWindow *window, struct MC_Graphics **g);
 
 MC_Str mc_wm_window_cached_get_title(MC_WMWindow *window);
-MC_Point2I mc_wm_window_cached_get_position(MC_WMWindow *window);
+MC_Vec2i mc_wm_window_cached_get_position(MC_WMWindow *window);
 MC_Size2U mc_wm_window_cached_get_size(MC_WMWindow *window);
 MC_Rect2IU mc_wm_window_cached_get_rect(MC_WMWindow *window);
 bool mc_wm_window_cached_is_mouse_over(MC_WMWindow *window);

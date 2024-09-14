@@ -56,7 +56,7 @@ struct MC_WMEvent{
 
         struct MC_WME_WindowMoved{
             MC_WMWindow *window;
-            MC_Point2I new_position;
+            MC_Vec2i new_position;
         } window_moved;
 
         struct MC_WME_RedrawRequest{
@@ -65,34 +65,34 @@ struct MC_WMEvent{
 
         struct MC_WME_MouseMoved{
             struct MC_WMWindow *window;
-            MC_Point2I position;
+            MC_Vec2i position;
         } mouse_moved;
 
         struct MC_WME_MouseDown{
             struct MC_WMWindow *window;
-            MC_Point2I position;
+            MC_Vec2i position;
             MC_MouseButton button;
         } mouse_down;
 
         struct MC_WME_MouseUp{
             struct MC_WMWindow *window;
-            MC_Point2I position;
+            MC_Vec2i position;
             MC_MouseButton button;
         } mouse_up;
 
         struct MC_WME_MouseEnter{
             struct MC_WMWindow *window;
-            MC_Point2I position;
+            MC_Vec2i position;
         } mouse_enter;
 
         struct MC_WME_MouseLeave{
             struct MC_WMWindow *window;
-            MC_Point2I position;
+            MC_Vec2i position;
         } mouse_leave;
 
         struct MC_WME_MouseWheel{
             struct MC_WMWindow *window;
-            MC_Point2I position;
+            MC_Vec2i position;
             int up;
             int right;
         } mouse_wheel;

@@ -68,7 +68,7 @@ struct MC_TargetIndication{
 
         struct MC_WMIND_WindowMoved{
             struct MC_TargetWMWindow *window;
-            MC_Point2I new_position;
+            MC_Vec2i new_position;
         } window_moved;
 
         struct MC_WMIND_WindowHide{
@@ -85,7 +85,7 @@ struct MC_TargetIndication{
 
         struct MC_WMIND_MouseMoved{
             struct MC_TargetWMWindow *window;
-            MC_Point2I position;
+            MC_Vec2i position;
         } mouse_moved;
 
         struct MC_WMIND_MouseDown{
@@ -138,12 +138,12 @@ struct MC_WMVtab{
     MC_Error (*create_window_graphic)(struct MC_TargetWM *wm, struct MC_TargetWMWindow *window, struct MC_Graphics **g);
 
     MC_Error (*set_window_title)(struct MC_TargetWM *wm, struct MC_TargetWMWindow *window, MC_Str title);
-    MC_Error (*set_window_position)(struct MC_TargetWM *wm, struct MC_TargetWMWindow *window, MC_Point2I position);
+    MC_Error (*set_window_position)(struct MC_TargetWM *wm, struct MC_TargetWMWindow *window, MC_Vec2i position);
     MC_Error (*set_window_size)(struct MC_TargetWM *wm, struct MC_TargetWMWindow *window, MC_Size2U size);
     MC_Error (*set_window_rect)(struct MC_TargetWM *wm, struct MC_TargetWMWindow *window, MC_Rect2IU rect);
 
     MC_Error (*get_window_title)(struct MC_TargetWM *wm, struct MC_TargetWMWindow *window, MC_Stream *title);
-    MC_Error (*get_window_position)(struct MC_TargetWM *wm, struct MC_TargetWMWindow *window, MC_Point2I *position);
+    MC_Error (*get_window_position)(struct MC_TargetWM *wm, struct MC_TargetWMWindow *window, MC_Vec2i *position);
     MC_Error (*get_window_size)(struct MC_TargetWM *wm, struct MC_TargetWMWindow *window, MC_Size2U *size);
     MC_Error (*get_window_rect)(struct MC_TargetWM *wm, struct MC_TargetWMWindow *window, MC_Rect2IU *rect);
 

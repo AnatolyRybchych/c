@@ -7,6 +7,12 @@
 #include <stdint.h>
 #include <memory.h>
 
+extern inline uint8_t mc_u8_clamp(int val);
+extern inline MC_Color mc_color(MC_AColor acolor);
+extern inline MC_AColor mc_acolor(MC_Color color, float alpha);
+extern inline MC_Color mc_color_lerp(MC_Color c1, MC_Color c2, float factor);
+extern inline MC_AColor mc_acolor_lerp(MC_AColor c1, MC_AColor c2, float factor);
+
 struct MC_Graphics{
     MC_GraphicsVtab vtab;
     MC_TargetGraphics *target;
@@ -22,8 +28,6 @@ struct MC_GBuffer{
     MC_TargetBuffer *target;
     alignas(void*) uint8_t data[];
 };
-
-extern inline uint8_t mc_u8_clamp(int val);
 
 MC_Error mc_graphics_init(MC_Graphics **ret_g, const MC_GraphicsVtab *vtab, size_t ctx_size, const void *ctx){
     MC_Graphics *g = malloc(sizeof(MC_Graphics) + ctx_size);
@@ -120,7 +124,7 @@ MC_Error mc_graphics_select_buffer(MC_Graphics *g, MC_GBuffer *buffer){
         :MCE_OK;
 }
 
-MC_Error mc_graphics_write(MC_Graphics *g, MC_Point2I pos, MC_Size2U size, MC_GBuffer *buffer, MC_Point2I src_pos){
+MC_Error mc_graphics_write(MC_Graphics *g, MC_Vec2i pos, MC_Size2U size, MC_GBuffer *buffer, MC_Vec2i src_pos){
     if(buffer){
         if(!g->vtab.write){
             return buffer ? MCE_NOT_SUPPORTED : MCE_OK;
@@ -134,7 +138,7 @@ MC_Error mc_graphics_write(MC_Graphics *g, MC_Point2I pos, MC_Size2U size, MC_GB
     return g->vtab.write ? g->vtab.write(g->target, pos, size, NULL, src_pos)  :MCE_OK;
 }
 
-MC_Error mc_graphics_write_pixels(MC_Graphics *g, MC_Point2I pos, MC_Size2U size, const MC_AColor pixels[size.height][size.width], MC_Point2I src_pos){
+MC_Error mc_graphics_write_pixels(MC_Graphics *g, MC_Vec2i pos, MC_Size2U size, const MC_AColor pixels[size.height][size.width], MC_Vec2i src_pos){
     if(g->vtab.write_pixels == NULL){
         return MCE_NOT_SUPPORTED;
     }
@@ -142,7 +146,7 @@ MC_Error mc_graphics_write_pixels(MC_Graphics *g, MC_Point2I pos, MC_Size2U size
     return g->vtab.write_pixels(g->target, pos, size, pixels, src_pos);
 }
 
-MC_Error mc_graphics_read_pixels(MC_Graphics *g, MC_Point2I pos, MC_Size2U size, MC_AColor pixels[size.height][size.width]){
+MC_Error mc_graphics_read_pixels(MC_Graphics *g, MC_Vec2i pos, MC_Size2U size, MC_AColor pixels[size.height][size.width]){
     if(g->vtab.read_pixels == NULL){
         return MCE_NOT_SUPPORTED;
     }
@@ -193,7 +197,7 @@ MC_Error mc_graphics_dump_bmp(MC_Graphics *g, struct MC_Stream *stream){
     MC_AColor (*pixels)[size.height][size.width] = g->tmp;
     uint8_t (*payload)[size.height][size.width][3] = g->tmp;
 
-    MC_RETURN_ERROR(g->vtab.read_pixels(g->target, (MC_Point2I){0}, size, (void*)pixels));
+    MC_RETURN_ERROR(g->vtab.read_pixels(g->target, (MC_Vec2i){0}, size, (void*)pixels));
     
     for(size_t y = 0; y < size.height; y++){
         for(size_t x = 0; x < size.width; x++){

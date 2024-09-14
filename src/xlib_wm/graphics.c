@@ -32,9 +32,9 @@ static MC_Error end(MC_TargetGraphics *g);
 static MC_Error init_buffer(MC_TargetGraphics *g, MC_TargetBuffer *buffer, MC_Size2U size_px);
 static void destroy_buffer(MC_TargetGraphics *g, MC_TargetBuffer *buffer);
 static MC_Error select_buffer(MC_TargetGraphics *g, MC_TargetBuffer *buffer);
-static MC_Error write(MC_TargetGraphics *g, MC_Point2I pos, MC_Size2U size, MC_TargetBuffer *src, MC_Point2I src_pos);
-static MC_Error write_pixels(MC_TargetGraphics *g, MC_Point2I pos, MC_Size2U size, const MC_AColor pixels[size.height][size.width], MC_Point2I src_pos);
-static MC_Error read_pixels(MC_TargetGraphics *g, MC_Point2I pos, MC_Size2U size, MC_AColor pixels[size.height][size.width]);
+static MC_Error write(MC_TargetGraphics *g, MC_Vec2i pos, MC_Size2U size, MC_TargetBuffer *src, MC_Vec2i src_pos);
+static MC_Error write_pixels(MC_TargetGraphics *g, MC_Vec2i pos, MC_Size2U size, const MC_AColor pixels[size.height][size.width], MC_Vec2i src_pos);
+static MC_Error read_pixels(MC_TargetGraphics *g, MC_Vec2i pos, MC_Size2U size, MC_AColor pixels[size.height][size.width]);
 
 static MC_Error clear(MC_TargetGraphics *g, MC_Color color);
 
@@ -118,7 +118,7 @@ static MC_Error select_buffer(MC_TargetGraphics *g, MC_TargetBuffer *buffer){
     return MCE_OK;
 }
 
-static MC_Error write(MC_TargetGraphics *g, MC_Point2I pos, MC_Size2U size, MC_TargetBuffer *src, MC_Point2I src_pos){
+static MC_Error write(MC_TargetGraphics *g, MC_Vec2i pos, MC_Size2U size, MC_TargetBuffer *src, MC_Vec2i src_pos){
     Drawable src_drawable = src ? src->pixmap : g->drawable;
 
     XCopyArea(g->dpy, src_drawable, g->drawing_target, g->gc,
@@ -127,7 +127,7 @@ static MC_Error write(MC_TargetGraphics *g, MC_Point2I pos, MC_Size2U size, MC_T
     return MCE_OK;
 }
 
-static MC_Error write_pixels(MC_TargetGraphics *g, MC_Point2I pos, MC_Size2U size, const MC_AColor pixels[size.height][size.width], MC_Point2I src_pos){
+static MC_Error write_pixels(MC_TargetGraphics *g, MC_Vec2i pos, MC_Size2U size, const MC_AColor pixels[size.height][size.width], MC_Vec2i src_pos){
     size_t pixel_data_size = size.width * size.height * 4;
     if(g->tmp_size < pixel_data_size){
         uint8_t *pixel_data = realloc(g->tmp, pixel_data_size);
@@ -163,7 +163,7 @@ static MC_Error write_pixels(MC_TargetGraphics *g, MC_Point2I pos, MC_Size2U siz
     return MCE_OK;
 }
 
-static MC_Error read_pixels(MC_TargetGraphics *g, MC_Point2I pos, MC_Size2U size, MC_AColor pixels[size.height][size.width]){
+static MC_Error read_pixels(MC_TargetGraphics *g, MC_Vec2i pos, MC_Size2U size, MC_AColor pixels[size.height][size.width]){
     XImage *img = XGetImage(g->dpy, g->drawing_target, pos.x, pos.y, size.width, size.height, AllPlanes, ZPixmap);
     if(img == NULL){
         return MCE_OUT_OF_MEMORY;
