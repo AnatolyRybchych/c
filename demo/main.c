@@ -38,7 +38,7 @@ int main(){
     };
 
     MC_DiShape *shape;
-    mc_di_shape_create(di, &shape, (MC_Size2U){.width = 30, .height = 30});
+    mc_di_shape_create(di, &shape, (MC_Size2U){.width = 10, .height = 10});
     mc_di_shape_circle(di, shape, mc_vec2f(0.5, 0.5), 0.5);
 
     // for(int y = 0; y < (int)shape->size.height; y++){

@@ -1,188 +1,184 @@
 #ifndef MC_GEOMETRY_LINA_H
 #define MC_GEOMETRY_LINA_H
 
-#include <stddef.h>
 #include <math.h>
+#include <stddef.h>
 #include <stdbool.h>
 
-#ifndef __LINA_DECL
-    #define __LINA_DECL(DECL, ...) inline DECL __VA_ARGS__
-#endif
-#ifndef __LINA_IMPL
-    #define __LINA_IMPL(DECL, ...)
-#endif
+float mc_lerpf(float beg, float end, float progress);
+float mc_clampf(float val, float min, float max);
+typedef struct MC_Vec2f MC_Vec2f;
+typedef struct MC_Vec3f MC_Vec3f;
+typedef struct MC_Vec4f MC_Vec4f;
+typedef struct MC_Vec2i MC_Vec2i;
+typedef struct MC_Vec3i MC_Vec3i;
+typedef struct MC_Vec4i MC_Vec4i;
+typedef struct MC_Vec2u MC_Vec2u;
+typedef struct MC_Vec3u MC_Vec3u;
+typedef struct MC_Vec4u MC_Vec4u;
 
-#define __LINA_FUNC(...) \
-    __LINA_DECL(__VA_ARGS__) \
-    __LINA_IMPL(__VA_ARGS__) \
+MC_Vec2f mc_vec2f(float x, float y);
+MC_Vec2f mc_vec2f_add(MC_Vec2f lhs, MC_Vec2f rhs);
+MC_Vec2f mc_vec2f_sub(MC_Vec2f lhs, MC_Vec2f rhs);
+MC_Vec2f mc_vec2f_mul(MC_Vec2f lhs, MC_Vec2f rhs);
+MC_Vec2f mc_vec2f_div(MC_Vec2f lhs, MC_Vec2f rhs);
+MC_Vec2f mc_vec2f_lerp(MC_Vec2f beg, MC_Vec2f end, float progress);
+MC_Vec2f mc_vec2f_min(MC_Vec2f lhs, MC_Vec2f rhs);
+MC_Vec2f mc_vec2f_max(MC_Vec2f lhs, MC_Vec2f rhs);
+MC_Vec2f mc_vec2f_clamp(MC_Vec2f val, MC_Vec2f min, MC_Vec2f max);
+float mc_vec2f_sqrmag(MC_Vec2f val);
+float mc_vec2f_mag(MC_Vec2f val);
+float mc_vec2f_sqrdst(MC_Vec2f vec1, MC_Vec2f vec2);
+float mc_vec2f_dst(MC_Vec2f vec1, MC_Vec2f vec2);
+bool mc_vec2f_equ(MC_Vec2f lhs, MC_Vec2f rhs);
+MC_Vec3f mc_vec3f(float x, float y, float z);
+MC_Vec3f mc_vec3f_add(MC_Vec3f lhs, MC_Vec3f rhs);
+MC_Vec3f mc_vec3f_sub(MC_Vec3f lhs, MC_Vec3f rhs);
+MC_Vec3f mc_vec3f_mul(MC_Vec3f lhs, MC_Vec3f rhs);
+MC_Vec3f mc_vec3f_div(MC_Vec3f lhs, MC_Vec3f rhs);
+MC_Vec3f mc_vec3f_lerp(MC_Vec3f beg, MC_Vec3f end, float progress);
+MC_Vec3f mc_vec3f_min(MC_Vec3f lhs, MC_Vec3f rhs);
+MC_Vec3f mc_vec3f_max(MC_Vec3f lhs, MC_Vec3f rhs);
+MC_Vec3f mc_vec3f_clamp(MC_Vec3f val, MC_Vec3f min, MC_Vec3f max);
+float mc_vec3f_sqrmag(MC_Vec3f val);
+float mc_vec3f_mag(MC_Vec3f val);
+float mc_vec3f_sqrdst(MC_Vec3f vec1, MC_Vec3f vec2);
+float mc_vec3f_dst(MC_Vec3f vec1, MC_Vec3f vec2);
+bool mc_vec3f_equ(MC_Vec3f lhs, MC_Vec3f rhs);
+MC_Vec4f mc_vec4f(float x, float y, float z, float w);
+MC_Vec4f mc_vec4f_add(MC_Vec4f lhs, MC_Vec4f rhs);
+MC_Vec4f mc_vec4f_sub(MC_Vec4f lhs, MC_Vec4f rhs);
+MC_Vec4f mc_vec4f_mul(MC_Vec4f lhs, MC_Vec4f rhs);
+MC_Vec4f mc_vec4f_div(MC_Vec4f lhs, MC_Vec4f rhs);
+MC_Vec4f mc_vec4f_lerp(MC_Vec4f beg, MC_Vec4f end, float progress);
+MC_Vec4f mc_vec4f_min(MC_Vec4f lhs, MC_Vec4f rhs);
+MC_Vec4f mc_vec4f_max(MC_Vec4f lhs, MC_Vec4f rhs);
+MC_Vec4f mc_vec4f_clamp(MC_Vec4f val, MC_Vec4f min, MC_Vec4f max);
+float mc_vec4f_sqrmag(MC_Vec4f val);
+float mc_vec4f_mag(MC_Vec4f val);
+float mc_vec4f_sqrdst(MC_Vec4f vec1, MC_Vec4f vec2);
+float mc_vec4f_dst(MC_Vec4f vec1, MC_Vec4f vec2);
+bool mc_vec4f_equ(MC_Vec4f lhs, MC_Vec4f rhs);
+MC_Vec2i mc_vec2i(int x, int y);
+MC_Vec2i mc_vec2i_add(MC_Vec2i lhs, MC_Vec2i rhs);
+MC_Vec2i mc_vec2i_sub(MC_Vec2i lhs, MC_Vec2i rhs);
+MC_Vec2i mc_vec2i_mul(MC_Vec2i lhs, MC_Vec2i rhs);
+MC_Vec2i mc_vec2i_div(MC_Vec2i lhs, MC_Vec2i rhs);
+MC_Vec2i mc_vec2i_lerp(MC_Vec2i beg, MC_Vec2i end, float progress);
+MC_Vec2i mc_vec2i_min(MC_Vec2i lhs, MC_Vec2i rhs);
+MC_Vec2i mc_vec2i_max(MC_Vec2i lhs, MC_Vec2i rhs);
+MC_Vec2i mc_vec2i_clamp(MC_Vec2i val, MC_Vec2i min, MC_Vec2i max);
+float mc_vec2i_sqrmag(MC_Vec2i val);
+float mc_vec2i_mag(MC_Vec2i val);
+float mc_vec2i_sqrdst(MC_Vec2i vec1, MC_Vec2i vec2);
+float mc_vec2i_dst(MC_Vec2i vec1, MC_Vec2i vec2);
+bool mc_vec2i_equ(MC_Vec2i lhs, MC_Vec2i rhs);
+MC_Vec3i mc_vec3i(int x, int y, int z);
+MC_Vec3i mc_vec3i_add(MC_Vec3i lhs, MC_Vec3i rhs);
+MC_Vec3i mc_vec3i_sub(MC_Vec3i lhs, MC_Vec3i rhs);
+MC_Vec3i mc_vec3i_mul(MC_Vec3i lhs, MC_Vec3i rhs);
+MC_Vec3i mc_vec3i_div(MC_Vec3i lhs, MC_Vec3i rhs);
+MC_Vec3i mc_vec3i_lerp(MC_Vec3i beg, MC_Vec3i end, float progress);
+MC_Vec3i mc_vec3i_min(MC_Vec3i lhs, MC_Vec3i rhs);
+MC_Vec3i mc_vec3i_max(MC_Vec3i lhs, MC_Vec3i rhs);
+MC_Vec3i mc_vec3i_clamp(MC_Vec3i val, MC_Vec3i min, MC_Vec3i max);
+float mc_vec3i_sqrmag(MC_Vec3i val);
+float mc_vec3i_mag(MC_Vec3i val);
+float mc_vec3i_sqrdst(MC_Vec3i vec1, MC_Vec3i vec2);
+float mc_vec3i_dst(MC_Vec3i vec1, MC_Vec3i vec2);
+bool mc_vec3i_equ(MC_Vec3i lhs, MC_Vec3i rhs);
+MC_Vec4i mc_vec4i(int x, int y, int z, int w);
+MC_Vec4i mc_vec4i_add(MC_Vec4i lhs, MC_Vec4i rhs);
+MC_Vec4i mc_vec4i_sub(MC_Vec4i lhs, MC_Vec4i rhs);
+MC_Vec4i mc_vec4i_mul(MC_Vec4i lhs, MC_Vec4i rhs);
+MC_Vec4i mc_vec4i_div(MC_Vec4i lhs, MC_Vec4i rhs);
+MC_Vec4i mc_vec4i_lerp(MC_Vec4i beg, MC_Vec4i end, float progress);
+MC_Vec4i mc_vec4i_min(MC_Vec4i lhs, MC_Vec4i rhs);
+MC_Vec4i mc_vec4i_max(MC_Vec4i lhs, MC_Vec4i rhs);
+MC_Vec4i mc_vec4i_clamp(MC_Vec4i val, MC_Vec4i min, MC_Vec4i max);
+float mc_vec4i_sqrmag(MC_Vec4i val);
+float mc_vec4i_mag(MC_Vec4i val);
+float mc_vec4i_sqrdst(MC_Vec4i vec1, MC_Vec4i vec2);
+float mc_vec4i_dst(MC_Vec4i vec1, MC_Vec4i vec2);
+bool mc_vec4i_equ(MC_Vec4i lhs, MC_Vec4i rhs);
+MC_Vec2u mc_vec2u(unsigned x, unsigned y);
+MC_Vec2u mc_vec2u_add(MC_Vec2u lhs, MC_Vec2u rhs);
+MC_Vec2u mc_vec2u_sub(MC_Vec2u lhs, MC_Vec2u rhs);
+MC_Vec2u mc_vec2u_mul(MC_Vec2u lhs, MC_Vec2u rhs);
+MC_Vec2u mc_vec2u_div(MC_Vec2u lhs, MC_Vec2u rhs);
+MC_Vec2u mc_vec2u_lerp(MC_Vec2u beg, MC_Vec2u end, float progress);
+MC_Vec2u mc_vec2u_min(MC_Vec2u lhs, MC_Vec2u rhs);
+MC_Vec2u mc_vec2u_max(MC_Vec2u lhs, MC_Vec2u rhs);
+MC_Vec2u mc_vec2u_clamp(MC_Vec2u val, MC_Vec2u min, MC_Vec2u max);
+float mc_vec2u_sqrmag(MC_Vec2u val);
+float mc_vec2u_mag(MC_Vec2u val);
+float mc_vec2u_sqrdst(MC_Vec2u vec1, MC_Vec2u vec2);
+float mc_vec2u_dst(MC_Vec2u vec1, MC_Vec2u vec2);
+bool mc_vec2u_equ(MC_Vec2u lhs, MC_Vec2u rhs);
+MC_Vec3u mc_vec3u(unsigned x, unsigned y, unsigned z);
+MC_Vec3u mc_vec3u_add(MC_Vec3u lhs, MC_Vec3u rhs);
+MC_Vec3u mc_vec3u_sub(MC_Vec3u lhs, MC_Vec3u rhs);
+MC_Vec3u mc_vec3u_mul(MC_Vec3u lhs, MC_Vec3u rhs);
+MC_Vec3u mc_vec3u_div(MC_Vec3u lhs, MC_Vec3u rhs);
+MC_Vec3u mc_vec3u_lerp(MC_Vec3u beg, MC_Vec3u end, float progress);
+MC_Vec3u mc_vec3u_min(MC_Vec3u lhs, MC_Vec3u rhs);
+MC_Vec3u mc_vec3u_max(MC_Vec3u lhs, MC_Vec3u rhs);
+MC_Vec3u mc_vec3u_clamp(MC_Vec3u val, MC_Vec3u min, MC_Vec3u max);
+float mc_vec3u_sqrmag(MC_Vec3u val);
+float mc_vec3u_mag(MC_Vec3u val);
+float mc_vec3u_sqrdst(MC_Vec3u vec1, MC_Vec3u vec2);
+float mc_vec3u_dst(MC_Vec3u vec1, MC_Vec3u vec2);
+bool mc_vec3u_equ(MC_Vec3u lhs, MC_Vec3u rhs);
+MC_Vec4u mc_vec4u(unsigned x, unsigned y, unsigned z, unsigned w);
+MC_Vec4u mc_vec4u_add(MC_Vec4u lhs, MC_Vec4u rhs);
+MC_Vec4u mc_vec4u_sub(MC_Vec4u lhs, MC_Vec4u rhs);
+MC_Vec4u mc_vec4u_mul(MC_Vec4u lhs, MC_Vec4u rhs);
+MC_Vec4u mc_vec4u_div(MC_Vec4u lhs, MC_Vec4u rhs);
+MC_Vec4u mc_vec4u_lerp(MC_Vec4u beg, MC_Vec4u end, float progress);
+MC_Vec4u mc_vec4u_min(MC_Vec4u lhs, MC_Vec4u rhs);
+MC_Vec4u mc_vec4u_max(MC_Vec4u lhs, MC_Vec4u rhs);
+MC_Vec4u mc_vec4u_clamp(MC_Vec4u val, MC_Vec4u min, MC_Vec4u max);
+float mc_vec4u_sqrmag(MC_Vec4u val);
+float mc_vec4u_mag(MC_Vec4u val);
+float mc_vec4u_sqrdst(MC_Vec4u vec1, MC_Vec4u vec2);
+float mc_vec4u_dst(MC_Vec4u vec1, MC_Vec4u vec2);
+bool mc_vec4u_equ(MC_Vec4u lhs, MC_Vec4u rhs);
 
-#define LINA_VEC(N, SUFIX,...) MC_Vec##N##SUFIX##__VA_ARGS__
-#define LINA_VEC_LOWER(N, SUFIX, ...) mc_vec##N##SUFIX##__VA_ARGS__
+struct MC_Vec2f{
+    float x, y;
+};
 
-#define __LINA_EACH0(CALL, ...)
-#define __LINA_EACH1(CALL, ...) CALL(x, ##__VA_ARGS__)
-#define __LINA_EACH2(CALL, ...) __LINA_EACH1(CALL, ##__VA_ARGS__), CALL(y, ##__VA_ARGS__)
-#define __LINA_EACH3(CALL, ...) __LINA_EACH2(CALL, ##__VA_ARGS__), CALL(z, ##__VA_ARGS__)
-#define __LINA_EACH4(CALL, ...) __LINA_EACH3(CALL, ##__VA_ARGS__), CALL(w, ##__VA_ARGS__)
-#define LINA_EACH(N, CALL, ...) __LINA_EACH##N(CALL, ##__VA_ARGS__)
+struct MC_Vec3f{
+    float x, y, z;
+};
 
-#define __LINA_EACHS0(CALL, ...)
-#define __LINA_EACHS1(CALL, ...) CALL(x, ##__VA_ARGS__)
-#define __LINA_EACHS2(CALL, ...) __LINA_EACHS1(CALL, ##__VA_ARGS__) CALL(y, ##__VA_ARGS__)
-#define __LINA_EACHS3(CALL, ...) __LINA_EACHS2(CALL, ##__VA_ARGS__) CALL(z, ##__VA_ARGS__)
-#define __LINA_EACHS4(CALL, ...) __LINA_EACHS3(CALL, ##__VA_ARGS__) CALL(w, ##__VA_ARGS__)
-#define LINA_EACHS(N, CALL, ...) __LINA_EACHS##N(CALL, ##__VA_ARGS__)
+struct MC_Vec4f{
+    float x, y, z, w;
+};
 
-#define __LINA_EACH_VEC_IMPL_SIZE(DELIM, CALL, ...) \
-    CALL(2, ##__VA_ARGS__) DELIM \
-    CALL(3, ##__VA_ARGS__) DELIM \
-    CALL(4, ##__VA_ARGS__)
+struct MC_Vec2i{
+    int x, y;
+};
 
-#define __LINA_GET(...) __VA_ARGS__
-#define __LINA_GET2_1(SECOND, FIRST, ...) FIRST SECOND, ##__VA_ARGS__
+struct MC_Vec3i{
+    int x, y, z;
+};
 
-#define __LINA_TYPEDEF_VEC(N, SUFIX) typedef struct LINA_VEC(N, SUFIX) LINA_VEC(N, SUFIX)
-#define __LINA_STRUCT_VECN(N, TYPE, SUFIX) struct LINA_VEC(N, SUFIX){TYPE LINA_EACH(N, __LINA_GET);} 
-#define __LINA_STRUCT_VEC(N, TYPE, SUFIX) __LINA_STRUCT_VECN(N, TYPE, SUFIX)
+struct MC_Vec4i{
+    int x, y, z, w;
+};
 
-#define __LINA_BINOP_EVAL(X, LHS, RHS, CBINOP) (LHS.X CBINOP RHS.X)
-#define __LINA_BINOP_CALL(N, TYPE, SUFIX, OP, CALL) \
-__LINA_FUNC(LINA_VEC(N, SUFIX) LINA_VEC_LOWER(N, SUFIX, _##OP)(LINA_VEC(N, SUFIX) lhs, LINA_VEC(N, SUFIX) rhs), { \
-    return LINA_VEC_LOWER(N, SUFIX)(LINA_EACH(N, CALL, lhs, rhs)); \
-})
+struct MC_Vec2u{
+    unsigned x, y;
+};
 
-#define __LINA_BINOP(N, TYPE, SUFIX, OP, CBINOP) \
-__LINA_FUNC(LINA_VEC(N, SUFIX) LINA_VEC_LOWER(N, SUFIX, _##OP)(LINA_VEC(N, SUFIX) lhs, LINA_VEC(N, SUFIX) rhs), { \
-    return LINA_VEC_LOWER(N, SUFIX)(LINA_EACH(N, __LINA_BINOP_EVAL, lhs, rhs, CBINOP)); \
-})
+struct MC_Vec3u{
+    unsigned x, y, z;
+};
 
-#define __LINA_CLAMP_OP(X, VAL, MIN, MAX) (VAL.X < MIN.X ? MIN.X : VAL.X > MAX.X ? MAX.X : VAL.X)
-#define __LINA_CLAMP(N, TYPE, SUFIX) \
-__LINA_FUNC(LINA_VEC(N, SUFIX) LINA_VEC_LOWER(N, SUFIX, _clamp)(LINA_VEC(N, SUFIX) val, LINA_VEC(N, SUFIX) min, LINA_VEC(N, SUFIX) max), { \
-    return LINA_VEC_LOWER(N, SUFIX)(LINA_EACH(N, __LINA_CLAMP_OP, val, min, max)); \
-})
+struct MC_Vec4u{
+    unsigned x, y, z, w;
+};
 
-#define __LINA_LERP_OP(X, BEG, END, PROGRESS) (BEG.X + (END.X - BEG.X) * PROGRESS)
-#define __LINA_LERP(N, TYPE, SUFIX) \
-__LINA_FUNC(LINA_VEC(N, SUFIX) LINA_VEC_LOWER(N, SUFIX, _lerp)(LINA_VEC(N, SUFIX) lhs, LINA_VEC(N, SUFIX) rhs, float progress), { \
-    return LINA_VEC_LOWER(N, SUFIX)(LINA_EACH(N, __LINA_LERP_OP, lhs, rhs, progress)); \
-})
 
-#define __LINA_SQRMAG_OP(X, VAL) + (VAL.X * VAL.X)
-#define __LINA_SQRMAG(N, TYPE, SUFIX) \
-__LINA_FUNC(float LINA_VEC_LOWER(N, SUFIX, _sqrmag)(LINA_VEC(N, SUFIX) val), { \
-    return 0 LINA_EACHS(N, __LINA_SQRMAG_OP, val); \
-})
-
-#define __LINA_MAG(N, TYPE, SUFIX) \
-__LINA_FUNC(float LINA_VEC_LOWER(N, SUFIX, _mag)(LINA_VEC(N, SUFIX) val), { \
-    return sqrtf(0 LINA_EACHS(N, __LINA_SQRMAG_OP, val)); \
-})
-
-#define __LINA_EQU_OP(X, LHS, RHS) && (LHS.X == RHS.X)
-#define __LINA_EQU(N, TYPE, SUFIX) \
-__LINA_FUNC(bool LINA_VEC_LOWER(N, SUFIX, _equ)(LINA_VEC(N, SUFIX) lhs, LINA_VEC(N, SUFIX) rhs), { \
-    return true LINA_EACHS(N, __LINA_EQU_OP, lhs, rhs); \
-})
-
-#define __LINA_SQRDST(N, TYPE, SUFIX) \
-__LINA_FUNC(float LINA_VEC_LOWER(N, SUFIX, _sqrdst)(LINA_VEC(N, SUFIX) lhs, LINA_VEC(N, SUFIX) rhs), { \
-    return LINA_VEC_LOWER(N, SUFIX, _sqrmag)(LINA_VEC_LOWER(N, SUFIX, _sub)(rhs, lhs)); \
-})
-
-#define __LINA_DST(N, TYPE, SUFIX) \
-__LINA_FUNC(float LINA_VEC_LOWER(N, SUFIX, _dst)(LINA_VEC(N, SUFIX) lhs, LINA_VEC(N, SUFIX) rhs), { \
-    return sqrtf(LINA_VEC_LOWER(N, SUFIX, _sqrmag)(LINA_VEC_LOWER(N, SUFIX, _sub)(rhs, lhs))); \
-})
-
-#define __LINA_CTOR(N, TYPE, SUFIX) \
-__LINA_FUNC(LINA_VEC(N, SUFIX) LINA_VEC_LOWER(N, SUFIX)(LINA_EACH(N, __LINA_GET2_1, TYPE)), { \
-    return (LINA_VEC(N, SUFIX)){LINA_EACH(N, __LINA_GET)};\
-})
-
-__LINA_FUNC(float mc_lerpf(float lhs, float rhs, float progress), {
-    return lhs + (rhs - lhs) * progress;
-})
-
-__LINA_FUNC(float mc_clampf(float val, float min, float max), {
-    return val < min ? min : val > max ? max : val;
-})
-
-__LINA_EACH_VEC_IMPL_SIZE(;, __LINA_TYPEDEF_VEC, f);
-__LINA_EACH_VEC_IMPL_SIZE(;, __LINA_TYPEDEF_VEC, lf);
-__LINA_EACH_VEC_IMPL_SIZE(;, __LINA_TYPEDEF_VEC, i);
-__LINA_EACH_VEC_IMPL_SIZE(;, __LINA_TYPEDEF_VEC, u);
-__LINA_EACH_VEC_IMPL_SIZE(;, __LINA_TYPEDEF_VEC, zu);
-
-__LINA_EACH_VEC_IMPL_SIZE(;, __LINA_STRUCT_VEC, float, f);
-__LINA_EACH_VEC_IMPL_SIZE(;, __LINA_STRUCT_VEC, double, lf);
-__LINA_EACH_VEC_IMPL_SIZE(;, __LINA_STRUCT_VEC, int, i);
-__LINA_EACH_VEC_IMPL_SIZE(;, __LINA_STRUCT_VEC, unsigned, u);
-__LINA_EACH_VEC_IMPL_SIZE(;, __LINA_STRUCT_VEC, size_t, zu);
-
-__LINA_EACH_VEC_IMPL_SIZE(, __LINA_CTOR, float, f)
-__LINA_EACH_VEC_IMPL_SIZE(, __LINA_BINOP, float, f, add, +)
-__LINA_EACH_VEC_IMPL_SIZE(, __LINA_BINOP, float, f, sub, -)
-__LINA_EACH_VEC_IMPL_SIZE(, __LINA_BINOP, float, f, mul, *)
-__LINA_EACH_VEC_IMPL_SIZE(, __LINA_BINOP, float, f, div, /)
-__LINA_EACH_VEC_IMPL_SIZE(, __LINA_LERP, float, f)
-__LINA_EACH_VEC_IMPL_SIZE(, __LINA_CLAMP, float, f)
-__LINA_EACH_VEC_IMPL_SIZE(, __LINA_SQRMAG, float, f)
-__LINA_EACH_VEC_IMPL_SIZE(, __LINA_MAG, float, f)
-__LINA_EACH_VEC_IMPL_SIZE(, __LINA_SQRDST, float, f)
-__LINA_EACH_VEC_IMPL_SIZE(, __LINA_DST, float, f)
-__LINA_EACH_VEC_IMPL_SIZE(, __LINA_EQU, float, f)
-
-__LINA_EACH_VEC_IMPL_SIZE(, __LINA_CTOR, double, lf)
-__LINA_EACH_VEC_IMPL_SIZE(, __LINA_BINOP, double, lf, add, +)
-__LINA_EACH_VEC_IMPL_SIZE(, __LINA_BINOP, double, lf, sub, -)
-__LINA_EACH_VEC_IMPL_SIZE(, __LINA_BINOP, double, lf, mul, *)
-__LINA_EACH_VEC_IMPL_SIZE(, __LINA_BINOP, double, lf, div, /)
-__LINA_EACH_VEC_IMPL_SIZE(, __LINA_LERP, double, lf)
-__LINA_EACH_VEC_IMPL_SIZE(, __LINA_CLAMP, double, lf)
-__LINA_EACH_VEC_IMPL_SIZE(, __LINA_SQRMAG, double, lf)
-__LINA_EACH_VEC_IMPL_SIZE(, __LINA_MAG, double, lf)
-__LINA_EACH_VEC_IMPL_SIZE(, __LINA_SQRDST, double, lf)
-__LINA_EACH_VEC_IMPL_SIZE(, __LINA_DST, double, lf)
-__LINA_EACH_VEC_IMPL_SIZE(, __LINA_EQU, double, lf)
-
-__LINA_EACH_VEC_IMPL_SIZE(, __LINA_CTOR, int, i)
-__LINA_EACH_VEC_IMPL_SIZE(, __LINA_BINOP, int, i, add, +)
-__LINA_EACH_VEC_IMPL_SIZE(, __LINA_BINOP, int, i, sub, -)
-__LINA_EACH_VEC_IMPL_SIZE(, __LINA_BINOP, int, i, mul, *)
-__LINA_EACH_VEC_IMPL_SIZE(, __LINA_BINOP, int, i, div, /)
-__LINA_EACH_VEC_IMPL_SIZE(, __LINA_LERP, int, i)
-__LINA_EACH_VEC_IMPL_SIZE(, __LINA_CLAMP, int, i)
-__LINA_EACH_VEC_IMPL_SIZE(, __LINA_SQRMAG, int, i)
-__LINA_EACH_VEC_IMPL_SIZE(, __LINA_MAG, int, i)
-__LINA_EACH_VEC_IMPL_SIZE(, __LINA_SQRDST, int, i)
-__LINA_EACH_VEC_IMPL_SIZE(, __LINA_DST, int, i)
-__LINA_EACH_VEC_IMPL_SIZE(, __LINA_EQU, int, i)
-
-__LINA_EACH_VEC_IMPL_SIZE(, __LINA_CTOR, unsigned, u)
-__LINA_EACH_VEC_IMPL_SIZE(, __LINA_BINOP, unsigned, u, add, +)
-__LINA_EACH_VEC_IMPL_SIZE(, __LINA_BINOP, unsigned, u, sub, -)
-__LINA_EACH_VEC_IMPL_SIZE(, __LINA_BINOP, unsigned, u, mul, *)
-__LINA_EACH_VEC_IMPL_SIZE(, __LINA_BINOP, unsigned, u, div, /)
-__LINA_EACH_VEC_IMPL_SIZE(, __LINA_LERP, unsigned, u)
-__LINA_EACH_VEC_IMPL_SIZE(, __LINA_CLAMP, unsigned, u)
-__LINA_EACH_VEC_IMPL_SIZE(, __LINA_SQRMAG, unsigned, u)
-__LINA_EACH_VEC_IMPL_SIZE(, __LINA_MAG, unsigned, u)
-__LINA_EACH_VEC_IMPL_SIZE(, __LINA_SQRDST, unsigned, u)
-__LINA_EACH_VEC_IMPL_SIZE(, __LINA_DST, unsigned, u)
-__LINA_EACH_VEC_IMPL_SIZE(, __LINA_EQU, unsigned, u)
-
-__LINA_EACH_VEC_IMPL_SIZE(, __LINA_CTOR, size_t, zu)
-__LINA_EACH_VEC_IMPL_SIZE(, __LINA_BINOP, size_t, zu, add, +)
-__LINA_EACH_VEC_IMPL_SIZE(, __LINA_BINOP, size_t, zu, sub, -)
-__LINA_EACH_VEC_IMPL_SIZE(, __LINA_BINOP, size_t, zu, mul, *)
-__LINA_EACH_VEC_IMPL_SIZE(, __LINA_BINOP, size_t, zu, div, /)
-__LINA_EACH_VEC_IMPL_SIZE(, __LINA_LERP, size_t, zu)
-__LINA_EACH_VEC_IMPL_SIZE(, __LINA_CLAMP, size_t, zu)
-__LINA_EACH_VEC_IMPL_SIZE(, __LINA_SQRMAG, size_t, zu)
-__LINA_EACH_VEC_IMPL_SIZE(, __LINA_MAG, size_t, zu)
-__LINA_EACH_VEC_IMPL_SIZE(, __LINA_SQRDST, size_t, zu)
-__LINA_EACH_VEC_IMPL_SIZE(, __LINA_DST, size_t, zu)
-__LINA_EACH_VEC_IMPL_SIZE(, __LINA_EQU, size_t, zu)
-
-#endif // MC_GEOMETRY_LINA_H
+#endif //MC_GEOMETRY_LINA_H
