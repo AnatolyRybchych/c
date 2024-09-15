@@ -93,38 +93,44 @@ inline MC_AColor mc_di_getpx(const MC_DiBuffer *buf, MC_Vec2i pos){
     return (*pixels)[pos.y][pos.x];
 }
 
-inline float mc_shape_getpx_unsafe(const MC_DiShape *shape, MC_Vec2i pos){
+inline float mc_shape_getpx(const MC_DiShape *shape, MC_Vec2i pos){
+    if(pos.x < 0 || pos.y < 0 || pos.x >= (int)shape->size.width || pos.y >= (int)shape->size.height)
+        return 0;
+
     float (*pixels)[shape->size.height][shape->size.width] = (void*)shape->pixels;
     return (*pixels)[pos.y][pos.x];
 }
 
-inline float mc_shape_getpx(const MC_DiShape *shape, MC_Vec2i pos){
-    if(pos.x < 0 || pos.y < 0 || pos.x >= (int)shape->size.width || pos.y >= (int)shape->size.height)
-        return -1;
-    return mc_shape_getpx_unsafe(shape, pos);
-}
-
-/// @param pos є [0; 1]
-inline float mc_shape_get_nearest_unsafe(const MC_DiShape *shape, MC_Vec2f pos){
-    return mc_shape_getpx_unsafe(shape, mc_vec2i(pos.y * shape->size.height, pos.x * shape->size.width));
-}
-
 /// @param pos є [0; 1]
 inline float mc_shape_get_nearest(const MC_DiShape *shape, MC_Vec2f pos){
-    return mc_shape_get_nearest_unsafe(shape, mc_vec2f_clamp(pos, mc_vec2f(0, 0), mc_vec2f(1, 1)));
+    pos = mc_vec2f_clamp(pos, mc_vec2f(0, 0), mc_vec2f(1, 1));
+    MC_Vec2i ipos = mc_vec2i(pos.y * (shape->size.height - 0.5), pos.x * (shape->size.width - 0.5));
+
+    float (*pixels)[shape->size.height][shape->size.width] = (void*)shape->pixels;
+    return (*pixels)[ipos.y][ipos.x];
 }
 
-/// @param pos є [-1; 1]
+/// @param pos є [0; 1]
 inline float mc_shape_get_linear(const MC_DiShape *shape, MC_Vec2f pos){
-    MC_Vec2f absolute = mc_vec2f_mul(pos, mc_vec2f(shape->size.width, shape->size.height));
+    MC_Vec2f absolute = mc_vec2f_mul(pos, mc_vec2f(shape->size.width - 0.5, shape->size.height - 0.5));
     MC_Vec2i iabsolute = mc_vec2i(absolute.x, absolute.y);
 
     MC_Vec2f displacement = mc_vec2f(absolute.x - iabsolute.x, absolute.y - iabsolute.y);
-    
+
+    MC_Vec2i idisplacement = mc_vec2i(
+        displacement.x < 0.5 ? -1 : 1,
+        displacement.y < 0.5 ? -1 : 1
+    );
+
+    displacement = mc_vec2f(
+        fabsf(displacement.x - 0.5f),
+        fabsf(displacement.y - 0.5f)
+    );
+
     float px00 = mc_shape_getpx(shape, mc_vec2i(iabsolute.x, iabsolute.y));
-    float px01 = mc_shape_getpx(shape, mc_vec2i(iabsolute.x, iabsolute.y + 1));
-    float px10 = mc_shape_getpx(shape, mc_vec2i(iabsolute.x + 1, iabsolute.y));
-    float px11 = mc_shape_getpx(shape, mc_vec2i(iabsolute.x + 1, iabsolute.y + 1));
+    float px01 = mc_shape_getpx(shape, mc_vec2i(iabsolute.x, iabsolute.y + idisplacement.y));
+    float px10 = mc_shape_getpx(shape, mc_vec2i(iabsolute.x + idisplacement.x, iabsolute.y));
+    float px11 = mc_shape_getpx(shape, mc_vec2i(iabsolute.x + idisplacement.x, iabsolute.y + idisplacement.y));
 
     return mc_lerpf(
         mc_lerpf(px00, px01, displacement.y),

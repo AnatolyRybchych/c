@@ -17,9 +17,7 @@ extern inline void mc_di_setpx(MC_DiBuffer *buf, MC_Vec2i pos, MC_AColor color);
 extern inline void mc_di_drawpx_unsafe(MC_DiBuffer *buf, MC_Vec2i pos, MC_AColor color);
 extern inline void mc_di_drawpx(MC_DiBuffer *buf, MC_Vec2i pos, MC_AColor color);
 extern inline MC_AColor mc_di_getpx(const MC_DiBuffer *buf, MC_Vec2i pos);
-extern inline float mc_shape_getpx_unsafe(const MC_DiShape *shape, MC_Vec2i pos);
 extern inline float mc_shape_getpx(const MC_DiShape *shape, MC_Vec2i pos);
-extern inline float mc_shape_get_nearest_unsafe(const MC_DiShape *shape, MC_Vec2f pos);
 extern inline float mc_shape_get_nearest(const MC_DiShape *shape, MC_Vec2f pos);
 extern inline float mc_shape_get_linear(const MC_DiShape *shape, MC_Vec2f pos);
 
@@ -353,17 +351,17 @@ MC_Error shape_circle(MC_Di *di, MC_DiShape *shape, MC_Vec2f pos, float radius){
         .height = shape->size.height
     };
 
-    pos = mc_vec2f(shape->size.width * pos.x, shape->size.height * pos.y);
+    pos = mc_vec2f((shape->size.width - 1) * pos.x, (shape->size.height - 1) * pos.y);
 
     struct ShapeCircleCtx ctx = {
         .pos = pos,
-        .radius = shape->size.width * radius,
+        .radius = (shape->size.width - 1) * radius,
         .shape = shape
     };
 
     RectBFS bfs;
     MC_RETURN_ERROR(bfs_rect(di->arena, bounds, &bfs, shape_circle_step, &ctx, 0));
-    MC_RETURN_ERROR(bfs_step(&bfs, mc_vec2i(pos.x, pos.y), NULL));
+    MC_RETURN_ERROR(bfs_step(&bfs, mc_vec2i(pos.x + 0.5, pos.y + 0.5), NULL));
     return bfs_run(&bfs);
 }
 

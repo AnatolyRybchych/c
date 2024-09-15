@@ -86,7 +86,8 @@ MC_Error mc_wm_init(MC_WM **ret_wm, const MC_WMVtab *vtab){
     }
 
     *ret_wm = wm;
-    dump_vtable(wm);
+    (void)dump_vtable;
+    // dump_vtable(wm);
 
     return MCE_OK;
 }
