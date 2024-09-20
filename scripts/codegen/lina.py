@@ -165,6 +165,8 @@ def main():
 
     hdr += ['float mc_lerpf(float beg, float end, float progress);']
     hdr += ['float mc_clampf(float val, float min, float max);']
+    hdr += ['float mc_minf(float lhs, float rhs);']
+    hdr += ['float mc_maxf(float lhs, float rhs);']
 
     types_sizes = [(t, s) for t in types for s in t['sizes']]
     types_sizes_ops = [(t, s, o) for t in types for s in t['sizes'] for o in t['ops']]
@@ -209,6 +211,18 @@ def main():
         f'{IDENT}return val < min ? min : val > max ? max : val;',
         '}',
         '',
+    ]
+
+    src += [
+        'float mc_minf(float lhs, float rhs){',
+        f'{IDENT}return lhs < rhs ? lhs : rhs;',
+        '}',
+    ]
+
+    src += [
+        'float mc_maxf(float lhs, float rhs){',
+        f'{IDENT}return lhs > rhs ? lhs : rhs;',
+        '}',
     ]
 
     for type, size, op in types_sizes_ops:

@@ -5,6 +5,7 @@
 #include <mc/data/bit.h>
 
 #include <mc/geometry/rect.h>
+#include <mc/geometry/point.h>
 
 #include <malloc.h>
 #include <memory.h>
@@ -75,6 +76,7 @@ static MC_Error curve_nearest_points_map(MC_Di *di, MC_Size2U size,
     MC_Vec2f nearest[size.height][size.width], MC_Vec2f beg, size_t n, const MC_SemiBezier4f curve[n]);
 
 static MC_Error shape_circle(MC_Di *di, MC_DiShape *shape, MC_Vec2f pos, float radius);
+static MC_Error shape_line(MC_Di *di, MC_DiShape *shape, MC_Vec2f p1, MC_Vec2f p2, float thikness);
 
 static MC_Error bfs_rect(MC_Arena *arena, MC_Rect2IU rect, RectBFS *bfs,
     BfsStep (*next)(MC_Vec2i cur, void *step, void *ctx), void *ctx, size_t step_data_size);
@@ -143,6 +145,12 @@ void mc_di_shape_delete(MC_Di *di, MC_DiShape *shape){
 
 MC_Error mc_di_shape_circle(MC_Di *di, MC_DiShape *shape, MC_Vec2f pos, float radius){
     MC_Error status = shape_circle(di, shape, pos, radius);
+    mc_arena_reset(di->arena);
+    return status;
+}
+
+MC_Error mc_di_shape_line(MC_Di *di, MC_DiShape *shape, MC_Vec2f p1, MC_Vec2f p2, float thikness){
+    MC_Error status = shape_line(di, shape, p1, p2,thikness);
     mc_arena_reset(di->arena);
     return status;
 }
@@ -362,6 +370,59 @@ MC_Error shape_circle(MC_Di *di, MC_DiShape *shape, MC_Vec2f pos, float radius){
     RectBFS bfs;
     MC_RETURN_ERROR(bfs_rect(di->arena, bounds, &bfs, shape_circle_step, &ctx, 0));
     MC_RETURN_ERROR(bfs_step(&bfs, mc_vec2i(pos.x + 0.5, pos.y + 0.5), NULL));
+    return bfs_run(&bfs);
+}
+
+struct ShapeLineCtx{
+    MC_Vec2f p1;
+    MC_Vec2f p2;
+    float thikness;
+    MC_DiShape *shape;
+};
+
+static BfsStep shape_line_step(MC_Vec2i cur, void *_step, void *_ctx){
+    (void)_step;
+
+    struct ShapeLineCtx *ctx = _ctx;
+
+    MC_Vec2f curf = mc_vec2f(cur.x, cur.y);
+
+    float distance = mc_vec2f_dst(curf,
+        mc_closest_point_to_segment(ctx->p1, ctx->p2, curf));
+
+    float (*pixels)[ctx->shape->size.height][ctx->shape->size.width] = (void*)ctx->shape->pixels;
+
+    if((*pixels)[cur.y][cur.x] >= ctx->thikness - distance){
+        return BFS_CONTINUE;
+    }
+
+    (*pixels)[cur.y][cur.x] = ctx->thikness - distance;
+    return BFS_NEXT;
+}
+
+static MC_Error shape_line(MC_Di *di, MC_DiShape *shape, MC_Vec2f p1, MC_Vec2f p2, float thikness){
+    MC_Rect2IU bounds = {
+        .width = shape->size.width,
+        .height = shape->size.height
+    };
+
+    p1 = mc_vec2f((shape->size.width - 1) * p1.x, (shape->size.height - 1) * p1.y);
+    p2 = mc_vec2f((shape->size.width - 1) * p2.x, (shape->size.height - 1) * p2.y);
+
+    struct ShapeLineCtx ctx = {
+        .p1 = p1,
+        .p2 = p2,
+        .thikness = (shape->size.width) * thikness,
+        .shape = shape
+    };
+
+    RectBFS bfs;
+    MC_RETURN_ERROR(bfs_rect(di->arena, bounds, &bfs, shape_line_step, &ctx, 0));
+
+    for(float t = 0; t <= 1; t += thikness){
+        MC_Vec2f cur = mc_vec2f_lerp(p1, p2, t);
+        MC_RETURN_ERROR(bfs_step(&bfs, mc_vec2i(cur.x + 0.5, cur.y + 0.5), NULL));
+    }
     return bfs_run(&bfs);
 }
 

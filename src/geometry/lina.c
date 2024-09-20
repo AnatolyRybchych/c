@@ -8,6 +8,12 @@ float mc_clampf(float val, float min, float max){
     return val < min ? min : val > max ? max : val;
 }
 
+float mc_minf(float lhs, float rhs){
+    return lhs < rhs ? lhs : rhs;
+}
+float mc_maxf(float lhs, float rhs){
+    return lhs > rhs ? lhs : rhs;
+}
 MC_Vec2f mc_vec2f(float x, float y){
     return (MC_Vec2f){.x = x, .y = y};
 }

@@ -23,6 +23,7 @@ MC_Error mc_di_shape_create(MC_Di *di, MC_DiShape **shape, MC_Size2U size);
 void mc_di_shape_delete(MC_Di *di, MC_DiShape *shape);
 
 MC_Error mc_di_shape_circle(MC_Di *di, MC_DiShape *shape, MC_Vec2f pos, float radius);
+MC_Error mc_di_shape_line(MC_Di *di, MC_DiShape *shape, MC_Vec2f p1, MC_Vec2f p2, float thikness);
 
 MC_Error mc_di_fill(MC_Di *di, MC_DiBuffer *buffer, const MC_DiShape *shape, MC_Rect2IU dst, MC_AColor fill_color);
 

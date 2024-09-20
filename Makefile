@@ -21,6 +21,7 @@ objects			+= data/img/bmp.o
 objects			+= data/bit.o
 objects			+= data/str.o
 objects			+= geometry/lina.o
+objects			+= geometry/point.o
 objects			+= geometry/bezier.o
 objects			+= io/stream.o
 

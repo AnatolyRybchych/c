@@ -7,6 +7,8 @@
 
 float mc_lerpf(float beg, float end, float progress);
 float mc_clampf(float val, float min, float max);
+float mc_minf(float lhs, float rhs);
+float mc_maxf(float lhs, float rhs);
 typedef struct MC_Vec2f MC_Vec2f;
 typedef struct MC_Vec3f MC_Vec3f;
 typedef struct MC_Vec4f MC_Vec4f;
