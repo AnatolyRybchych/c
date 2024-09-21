@@ -51,13 +51,13 @@ int main(){
         .c2 = mc_vec2f(0, 0),
     }, 0.03);
 
-    mc_di_clear(di, buf, (MC_AColor){.a = 0x00, .r = 0x25, .g = 0x25, .b = 0x25});
+    mc_di_clear(di, buf, (MC_AColor){.a = 0xff, .r = 0x15, .g =0x15, .b = 0x15});
 
     mc_di_fill_shape(di, buf, shape, MC_RECT2IU(100, 100, 200, 200), (MC_AColor){
-        .a = 255,
-        .r = 120,
-        .g = 60,
-        .b = 30,
+        .a = 0xff,
+        .r = 0x88,
+        .g = 0x44,
+        .b = 0x22,
     });
     mc_di_shape_delete(di, shape);
 

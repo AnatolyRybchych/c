@@ -567,11 +567,11 @@ static MC_Error bfs_run(RectBFS *bfs){
 }
 
 static MC_AColor blend(MC_AColor dst, MC_AColor src){
-    uint8_t dfac = 255 - dst.a;
+    uint8_t dfac = 255 - src.a;
     uint8_t sfac = src.a;
 
     return (MC_AColor){
-        .a = mc_u8_clamp(255 - ((255 - dst.a) / 2 + (255 - src.a) / 2)),
+        .a = mc_u8_clamp(255 - mc_u8_clamp(((255 - dst.a) + (255 - src.a)) / 2)),
         .r = mc_u8_clamp((dst.r * dfac + sfac * src.r) / 255),
         .g = mc_u8_clamp((dst.g * dfac + sfac * src.g) / 255),
         .b = mc_u8_clamp((dst.b * dfac + sfac * src.b) / 255)
