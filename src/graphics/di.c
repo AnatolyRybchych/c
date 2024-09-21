@@ -11,46 +11,10 @@
 #include <memory.h>
 #include <stdalign.h>
 
-extern inline MC_AColor mc_di_blend(MC_AColor dst, MC_AColor src);
-extern inline bool mc_di_hoverover(const MC_DiBuffer *buf, MC_Vec2i pos);
-extern inline void mc_di_setpx_unsafe(MC_DiBuffer *buf, MC_Vec2i pos, MC_AColor color);
-extern inline void mc_di_setpx(MC_DiBuffer *buf, MC_Vec2i pos, MC_AColor color);
-extern inline void mc_di_drawpx_unsafe(MC_DiBuffer *buf, MC_Vec2i pos, MC_AColor color);
-extern inline void mc_di_drawpx(MC_DiBuffer *buf, MC_Vec2i pos, MC_AColor color);
-extern inline MC_AColor mc_di_getpx(const MC_DiBuffer *buf, MC_Vec2i pos);
-extern inline float mc_shape_getpx(const MC_DiShape *shape, MC_Vec2i pos);
-extern inline float mc_shape_get_nearest(const MC_DiShape *shape, MC_Vec2f pos);
-extern inline float mc_shape_get_linear(const MC_DiShape *shape, MC_Vec2f pos);
-
 typedef struct DstHeatmapStep DstHeatmapStep;
 typedef struct CntHeatmapStep CntHeatmapStep;
 typedef struct RectBFS RectBFS;
-
 typedef unsigned BfsStep;
-enum BfsStep{
-    BFS_ACTION_NEXT,
-    BFS_ACTION_CONTINUE,
-    BFS_ACTION_BREAK,
-
-    BFS_FLAG_VISIT = 1 << 15,
-    BFS_ACTION = 0xFF,
-
-    BFS_NEXT = BFS_ACTION_NEXT | BFS_FLAG_VISIT,
-    BFS_CONTINUE = BFS_ACTION_CONTINUE | BFS_FLAG_VISIT,
-    BFS_BREAK = BFS_ACTION_BREAK | BFS_FLAG_VISIT,
-};
-
-struct DstHeatmapStep{
-    struct DstHeatmapStep *next;
-    MC_Vec2f src;
-    MC_Vec2i dst;
-};
-
-struct CntHeatmapStep{
-    struct CntHeatmapStep *next;
-    size_t count;
-    MC_Vec2i cur;
-};
 
 struct MC_Di{
     MC_Arena *arena;
@@ -73,14 +37,29 @@ struct RectBFS{
     BfsStep (*next)(MC_Vec2i cur, void *step, void *ctx);
 };
 
-static MC_Error curve_dst_inverse_heatmap(MC_Di *di, MC_Size2U size,
-    float heatmap[size.height][size.width], MC_Vec2f beg, size_t n, const MC_SemiBezier4f curve[n]);
+enum BfsStep{
+    BFS_ACTION_NEXT,
+    BFS_ACTION_CONTINUE,
+    BFS_ACTION_BREAK,
 
-static MC_Error contour_dst_inverse_heatmap(MC_Di *di, MC_Size2U size,
-    float heatmap[size.height][size.width], MC_Vec2f beg, size_t n, const MC_SemiBezier4f contour[n]);
+    BFS_FLAG_VISIT = 1 << 15,
+    BFS_ACTION = 0xFF,
 
-static MC_Error curve_nearest_points_map(MC_Di *di, MC_Size2U size,
-    MC_Vec2f nearest[size.height][size.width], MC_Vec2f beg, size_t n, const MC_SemiBezier4f curve[n]);
+    BFS_NEXT = BFS_ACTION_NEXT | BFS_FLAG_VISIT,
+    BFS_CONTINUE = BFS_ACTION_CONTINUE | BFS_FLAG_VISIT,
+    BFS_BREAK = BFS_ACTION_BREAK | BFS_FLAG_VISIT,
+};
+
+extern inline MC_AColor mc_di_blend(MC_AColor dst, MC_AColor src);
+extern inline bool mc_di_hoverover(const MC_DiBuffer *buf, MC_Vec2i pos);
+extern inline void mc_di_setpx_unsafe(MC_DiBuffer *buf, MC_Vec2i pos, MC_AColor color);
+extern inline void mc_di_setpx(MC_DiBuffer *buf, MC_Vec2i pos, MC_AColor color);
+extern inline void mc_di_drawpx_unsafe(MC_DiBuffer *buf, MC_Vec2i pos, MC_AColor color);
+extern inline void mc_di_drawpx(MC_DiBuffer *buf, MC_Vec2i pos, MC_AColor color);
+extern inline MC_AColor mc_di_getpx(const MC_DiBuffer *buf, MC_Vec2i pos);
+extern inline float mc_shape_getpx(const MC_DiShape *shape, MC_Vec2i pos);
+extern inline float mc_shape_get_nearest(const MC_DiShape *shape, MC_Vec2f pos);
+extern inline float mc_shape_get_linear(const MC_DiShape *shape, MC_Vec2f pos);
 
 static MC_Error shape_circle(MC_Di *di, MC_DiShape *shape, MC_Vec2f pos, float radius);
 static MC_Error shape_line(MC_Di *di, MC_DiShape *shape, MC_Vec2f p1, MC_Vec2f p2, float thikness);
@@ -88,9 +67,7 @@ static MC_Error shape_curve(MC_Di *di, MC_DiShape *shape, MC_Vec2f beg, size_t n
 
 static MC_Error bfs_rect(MC_Arena *arena, MC_Rect2IU rect, RectBFS *bfs,
     BfsStep (*next)(MC_Vec2i cur, void *step, void *ctx), void *ctx, size_t step_data_size);
-
 static MC_Error bfs_step(RectBFS *bfs, MC_Vec2i pos, const void *step_data);
-
 static MC_Error bfs_run(RectBFS *bfs);
 
 MC_Error mc_di_init(MC_Di **ret_di){
@@ -191,155 +168,6 @@ MC_Error mc_di_fill(MC_Di *di, MC_DiBuffer *buffer, const MC_DiShape *shape, MC_
 
             mc_di_drawpx_unsafe(buffer, dst_pos, mc_acolor(mc_color(fill_color), fill_color.a * mc_clampf(mag * scale, 0, 1)));
         }
-    }
-
-    return MCE_OK;
-}
-
-MC_Error mc_di_curve_dst_inverse_heatmap(MC_Di *di, MC_Size2U size,
-    float heatmap[size.height][size.width], MC_Vec2f beg, size_t n, const MC_SemiBezier4f curve[n])
-{
-    MC_Error status = curve_dst_inverse_heatmap(di, size, heatmap, beg, n, curve);
-    mc_arena_reset(di->arena);
-    return status;
-}
-
-MC_Error mc_di_contour_dst_inverse_heatmap(MC_Di *di, MC_Size2U size,
-    float heatmap[size.height][size.width], MC_Vec2f beg, size_t n, const MC_SemiBezier4f contour[n])
-{
-    MC_Error status = contour_dst_inverse_heatmap(di, size, heatmap, beg, n, contour);
-    mc_arena_reset(di->arena);
-    return status;
-}
-
-MC_Error mc_di_curve_nearest_points_map(MC_Di *di, MC_Size2U size,
-    MC_Vec2f nearest[size.height][size.width], MC_Vec2f beg, size_t n, const MC_SemiBezier4f curve[n])
-{
-    MC_Error status = curve_nearest_points_map(di, size, nearest, beg, n, curve);
-    mc_arena_reset(di->arena);
-    return status;
-}
-
-static MC_Error curve_dst_inverse_heatmap(MC_Di *di, MC_Size2U size,
-    float heatmap[size.height][size.width], MC_Vec2f beg, size_t n, const MC_SemiBezier4f curve[n])
-{
-    MC_Vec2f (*nearest)[size.height][size.width];
-    MC_RETURN_ERROR(mc_arena_alloc(di->arena, sizeof(MC_Vec2f[size.height][size.width]), (void*)&nearest));
-    MC_RETURN_ERROR(curve_nearest_points_map(di, size, *nearest, beg, n, curve));
-
-    for(size_t y = 0; y < size.height; y++){
-        for(size_t x = 0; x < size.width; x++){
-            heatmap[y][x] = mc_vec2f_sqrdst((*nearest)[y][x], mc_vec2f(x, y));
-        }
-    }
-
-    return MCE_OK;
-}
-
-static MC_Error contour_dst_inverse_heatmap(MC_Di *di, MC_Size2U size,
-    float heatmap[size.height][size.width], MC_Vec2f beg, size_t n, const MC_SemiBezier4f contour[n])
-{
-    size_t contour_size = n;
-    const MC_SemiBezier4f *full_contour = contour;
-
-    if(n && !mc_vec2f_equ(beg, contour[n-1].p2)){
-        contour_size = n + 1;
-        MC_SemiBezier4f *c;
-        MC_RETURN_ERROR(mc_arena_alloc(di->arena, sizeof(MC_SemiBezier4f[contour_size]), (void*)&c));
-        memcpy(c, contour, sizeof(MC_SemiBezier4f[n]));
-
-        c[n] = (MC_SemiBezier4f){
-            .c1 = contour[n-1].p2,
-            .c2 = beg,
-            .p2 = beg
-        };
-
-        full_contour = c;
-    }
-
-    return curve_dst_inverse_heatmap(di, size, heatmap, beg, contour_size, full_contour);
-}
-
-static MC_Error curve_nearest_points_map(MC_Di *di, MC_Size2U size,
-    MC_Vec2f nearest[size.height][size.width], MC_Vec2f beg, size_t n, const MC_SemiBezier4f curve[n])
-{
-    //TODO: consider using array based queue
-    DstHeatmapStep first_step = {.next = NULL};
-    DstHeatmapStep *last_step = &first_step;
-    DstHeatmapStep *reuse = NULL;
-
-    MC_Vec2i prev = mc_vec2i(beg.x, beg.y);
-
-    for(const MC_SemiBezier4f *b = curve; b != &curve[n]; b++){
-        for(float progress = 0, inc = 0.001; progress <= 1; progress += inc){
-            MC_Vec2f on_curve = mc_bezier4((MC_Bezier4f){
-                .p1 = beg,
-                .c1 = b->c1,
-                .c2 = b->c2,
-                .p2 = b->p2
-            }, progress);
-
-            on_curve = mc_vec2f_clamp(on_curve, mc_vec2f(0, 0), mc_vec2f(size.width, size.height));
-            MC_Vec2i p = mc_vec2i(on_curve.x, on_curve.y);
-
-            if(mc_vec2i_equ(prev, p)){
-                continue;
-            }
-
-            //TODO: repeat for all pixels in between prev and p
-            DstHeatmapStep *new;
-            MC_RETURN_ERROR(mc_arena_alloc(di->arena, sizeof(DstHeatmapStep), (void**)&new));
-            *new = (DstHeatmapStep){
-                .src = on_curve,
-                .dst = p,
-            };
-
-            last_step = mc_list_add_after(last_step, new);
-
-            prev = p;
-        }
-
-        beg = b->p2;
-    }
-
-    DstHeatmapStep *steps = first_step.next;
-    while(!mc_list_empty(steps)){
-        static const MC_Vec2i offsets[4] = {
-            {-1, 0},
-            {1, 0},
-            {0, -1},
-            {0, 1}
-        };
-
-        for(const MC_Vec2i *off = offsets; off != &offsets[sizeof offsets / sizeof *offsets]; off++){
-            MC_Vec2i p = mc_vec2i(steps->dst.x + off->x, steps->dst.y + off->y);
-            if(p.x < 0 || p.x >= (int)size.width
-            || p.y < 0 || p.y >= (int)size.height){
-                continue;
-            }
-
-            float dst = mc_vec2f_sqrdst(steps->src, mc_vec2f(p.x, p.y));
-            float cur_dst = mc_vec2f_sqrdst(nearest[p.y][p.x], mc_vec2f(p.x, p.y));
-            if(cur_dst <= dst){
-                continue;
-            }
-
-            nearest[p.y][p.x] = steps->src;
-
-            DstHeatmapStep *new = mc_list_empty(reuse) ? NULL : mc_list_remove(&reuse);
-            if(new == NULL){
-                MC_RETURN_ERROR(mc_arena_alloc(di->arena, sizeof(DstHeatmapStep), (void**)&new));
-            }
-
-            *new = (DstHeatmapStep){
-                .src = steps->src,
-                .dst = p,
-            };
-
-            last_step = mc_list_add_after(last_step, new);
-        }
-
-        mc_list_add(&reuse, mc_list_remove(&steps));
     }
 
     return MCE_OK;

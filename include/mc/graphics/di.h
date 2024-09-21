@@ -28,15 +28,6 @@ MC_Error mc_di_shape_curve(MC_Di *di, MC_DiShape *shape, MC_Vec2f beg, size_t n,
 
 MC_Error mc_di_fill(MC_Di *di, MC_DiBuffer *buffer, const MC_DiShape *shape, MC_Rect2IU dst, MC_AColor fill_color);
 
-MC_Error mc_di_curve_dst_inverse_heatmap(MC_Di *di, MC_Size2U size,
-    float heatmap[size.height][size.width], MC_Vec2f beg, size_t n, const MC_SemiBezier4f curve[n]);
-
-MC_Error mc_di_contour_dst_inverse_heatmap(MC_Di *di, MC_Size2U size,
-    float heatmap[size.height][size.width], MC_Vec2f beg, size_t n, const MC_SemiBezier4f contour[n]);
-
-MC_Error mc_di_curve_nearest_points_map(MC_Di *di, MC_Size2U size,
-    MC_Vec2f nearest[size.height][size.width], MC_Vec2f beg, size_t n, const MC_SemiBezier4f curve[n]);
-
 struct MC_DiBuffer{
     MC_Size2U size;
     MC_AColor *pixels;
