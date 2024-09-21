@@ -36,24 +36,24 @@ int main(){
 
     MC_DiShape *shape;
     mc_di_shape_create(di, &shape, (MC_Size2U){.width = 50, .height = 50});
-    mc_di_shape_line(di, shape, mc_vec2f(0.1, 0.1), mc_vec2f(0.9, 0.9), 0.03);
-    mc_di_shape_line(di, shape, mc_vec2f(0.1, 0.9), mc_vec2f(0.9, 0.1), 0.03);
+    mc_di_shape_line(di, shape, mc_vec2f(0, 0), mc_vec2f(1, 1), 0.03);
+    mc_di_shape_line(di, shape, mc_vec2f(0, 1), mc_vec2f(1, 0), 0.03);
 
-    mc_di_shape_curve(di, shape, mc_vec2f(0.1, 0.1), 1, &(MC_SemiBezier4f){
-        .p2 = mc_vec2f(0.9, 0.9),
-        .c1 = mc_vec2f(0.1, 0.9),
-        .c2 = mc_vec2f(0.9, 0.1),
+    mc_di_shape_curve(di, shape, mc_vec2f(0, 0), 1, &(MC_SemiBezier4f){
+        .p2 = mc_vec2f(1, 1),
+        .c1 = mc_vec2f(0, 1),
+        .c2 = mc_vec2f(1, 0),
     }, 0.03);
 
-    mc_di_shape_curve(di, shape, mc_vec2f(0.9, 0.1), 1, &(MC_SemiBezier4f){
-        .p2 = mc_vec2f(0.1, 0.9),
-        .c1 = mc_vec2f(0.9, 0.9),
-        .c2 = mc_vec2f(0.1, 0.1),
+    mc_di_shape_curve(di, shape, mc_vec2f(1, 0), 1, &(MC_SemiBezier4f){
+        .p2 = mc_vec2f(0, 1),
+        .c1 = mc_vec2f(1, 1),
+        .c2 = mc_vec2f(0, 0),
     }, 0.03);
 
-    mc_di_clear(di, buf, (MC_AColor){.a = 255, .r = 60, .g = 60, .b = 60});
+    mc_di_clear(di, buf, (MC_AColor){.a = 0x00, .r = 0x25, .g = 0x25, .b = 0x25});
 
-    mc_di_fill_shape(di, buf, shape, MC_RECT2IU(0, 0, 200, 200), (MC_AColor){
+    mc_di_fill_shape(di, buf, shape, MC_RECT2IU(100, 100, 200, 200), (MC_AColor){
         .a = 255,
         .r = 120,
         .g = 60,
@@ -62,8 +62,8 @@ int main(){
     mc_di_shape_delete(di, shape);
 
     mc_di_write(di, buf,
-        (MC_Rect2IU){ .x = 200, .y = 0, .width = 200, .height = 200},
-        (MC_Rect2IU){ .x = 0, .y = 0, .width = 200, .height = 200},
+        (MC_Rect2IU){ .x = 300, .y = 100, .width = 200, .height = 200},
+        (MC_Rect2IU){ .x = 100, .y = 100, .width = 200, .height = 200},
         buf);
 
     MC_WM *wm;

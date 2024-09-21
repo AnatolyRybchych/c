@@ -163,27 +163,26 @@ MC_Error mc_di_blit_pixels(MC_Di *di, MC_DiBuffer *dst, MC_Vec2i dst_pos, MC_Vec
     }
 
     MC_Vec2i dsrc = mc_vec2i_sub(src_pos, dst_pos);
-    MC_Vec2i dst_size = size;
 
     if(dst_pos.x < 0){
         src_pos.x -= dst_pos.x;
-        dst_size.x += dst_pos.x;
+        size.x += dst_pos.x;
         dst_pos.x = 0;
     }
 
     if(dst_pos.y < 0){
         src_pos.y -= dst_pos.y;
-        dst_size.y += dst_pos.y;
+        size.y += dst_pos.y;
         dst_pos.y = 0;
     }
 
-    MC_Vec2i dst_end = mc_vec2i_add(dst_pos, mc_vec2i_min(mc_vec2i(dst->size.width, dst->size.height), dst_size));
+    MC_Vec2i dst_end = mc_vec2i_add(dst_pos, mc_vec2i_min(mc_vec2i(dst->size.width, dst->size.height), size));
     for(int y = dst_pos.y; y < dst_end.y; y++){
         int src_y = y + dsrc.y;
         for(int x = dst_pos.x; x < dst_end.x; x++){
             int src_x = x + dsrc.x;
 
-            (src_x < 0 || src_x >= size.x || src_y < 0 || src_y >= size.y)
+            (src_x < 0 || src_x >= (int)src_size.width || src_y < 0 || src_y >= (int)src_size.height)
                 ? setpx_unsafe(dst, mc_vec2i(x, y), (MC_AColor){0})
                 : setpx_unsafe(dst, mc_vec2i(x, y), src[src_y][src_x]);
         }
@@ -614,7 +613,7 @@ static void drawpx_unsafe(MC_DiBuffer *buf, MC_Vec2i pos, MC_AColor color){
 
 static float shape_getpx(const MC_DiShape *shape, MC_Vec2i pos){
     if(pos.x < 0 || pos.y < 0 || pos.x >= (int)shape->size.width || pos.y >= (int)shape->size.height)
-        return 0;
+        return -0.5;
 
     float (*pixels)[shape->size.height][shape->size.width] = (void*)shape->pixels;
     return (*pixels)[pos.y][pos.x];
