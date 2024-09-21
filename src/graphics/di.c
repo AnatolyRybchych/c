@@ -16,6 +16,16 @@ typedef struct CntHeatmapStep CntHeatmapStep;
 typedef struct RectBFS RectBFS;
 typedef unsigned BfsStep;
 
+struct MC_DiBuffer{
+    MC_Size2U size;
+    MC_AColor pixels[];
+};
+
+struct MC_DiShape{
+    MC_Size2U size;
+    float pixels[];
+};
+
 struct MC_Di{
     MC_Arena *arena;
 };
@@ -50,16 +60,16 @@ enum BfsStep{
     BFS_BREAK = BFS_ACTION_BREAK | BFS_FLAG_VISIT,
 };
 
-extern inline MC_AColor mc_di_blend(MC_AColor dst, MC_AColor src);
-extern inline bool mc_di_hoverover(const MC_DiBuffer *buf, MC_Vec2i pos);
-extern inline void mc_di_setpx_unsafe(MC_DiBuffer *buf, MC_Vec2i pos, MC_AColor color);
-extern inline void mc_di_setpx(MC_DiBuffer *buf, MC_Vec2i pos, MC_AColor color);
-extern inline void mc_di_drawpx_unsafe(MC_DiBuffer *buf, MC_Vec2i pos, MC_AColor color);
-extern inline void mc_di_drawpx(MC_DiBuffer *buf, MC_Vec2i pos, MC_AColor color);
-extern inline MC_AColor mc_di_getpx(const MC_DiBuffer *buf, MC_Vec2i pos);
-extern inline float mc_shape_getpx(const MC_DiShape *shape, MC_Vec2i pos);
-extern inline float mc_shape_get_nearest(const MC_DiShape *shape, MC_Vec2f pos);
-extern inline float mc_shape_get_linear(const MC_DiShape *shape, MC_Vec2f pos);
+static MC_AColor blend(MC_AColor dst, MC_AColor src);
+// static bool hoverover(const MC_DiBuffer *buf, MC_Vec2i pos);
+static void setpx_unsafe(MC_DiBuffer *buf, MC_Vec2i pos, MC_AColor color);
+// static void setpx(MC_DiBuffer *buf, MC_Vec2i pos, MC_AColor color);
+static void drawpx_unsafe(MC_DiBuffer *buf, MC_Vec2i pos, MC_AColor color);
+// static void drawpx(MC_DiBuffer *buf, MC_Vec2i pos, MC_AColor color);
+// static MC_AColor getpx(const MC_DiBuffer *buf, MC_Vec2i pos);
+static float shape_getpx(const MC_DiShape *shape, MC_Vec2i pos);
+// static float shape_get_nearest(const MC_DiShape *shape, MC_Vec2f pos);
+static float shape_get_linear(const MC_DiShape *shape, MC_Vec2f pos);
 
 static MC_Error shape_circle(MC_Di *di, MC_DiShape *shape, MC_Vec2f pos, float radius);
 static MC_Error shape_line(MC_Di *di, MC_DiShape *shape, MC_Vec2f p1, MC_Vec2f p2, float thikness);
@@ -93,12 +103,71 @@ void mc_di_destroy(MC_Di *di){
     free(di);
 }
 
+MC_Error mc_di_create(MC_Di *di, MC_DiBuffer **buffer, MC_Size2U size){
+    (void)di;
+
+    MC_DiBuffer *res = malloc(sizeof(MC_DiBuffer) + sizeof(MC_AColor[size.height][size.width]));
+    if(res == NULL){
+        *buffer = NULL;
+        return MCE_OUT_OF_MEMORY;
+    }
+
+    res->size = size;
+    memset(res->pixels, 0, sizeof(MC_AColor[size.height][size.width]));
+
+    *buffer = res;
+    return MCE_OK;
+}
+
+void mc_di_delete(MC_Di *di, MC_DiBuffer *buffer){
+    (void)di;
+
+    if(buffer == NULL){
+        return;
+    }
+
+    free(buffer);
+}
+
+MC_Size2U mc_di_size(MC_DiBuffer *buffer){
+    return buffer->size;
+}
+
+MC_AColor *mc_di_pixels(MC_DiBuffer *buffer){
+    return buffer->pixels;
+}
+
 void mc_di_clear(MC_Di *di, MC_DiBuffer *buffer, MC_AColor color){
     (void)di;
 
     for(MC_AColor *px = buffer->pixels; px < buffer->pixels + buffer->size.width * buffer->size.height; px++){
         *px = color;
     }
+}
+
+MC_Error mc_di_fill_shape(MC_Di *di, MC_DiBuffer *buffer, const MC_DiShape *shape, MC_Rect2IU dst, MC_AColor fill_color){
+    (void)di;
+
+    MC_Vec2i dst_left_top = mc_vec2i(dst.x, dst.y);
+    MC_Vec2i dst_right_bottom = mc_vec2i(dst.x + dst.width, dst.y + dst.height);
+
+    MC_Vec2i avail_left_top = mc_vec2i_clamp(dst_left_top, mc_vec2i(0, 0), mc_vec2i(buffer->size.width, buffer->size.height));
+    MC_Vec2i avail_right_bottom = mc_vec2i_clamp(dst_right_bottom, mc_vec2i(0, 0), mc_vec2i(buffer->size.width, buffer->size.height));
+
+    float scale = dst.width / (float)shape->size.width;
+
+    for(MC_Vec2i dst_pos = {.y = avail_left_top.y}; dst_pos.y != avail_right_bottom.y; dst_pos.y++){
+        MC_Vec2f norm_pos = {.y = (dst_pos.y - dst_left_top.y) / (float)dst.height};
+        for(dst_pos.x = avail_left_top.x; dst_pos.x != avail_right_bottom.x; dst_pos.x++){
+            norm_pos.x = (dst_pos.x - dst_left_top.x) / (float)dst.width;
+
+            float mag = shape_get_linear(shape, norm_pos);
+
+            drawpx_unsafe(buffer, dst_pos, mc_acolor(mc_color(fill_color), fill_color.a * mc_clampf(mag * scale, 0, 1)));
+        }
+    }
+
+    return MCE_OK;
 }
 
 MC_Error mc_di_shape_create(MC_Di *di, MC_DiShape **ret_shape, MC_Size2U size){
@@ -144,33 +213,6 @@ MC_Error mc_di_shape_curve(MC_Di *di, MC_DiShape *shape, MC_Vec2f beg, size_t n,
     MC_Error status = shape_curve(di, shape, beg, n, curve, thikness);
     mc_arena_reset(di->arena);
     return status;
-}
-
-MC_Error mc_di_fill_shape(MC_Di *di, MC_DiBuffer *buffer, const MC_DiShape *shape, MC_Rect2IU dst, MC_AColor fill_color){
-    (void)di;
-
-    MC_Vec2i dst_left_top = mc_vec2i(dst.x, dst.y);
-    MC_Vec2i dst_right_bottom = mc_vec2i(dst.x + dst.width, dst.y + dst.height);
-
-    MC_Vec2i avail_left_top = mc_vec2i_clamp(dst_left_top, mc_vec2i(0, 0), mc_vec2i(buffer->size.width, buffer->size.height));
-    MC_Vec2i avail_right_bottom = mc_vec2i_clamp(dst_right_bottom, mc_vec2i(0, 0), mc_vec2i(buffer->size.width, buffer->size.height));
-
-    float scale = dst.width / (float)shape->size.width;
-
-    // MC_Vec2f shape_size = mc_vec2f(shape->size.width, shape->size.height);
-
-    for(MC_Vec2i dst_pos = {.y = avail_left_top.y}; dst_pos.y != avail_right_bottom.y; dst_pos.y++){
-        MC_Vec2f norm_pos = {.y = (dst_pos.y - dst_left_top.y) / (float)dst.height};
-        for(dst_pos.x = avail_left_top.x; dst_pos.x != avail_right_bottom.x; dst_pos.x++){
-            norm_pos.x = (dst_pos.x - dst_left_top.x) / (float)dst.width;
-
-            float mag = mc_shape_get_linear(shape, norm_pos);
-
-            mc_di_drawpx_unsafe(buffer, dst_pos, mc_acolor(mc_color(fill_color), fill_color.a * mc_clampf(mag * scale, 0, 1)));
-        }
-    }
-
-    return MCE_OK;
 }
 
 struct ShapeCircleCtx{
@@ -441,4 +483,94 @@ static MC_Error bfs_run(RectBFS *bfs){
     }
 
     return MCE_OK;
+}
+
+static MC_AColor blend(MC_AColor dst, MC_AColor src){
+    uint8_t dfac = 255 - dst.a;
+    uint8_t sfac = src.a;
+
+    return (MC_AColor){
+        .a = mc_u8_clamp(255 - ((255 - dst.a) / 2 + (255 - src.a) / 2)),
+        .r = mc_u8_clamp((dst.r * dfac + sfac * src.r) / 255),
+        .g = mc_u8_clamp((dst.g * dfac + sfac * src.g) / 255),
+        .b = mc_u8_clamp((dst.b * dfac + sfac * src.b) / 255)
+    };
+}
+
+// static bool hoverover(const MC_DiBuffer *buf, MC_Vec2i pos){
+//     return !(pos.x < 0 || pos.y < 0
+//         || pos.x >= (int)buf->size.width || pos.y > (int)buf->size.height);
+// }
+
+static void setpx_unsafe(MC_DiBuffer *buf, MC_Vec2i pos, MC_AColor color){
+    MC_AColor (*pixels)[buf->size.height][buf->size.width] = (void*)buf->pixels;
+    (*pixels)[pos.y][pos.x] = color;
+}
+
+// static void setpx(MC_DiBuffer *buf, MC_Vec2i pos, MC_AColor color){
+//     if(hoverover(buf, pos)){
+//         setpx_unsafe(buf, pos, color);
+//     }
+// }
+
+static void drawpx_unsafe(MC_DiBuffer *buf, MC_Vec2i pos, MC_AColor color){
+    MC_AColor (*pixels)[buf->size.height][buf->size.width] = (void*)buf->pixels;
+    setpx_unsafe(buf, pos, blend((*pixels)[pos.y][pos.x], color));
+}
+
+// static void drawpx(MC_DiBuffer *buf, MC_Vec2i pos, MC_AColor color){
+//     if(hoverover(buf, pos)){
+//         drawpx_unsafe(buf, pos, color);
+//     }
+// }
+
+// static MC_AColor getpx(const MC_DiBuffer *buf, MC_Vec2i pos){
+//     pos = mc_vec2i_clamp(pos, mc_vec2i(0, 0), mc_vec2i(buf->size.width - 1, buf->size.height - 1));
+//     MC_AColor (*pixels)[buf->size.height][buf->size.width] = (void*)buf->pixels;
+//     return (*pixels)[pos.y][pos.x];
+// }
+
+static float shape_getpx(const MC_DiShape *shape, MC_Vec2i pos){
+    if(pos.x < 0 || pos.y < 0 || pos.x >= (int)shape->size.width || pos.y >= (int)shape->size.height)
+        return 0;
+
+    float (*pixels)[shape->size.height][shape->size.width] = (void*)shape->pixels;
+    return (*pixels)[pos.y][pos.x];
+}
+
+// static float shape_get_nearest(const MC_DiShape *shape, MC_Vec2f pos){
+//     pos = mc_vec2f_clamp(pos, mc_vec2f(0, 0), mc_vec2f(1, 1));
+//     MC_Vec2i ipos = mc_vec2i(pos.y * (shape->size.height - 0.5), pos.x * (shape->size.width - 0.5));
+
+//     float (*pixels)[shape->size.height][shape->size.width] = (void*)shape->pixels;
+//     return (*pixels)[ipos.y][ipos.x];
+// }
+
+/// @param pos є [0; 1]
+static float shape_get_linear(const MC_DiShape *shape, MC_Vec2f pos){
+    MC_Vec2f absolute = mc_vec2f_mul(pos, mc_vec2f(shape->size.width - 0.5, shape->size.height - 0.5));
+    MC_Vec2i iabsolute = mc_vec2i(absolute.x, absolute.y);
+
+    MC_Vec2f displacement = mc_vec2f(absolute.x - iabsolute.x, absolute.y - iabsolute.y);
+
+    MC_Vec2i idisplacement = mc_vec2i(
+        displacement.x < 0.5 ? -1 : 1,
+        displacement.y < 0.5 ? -1 : 1
+    );
+
+    displacement = mc_vec2f(
+        fabsf(displacement.x - 0.5f),
+        fabsf(displacement.y - 0.5f)
+    );
+
+    float px00 = shape_getpx(shape, mc_vec2i(iabsolute.x, iabsolute.y));
+    float px01 = shape_getpx(shape, mc_vec2i(iabsolute.x, iabsolute.y + idisplacement.y));
+    float px10 = shape_getpx(shape, mc_vec2i(iabsolute.x + idisplacement.x, iabsolute.y));
+    float px11 = shape_getpx(shape, mc_vec2i(iabsolute.x + idisplacement.x, iabsolute.y + idisplacement.y));
+
+    return mc_lerpf(
+        mc_lerpf(px00, px01, displacement.y),
+        mc_lerpf(px10, px11, displacement.y),
+        displacement.x
+    );
 }

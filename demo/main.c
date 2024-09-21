@@ -28,14 +28,11 @@ int main(){
     MC_Di *di;
     MC_REQUIRE(mc_di_init(&di));
 
-    MC_AColor buf_pixels[800*600] = {0};
-    MC_DiBuffer buf = {
-        .size = {
-            .width = 800,
-            .height = 600,
-        },
-        .pixels = buf_pixels
-    };
+    MC_DiBuffer *buf;
+    mc_di_create(di, &buf, (MC_Size2U){
+        .width = 800,
+        .height = 600
+    });
 
     MC_DiShape *shape;
     mc_di_shape_create(di, &shape, (MC_Size2U){.width = 50, .height = 50});
@@ -54,9 +51,9 @@ int main(){
         .c2 = mc_vec2f(0.1, 0.1),
     }, 0.03);
 
-    mc_di_clear(di, &buf, (MC_AColor){.a = 255, .r = 60, .g = 60, .b = 60});
+    mc_di_clear(di, buf, (MC_AColor){.a = 255, .r = 60, .g = 60, .b = 60});
 
-    mc_di_fill_shape(di, &buf, shape, MC_RECT2IU(100, 100, 300, 300), (MC_AColor){
+    mc_di_fill_shape(di, buf, shape, MC_RECT2IU(100, 100, 300, 300), (MC_AColor){
         .a = 255,
         .r = 120,
         .g = 60,
@@ -83,7 +80,7 @@ int main(){
         switch (event.type){
         case MC_WME_WINDOW_REDRAW_REQUESTED:{
             MC_REQUIRE(mc_graphics_begin(g));
-            MC_REQUIRE(mc_graphics_write_pixels(g, (MC_Vec2i){.x = 0, .y = 0}, buf.size, (void*)buf.pixels, (MC_Vec2i){0, 0}));
+            MC_REQUIRE(mc_graphics_write_pixels(g, mc_vec2i(0, 0), mc_di_size(buf), (void*)mc_di_pixels(buf), (MC_Vec2i){0, 0}));
             MC_REQUIRE(mc_graphics_end(g));
         }break;
         case MC_WME_KEY_DOWN:
