@@ -28,9 +28,16 @@ typedef struct RectBFS RectBFS;
 
 typedef unsigned BfsStep;
 enum BfsStep{
-    BFS_NEXT,
-    BFS_CONTINUE,
-    BFS_BREAK,
+    BFS_ACTION_NEXT,
+    BFS_ACTION_CONTINUE,
+    BFS_ACTION_BREAK,
+
+    BFS_FLAG_VISIT = 1 << 15,
+    BFS_ACTION = 0xFF,
+
+    BFS_NEXT = BFS_ACTION_NEXT | BFS_FLAG_VISIT,
+    BFS_CONTINUE = BFS_ACTION_CONTINUE | BFS_FLAG_VISIT,
+    BFS_BREAK = BFS_ACTION_BREAK | BFS_FLAG_VISIT,
 };
 
 struct DstHeatmapStep{
@@ -77,6 +84,7 @@ static MC_Error curve_nearest_points_map(MC_Di *di, MC_Size2U size,
 
 static MC_Error shape_circle(MC_Di *di, MC_DiShape *shape, MC_Vec2f pos, float radius);
 static MC_Error shape_line(MC_Di *di, MC_DiShape *shape, MC_Vec2f p1, MC_Vec2f p2, float thikness);
+static MC_Error shape_curve(MC_Di *di, MC_DiShape *shape, MC_Vec2f beg, size_t n, const MC_SemiBezier4f curve[n], float thikness);
 
 static MC_Error bfs_rect(MC_Arena *arena, MC_Rect2IU rect, RectBFS *bfs,
     BfsStep (*next)(MC_Vec2i cur, void *step, void *ctx), void *ctx, size_t step_data_size);
@@ -151,6 +159,12 @@ MC_Error mc_di_shape_circle(MC_Di *di, MC_DiShape *shape, MC_Vec2f pos, float ra
 
 MC_Error mc_di_shape_line(MC_Di *di, MC_DiShape *shape, MC_Vec2f p1, MC_Vec2f p2, float thikness){
     MC_Error status = shape_line(di, shape, p1, p2,thikness);
+    mc_arena_reset(di->arena);
+    return status;
+}
+
+MC_Error mc_di_shape_curve(MC_Di *di, MC_DiShape *shape, MC_Vec2f beg, size_t n, const MC_SemiBezier4f curve[n], float thikness){
+    MC_Error status = shape_curve(di, shape, beg, n, curve, thikness);
     mc_arena_reset(di->arena);
     return status;
 }
@@ -426,6 +440,77 @@ static MC_Error shape_line(MC_Di *di, MC_DiShape *shape, MC_Vec2f p1, MC_Vec2f p
     return bfs_run(&bfs);
 }
 
+struct ShapeCurveCtx{
+    float thikness;
+    MC_DiShape *shape;
+};
+
+struct ShapeCurveStep{
+    MC_Vec2f nearest;
+};
+
+static BfsStep shape_curve_step(MC_Vec2i cur, void *_step, void *_ctx){
+    struct ShapeCurveCtx *ctx = _ctx;
+    struct ShapeCurveStep *step = _step;
+
+    MC_Vec2f curf = mc_vec2f(cur.x, cur.y);
+    float distance = mc_vec2f_dst(step->nearest, curf);
+
+    float (*pixels)[ctx->shape->size.height][ctx->shape->size.width] = (void*)ctx->shape->pixels;
+
+    if((*pixels)[cur.y][cur.x] >= ctx->thikness - distance){
+        return BFS_ACTION_CONTINUE;
+    }
+
+    (*pixels)[cur.y][cur.x] = ctx->thikness - distance;
+    return BFS_ACTION_NEXT;
+}
+
+static MC_Error shape_curve(MC_Di *di, MC_DiShape *shape, MC_Vec2f beg, size_t n, const MC_SemiBezier4f curve[n], float thikness){
+    MC_Rect2IU bounds = {
+        .width = shape->size.width,
+        .height = shape->size.height
+    };
+
+    MC_Vec2f shape_max_pos = mc_vec2f(shape->size.width - 1, shape->size.height - 1);
+    beg = mc_vec2f_mul(beg, shape_max_pos);
+
+    struct ShapeCurveCtx ctx = {
+        .thikness = shape->size.width * thikness,
+        .shape = shape
+    };
+
+    RectBFS bfs;
+    MC_RETURN_ERROR(bfs_rect(di->arena, bounds, &bfs, shape_curve_step, &ctx, sizeof(struct ShapeCurveStep)));
+
+    MC_Vec2i prev = mc_vec2i(beg.x + 0.5, beg.y + 0.5);
+    for(const MC_SemiBezier4f *b = curve; b != &curve[n]; b++){
+        for(float progress = 0, inc = 0.001; progress <= 1; progress += inc){
+            MC_Vec2f on_curve = mc_bezier4((MC_Bezier4f){
+                .p1 = beg,
+                .c1 =  mc_vec2f_mul(b->c1, shape_max_pos),
+                .c2 =  mc_vec2f_mul(b->c2, shape_max_pos),
+                .p2 =  mc_vec2f_mul(b->p2, shape_max_pos)
+            }, progress);
+
+            on_curve = mc_vec2f_clamp(on_curve, mc_vec2f(0, 0), shape_max_pos);
+
+            MC_Vec2i p = mc_vec2i(on_curve.x + 0.5, on_curve.y + 0.5);
+            if(mc_vec2i_equ(prev, p)){
+                continue;
+            }
+
+            MC_RETURN_ERROR(bfs_step(&bfs, p, &(struct ShapeCurveStep){
+                .nearest = on_curve
+            }));
+        }
+
+        beg = b->p2;
+    }
+
+    return bfs_run(&bfs);
+}
+
 static MC_Error bfs_rect(MC_Arena *arena, MC_Rect2IU rect, RectBFS *bfs,
     BfsStep (*next)(MC_Vec2i cur, void *step, void *ctx), void *ctx, size_t step_data_size)
 {
@@ -501,14 +586,18 @@ static MC_Error bfs_run(RectBFS *bfs){
 
             memcpy(new_step, steps, sizeof(struct RectBFSStep) + step_data_size);
             new_step->cur = p;
-            BfsStep action = next(p, new_step, ctx);
-            if(action == BFS_BREAK){
+
+            BfsStep step_result = next(p, new_step->data, ctx);
+            BfsStep action = step_result & BFS_ACTION;
+            if(action == BFS_ACTION_BREAK){
                 return MCE_OK;
             }
 
-            mc_bit_set(visited, visited_bit, 1);
+            if(step_result & BFS_FLAG_VISIT){
+                mc_bit_set(visited, visited_bit, 1);
+            }
 
-            if(action == BFS_CONTINUE){
+            if(action == BFS_ACTION_CONTINUE){
                 continue;
             }
 
@@ -516,7 +605,7 @@ static MC_Error bfs_run(RectBFS *bfs){
 
             new_step = mc_list_empty(reuse) ? NULL : mc_list_remove(&reuse);
             if(new_step == NULL){
-                MC_RETURN_ERROR(mc_arena_alloc(arena, sizeof(struct RectBFSStep), (void**)&new_step));
+                MC_RETURN_ERROR(mc_arena_alloc(arena, sizeof(struct RectBFSStep) + step_data_size, (void**)&new_step));
             }
         }
 
