@@ -53,13 +53,18 @@ int main(){
 
     mc_di_clear(di, buf, (MC_AColor){.a = 255, .r = 60, .g = 60, .b = 60});
 
-    mc_di_fill_shape(di, buf, shape, MC_RECT2IU(100, 100, 300, 300), (MC_AColor){
+    mc_di_fill_shape(di, buf, shape, MC_RECT2IU(0, 0, 200, 200), (MC_AColor){
         .a = 255,
         .r = 120,
         .g = 60,
         .b = 30,
     });
     mc_di_shape_delete(di, shape);
+
+    mc_di_write(di, buf,
+        (MC_Rect2IU){ .x = 200, .y = 0, .width = 200, .height = 200},
+        (MC_Rect2IU){ .x = 0, .y = 0, .width = 200, .height = 200},
+        buf);
 
     MC_WM *wm;
     MC_REQUIRE(mc_wm_init(&wm, mc_xlib_wm_vtab));

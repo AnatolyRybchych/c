@@ -145,6 +145,88 @@ void mc_di_clear(MC_Di *di, MC_DiBuffer *buffer, MC_AColor color){
     }
 }
 
+MC_Error mc_di_blit(MC_Di *di, MC_DiBuffer *dst, MC_Vec2i dst_pos, MC_Vec2i src_pos, MC_Vec2i size, MC_DiBuffer *src){
+    if(src == NULL){
+        return MCE_INVALID_INPUT;
+    }
+
+    return mc_di_blit_pixels(di, dst, dst_pos, src_pos, size, src->size, (void*)src->pixels);
+}
+
+MC_Error mc_di_blit_pixels(MC_Di *di, MC_DiBuffer *dst, MC_Vec2i dst_pos, MC_Vec2i src_pos, MC_Vec2i size,
+    MC_Size2U src_size, const MC_AColor src[src_size.height][src_size.width])
+{
+    (void)di;
+
+    if(dst == NULL){
+        return MCE_INVALID_INPUT;
+    }
+
+    MC_Vec2i dsrc = mc_vec2i_sub(src_pos, dst_pos);
+    MC_Vec2i dst_size = size;
+
+    if(dst_pos.x < 0){
+        src_pos.x -= dst_pos.x;
+        dst_size.x += dst_pos.x;
+        dst_pos.x = 0;
+    }
+
+    if(dst_pos.y < 0){
+        src_pos.y -= dst_pos.y;
+        dst_size.y += dst_pos.y;
+        dst_pos.y = 0;
+    }
+
+    MC_Vec2i dst_end = mc_vec2i_add(dst_pos, mc_vec2i_min(mc_vec2i(dst->size.width, dst->size.height), dst_size));
+    for(int y = dst_pos.y; y < dst_end.y; y++){
+        int src_y = y + dsrc.y;
+        for(int x = dst_pos.x; x < dst_end.x; x++){
+            int src_x = x + dsrc.x;
+
+            (src_x < 0 || src_x >= size.x || src_y < 0 || src_y >= size.y)
+                ? setpx_unsafe(dst, mc_vec2i(x, y), (MC_AColor){0})
+                : setpx_unsafe(dst, mc_vec2i(x, y), src[src_y][src_x]);
+        }
+    }
+
+    return MCE_OK;
+}
+
+MC_Error mc_di_write(MC_Di *di, MC_DiBuffer *dst, MC_Rect2IU dst_rect, MC_Rect2IU src_rect, MC_DiBuffer *src){
+    if(src == NULL){
+        return MCE_INVALID_INPUT;
+    }
+
+    if(src == dst){
+        MC_DiBuffer *src_cp;
+        MC_RETURN_ERROR(mc_arena_alloc(di->arena,
+            sizeof(MC_DiBuffer) + sizeof(MC_AColor[src->size.height][src->size.width]), (void**)&src_cp));
+        memcpy(src_cp, src, sizeof(MC_DiBuffer) + sizeof(MC_AColor[src->size.height][src->size.width]));
+
+        MC_Error result = mc_di_write_pixels(di, dst, dst_rect, src_rect, src_cp->size, (void*)src_cp->pixels);
+        mc_arena_reset(di->arena);
+        return result;
+    }
+
+    return mc_di_write_pixels(di, dst, dst_rect, src_rect, src->size, (void*)src->pixels);
+}
+
+MC_Error mc_di_write_pixels(MC_Di *di, MC_DiBuffer *dst, MC_Rect2IU dst_rect, MC_Rect2IU src_rect,
+    MC_Size2U src_size, const MC_AColor src[src_size.height][src_size.width])
+{
+    if(src_rect.width == dst_rect.width
+    && src_rect.height == dst_rect.height)
+        return mc_di_blit_pixels(di, dst,
+            mc_vec2i(dst_rect.x, dst_rect.y),
+            mc_vec2i(src_rect.x, src_rect.y),
+            mc_vec2i(src_rect.width, src_rect.height),
+            src_size, src);
+
+    // TODO: stretch src to dst
+
+    return MCE_OK;
+}
+
 MC_Error mc_di_fill_shape(MC_Di *di, MC_DiBuffer *buffer, const MC_DiShape *shape, MC_Rect2IU dst, MC_AColor fill_color){
     (void)di;
 
