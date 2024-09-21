@@ -53,18 +53,10 @@ int main(){
         .c1 = mc_vec2f(0.9, 0.9),
         .c2 = mc_vec2f(0.1, 0.1),
     }, 0.03);
-    // mc_di_shape_circle(di, shape, mc_vec2f(0.5, 0.5), 0.2);
-
-    // for(int y = 0; y < (int)shape->size.height; y++){
-    //     for(int x = 0; x < (int)shape->size.width; x++){
-    //         printf("%f\t", mc_shape_getpx(shape, mc_vec2i(x, y)));
-    //     }
-    //     printf("\n");
-    // }
 
     mc_di_clear(di, &buf, (MC_AColor){.a = 255, .r = 60, .g = 60, .b = 60});
 
-    mc_di_fill(di, &buf, shape, MC_RECT2IU(100, 100, 300, 300), (MC_AColor){
+    mc_di_fill_shape(di, &buf, shape, MC_RECT2IU(100, 100, 300, 300), (MC_AColor){
         .a = 255,
         .r = 120,
         .g = 60,
