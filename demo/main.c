@@ -7,6 +7,8 @@
 #include <mc/data/list.h>
 #include <mc/data/string.h>
 #include <mc/data/struct.h>
+#include <mc/data/arena.h>
+#include <mc/data/json.h>
 #include <mc/io/stream.h>
 #include <mc/os/file.h>
 #include <mc/util/assert.h>
@@ -25,81 +27,98 @@
 #include <stdlib.h>
 
 int main(){
-    MC_Di *di;
-    MC_REQUIRE(mc_di_init(&di));
+    MC_Arena *arena;
+    MC_REQUIRE(mc_arena_init(&arena));
+    MC_Alloc *alloc = mc_arena_allocator(arena);
 
-    MC_DiBuffer *buf;
-    mc_di_create(di, &buf, (MC_Size2U){
-        .width = 800,
-        .height = 600
-    });
+    MC_Json *json, *obj1, *obj2, *arr, *arr_item, *arr_item2;
+    MC_REQUIRE(mc_json_new(alloc, &json));
 
-    MC_DiShape *shape;
-    mc_di_shape_create(di, &shape, (MC_Size2U){.width = 50, .height = 50});
-    mc_di_shape_line(di, shape, mc_vec2f(0, 0), mc_vec2f(1, 1), 0.03);
-    mc_di_shape_line(di, shape, mc_vec2f(0, 1), mc_vec2f(1, 0), 0.03);
+    MC_REQUIRE(mc_json_object_add(json, &obj1, "obj1"));
+    MC_REQUIRE(mc_json_object_add(json, &obj2, "obj2"));
+    MC_REQUIRE(mc_json_object_add(obj1, &arr, "arr"));
+    MC_REQUIRE(mc_json_list_add(arr, &arr_item));
+    MC_REQUIRE(mc_json_list_add(arr, &arr_item2));
+    MC_REQUIRE(mc_json_set_stringf(arr_item, "asdasdas\""));
+    MC_REQUIRE(mc_json_set_stringf(arr_item2, "test2"));
 
-    mc_di_shape_curve(di, shape, mc_vec2f(0, 0), 1, &(MC_SemiBezier4f){
-        .p2 = mc_vec2f(1, 1),
-        .c1 = mc_vec2f(0, 1),
-        .c2 = mc_vec2f(1, 0),
-    }, 0.03);
+    mc_json_dump(json, MC_STDOUT);
 
-    mc_di_shape_curve(di, shape, mc_vec2f(1, 0), 1, &(MC_SemiBezier4f){
-        .p2 = mc_vec2f(0, 1),
-        .c1 = mc_vec2f(1, 1),
-        .c2 = mc_vec2f(0, 0),
-    }, 0.03);
+    // MC_Di *di;
+    // MC_REQUIRE(mc_di_init(&di));
 
-    mc_di_clear(di, buf, (MC_AColor){.a = 0xff, .r = 0x15, .g =0x15, .b = 0x15});
+    // MC_DiBuffer *buf;
+    // mc_di_create(di, &buf, (MC_Size2U){
+    //     .width = 800,
+    //     .height = 600
+    // });
 
-    mc_di_fill_shape(di, buf, shape, MC_RECT2IU(100, 100, 200, 200), (MC_AColor){
-        .a = 0xff,
-        .r = 0x88,
-        .g = 0x44,
-        .b = 0x22,
-    });
-    mc_di_shape_delete(di, shape);
+    // MC_DiShape *shape;
+    // mc_di_shape_create(di, &shape, (MC_Size2U){.width = 50, .height = 50});
+    // mc_di_shape_line(di, shape, mc_vec2f(0, 0), mc_vec2f(1, 1), 0.03);
+    // mc_di_shape_line(di, shape, mc_vec2f(0, 1), mc_vec2f(1, 0), 0.03);
 
-    mc_di_write(di, buf,
-        (MC_Rect2IU){ .x = 300, .y = 100, .width = 200, .height = 200},
-        (MC_Rect2IU){ .x = 100, .y = 100, .width = 200, .height = 200},
-        buf);
+    // mc_di_shape_curve(di, shape, mc_vec2f(0, 0), 1, &(MC_SemiBezier4f){
+    //     .p2 = mc_vec2f(1, 1),
+    //     .c1 = mc_vec2f(0, 1),
+    //     .c2 = mc_vec2f(1, 0),
+    // }, 0.03);
 
-    MC_WM *wm;
-    MC_REQUIRE(mc_wm_init(&wm, mc_xlib_wm_vtab));
+    // mc_di_shape_curve(di, shape, mc_vec2f(1, 0), 1, &(MC_SemiBezier4f){
+    //     .p2 = mc_vec2f(0, 1),
+    //     .c1 = mc_vec2f(1, 1),
+    //     .c2 = mc_vec2f(0, 0),
+    // }, 0.03);
 
-    MC_WMWindow *window;
-    MC_REQUIRE(mc_wm_window_init(wm, &window));
+    // mc_di_clear(di, buf, (MC_AColor){.a = 0xff, .r = 0x15, .g =0x15, .b = 0x15});
 
-    MC_Graphics *g;
-    MC_REQUIRE(mc_wm_window_get_graphic(window, &g));
+    // mc_di_fill_shape(di, buf, shape, MC_RECT2IU(100, 100, 200, 200), (MC_AColor){
+    //     .a = 0xff,
+    //     .r = 0x88,
+    //     .g = 0x44,
+    //     .b = 0x22,
+    // });
+    // mc_di_shape_delete(di, shape);
 
-    while(true){
-        MC_WMEvent event;
-        if(MC_REQUIRE(mc_wm_poll_event(wm, &event)) != MCE_OK){
-            mc_sleep(&(MC_Time){.nsec = 1000000});
-            continue;
-        }
+    // mc_di_write(di, buf,
+    //     (MC_Rect2IU){ .x = 300, .y = 100, .width = 200, .height = 200},
+    //     (MC_Rect2IU){ .x = 100, .y = 100, .width = 200, .height = 200},
+    //     buf);
 
-        switch (event.type){
-        case MC_WME_WINDOW_REDRAW_REQUESTED:{
-            MC_REQUIRE(mc_graphics_begin(g));
-            MC_REQUIRE(mc_graphics_write_pixels(g, mc_vec2i(0, 0), mc_di_size(buf), (void*)mc_di_pixels(buf), (MC_Vec2i){0, 0}));
-            MC_REQUIRE(mc_graphics_end(g));
-        }break;
-        case MC_WME_KEY_DOWN:
-            // mc_fmt(MC_STDOUT, "KEY_DOWN %s\n", mc_key_str(event.as.key_down.key));
-            break;
-        case MC_WME_KEY_UP:
-            // mc_fmt(MC_STDOUT, "KEY_UP %s\n", mc_key_str(event.as.key_up.key));
-            break;
-        default:
-            // mc_fmt(MC_STDOUT, "event %s\n", mc_wm_event_type_str(event.type));
-            break;
-        }
-    }
+    // MC_WM *wm;
+    // MC_REQUIRE(mc_wm_init(&wm, mc_xlib_wm_vtab));
 
-    mc_wm_destroy(wm);
+    // MC_WMWindow *window;
+    // MC_REQUIRE(mc_wm_window_init(wm, &window));
+
+    // MC_Graphics *g;
+    // MC_REQUIRE(mc_wm_window_get_graphic(window, &g));
+
+    // while(true){
+    //     MC_WMEvent event;
+    //     if(MC_REQUIRE(mc_wm_poll_event(wm, &event)) != MCE_OK){
+    //         mc_sleep(&(MC_Time){.nsec = 1000000});
+    //         continue;
+    //     }
+
+    //     switch (event.type){
+    //     case MC_WME_WINDOW_REDRAW_REQUESTED:{
+    //         MC_REQUIRE(mc_graphics_begin(g));
+    //         MC_REQUIRE(mc_graphics_write_pixels(g, mc_vec2i(0, 0), mc_di_size(buf), (void*)mc_di_pixels(buf), (MC_Vec2i){0, 0}));
+    //         MC_REQUIRE(mc_graphics_end(g));
+    //     }break;
+    //     case MC_WME_KEY_DOWN:
+    //         // mc_fmt(MC_STDOUT, "KEY_DOWN %s\n", mc_key_str(event.as.key_down.key));
+    //         break;
+    //     case MC_WME_KEY_UP:
+    //         // mc_fmt(MC_STDOUT, "KEY_UP %s\n", mc_key_str(event.as.key_up.key));
+    //         break;
+    //     default:
+    //         // mc_fmt(MC_STDOUT, "event %s\n", mc_wm_event_type_str(event.type));
+    //         break;
+    //     }
+    // }
+
+    // mc_wm_destroy(wm);
 }
 

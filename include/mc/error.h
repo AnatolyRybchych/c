@@ -19,7 +19,9 @@ typedef unsigned MC_Error;
     MC_ERROR(CONNECTION_REFUSED) \
     MC_ERROR(NOT_PERMITTED) \
 
-#define MC_RETURN_ERROR(...) for(MC_Error status = (__VA_ARGS__); status != MCE_OK && status != MCE_AGAIN;) return status
+#define MC_RETURN_ERROR(...) for(MC_Error __mc_return_error_status = (__VA_ARGS__); \
+    __mc_return_error_status != MCE_OK && __mc_return_error_status != MCE_AGAIN;) \
+        return __mc_return_error_status
 #define MC_RETURN_INVALID(...) if(__VA_ARGS__) return MCE_INVALID_INPUT
 
 enum MC_Error{

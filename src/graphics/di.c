@@ -221,9 +221,8 @@ MC_Error mc_di_write_pixels(MC_Di *di, MC_DiBuffer *dst, MC_Rect2IU dst_rect, MC
             mc_vec2i(src_rect.width, src_rect.height),
             src_size, src);
 
-    // TODO: stretch src to dst
-
-    return MCE_OK;
+    // TODO: stretch src onto dst
+    return MCE_NOT_IMPLEMENTED;
 }
 
 MC_Error mc_di_fill_shape(MC_Di *di, MC_DiBuffer *buffer, const MC_DiShape *shape, MC_Rect2IU dst, MC_AColor fill_color){

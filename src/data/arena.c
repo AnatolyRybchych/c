@@ -9,6 +9,7 @@
 #define INITIAL_CAPACITY 1024
 
 struct MC_Arena{
+    MC_Alloc alloc;
     struct Buffer{
         struct Buffer *next;
         uint8_t *capacity_end;
@@ -16,6 +17,8 @@ struct MC_Arena{
         alignas(void*) uint8_t beg[];
     } *buffer;
 };
+
+void *alloc(MC_Alloc *this, size_t size);
 
 MC_Error mc_arena_init(MC_Arena **ret_arena){
     MC_Arena *arena;
@@ -30,6 +33,11 @@ MC_Error mc_arena_init(MC_Arena **ret_arena){
     buffer->capacity_end = buffer->beg + INITIAL_CAPACITY;
     buffer->next = NULL;
 
+    arena->alloc = (MC_Alloc){
+        .alloc = alloc,
+        .free = NULL
+    };
+
     arena->buffer = buffer;
 
     *ret_arena = arena;
@@ -40,6 +48,10 @@ void mc_arena_destroy(MC_Arena *arena){
     mc_arena_reset(arena);
     free(arena->buffer);
     free(arena);
+}
+
+MC_Alloc *mc_arena_allocator(MC_Arena *arena){
+    return &arena->alloc;
 }
 
 MC_Error mc_arena_alloc(MC_Arena *arena, size_t size, void **mem){
@@ -74,4 +86,12 @@ void mc_arena_reset(MC_Arena *arena){
 
     arena->buffer->next = NULL;
     arena->buffer->available = arena->buffer->beg;
+}
+
+void *alloc(MC_Alloc *this, size_t size){
+    MC_Arena *alloc = (MC_Arena*)this;
+
+    void *ptr;
+    return mc_arena_alloc(alloc, size, (void**)&ptr) == MCE_OK
+        ? ptr : NULL;
 }
