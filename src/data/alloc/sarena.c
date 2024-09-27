@@ -7,6 +7,16 @@
 static void *_alloc(MC_Alloc *this, size_t size);
 
 MC_Alloc *mc_sarena(MC_Sarena *sarena, size_t bufsz, void *buf){
+    uint8_t *aligned_buf = (void*)MC_ALIGN(sizeof(void*), (size_t)buf);
+    if((int)bufsz < aligned_buf - (uint8_t*)buf){
+        buf = NULL;
+        bufsz = 0;
+    }
+    else{
+        bufsz -= aligned_buf - (uint8_t*)buf;
+        buf = aligned_buf;
+    }
+
     *sarena = (MC_Sarena){
         .alloc = {
             .alloc = _alloc,
@@ -14,7 +24,7 @@ MC_Alloc *mc_sarena(MC_Sarena *sarena, size_t bufsz, void *buf){
         },
         .buf = buf,
         .buf_cur = buf,
-        .buf_end = (uint8_t*)buf + bufsz
+        .buf_end = aligned_buf + bufsz
     };
 
     return mc_sarena_allocator(sarena);
