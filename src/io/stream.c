@@ -15,12 +15,8 @@ struct MC_Stream{
 };
 
 MC_Error mc_open(MC_Stream **stream, const MC_StreamVtab *vtab, size_t ctx_size, const void *ctx){
-    MC_Stream *res = malloc(sizeof(MC_Stream) + ctx_size);
-    *stream = res;
-
-    if(stream == NULL){
-        return MCE_OUT_OF_MEMORY;
-    }
+    MC_RETURN_ERROR(mc_alloc(NULL, sizeof(MC_Stream) + ctx_size, (void**)stream));
+    MC_Stream *res = *stream;
 
     res->vtab = *vtab;
 
@@ -40,7 +36,7 @@ void mc_close(MC_Stream *stream){
         stream->vtab.close(stream->data);
     }
 
-    free(stream);
+    mc_free(NULL, stream);
 }
 
 void *mc_ctx(MC_Stream *stream){
@@ -134,7 +130,7 @@ MC_Error mc_fmtv(MC_Stream *stream, const char *fmt, va_list args){
         MC_String *buffer;
         MC_RETURN_ERROR(mc_string_fmtv(NULL, &buffer, fmt, args));
         status = mc_write(stream, buffer->len, buffer->data, NULL);
-        free(buffer);
+        mc_free(NULL, buffer);
     }
     
     return status;
@@ -158,14 +154,12 @@ MC_Error mc_packv(MC_Stream *stream, const char *fmt, va_list args){
         return mc_write(stream, size, buffer, NULL);
     }
 
-    char *buffer = malloc(size);
-    if(buffer == NULL){
-        return MCE_OUT_OF_MEMORY;
-    }
+    char *buffer;
+    MC_RETURN_ERROR(mc_alloc(NULL, size, (void**)&buffer));
 
     mc_struct_vnpack(buffer, ~(unsigned)0, fmt, args);
     MC_Error status = mc_write(stream, size, buffer, NULL);
-    free(buffer);
+    mc_free(NULL, buffer);
     return status;
 }
 
@@ -188,19 +182,17 @@ MC_Error mc_unpackv(MC_Stream *stream, const char *fmt, va_list args){
         return MCE_OK;
     }
 
-    char *buffer = malloc(size);
-    if(buffer == NULL){
-        return MCE_OUT_OF_MEMORY;
-    }
+    char *buffer;
+    MC_RETURN_ERROR(mc_alloc(NULL, size, (void**)&buffer));
 
     MC_Error status = mc_read(stream, size, buffer, NULL);
     if(status != MCE_OK){
-        free(buffer);
+        mc_free(NULL, buffer);
         return status;
     }
 
     mc_struct_vnunpack(buffer, ~(unsigned)0, fmt, args);
-    free(buffer);
+    mc_free(NULL, buffer);
     return MCE_OK;
 }
 

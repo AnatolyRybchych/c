@@ -178,10 +178,10 @@ static void socket_close(void *ctx){
     SocketCtx *sock_ctx = ctx;
     fd_close(sock_ctx);
     if(sock_ctx->local_addr){
-        free(sock_ctx->local_addr);
+        mc_free(NULL, sock_ctx->local_addr);
     }
 
     if(sock_ctx->remote_addr){
-        free(sock_ctx->remote_addr);
+        mc_free(NULL, sock_ctx->remote_addr);
     }
 }

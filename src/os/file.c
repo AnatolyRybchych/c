@@ -92,7 +92,7 @@ static MC_Error open_fd(MC_Stream **stream, int fd, MC_String *path){
 
     MC_Error status = fd_open(&ctx.fd_ctx, fd);
     if(status != MCE_OK){
-        free(ctx.path);
+        mc_free(NULL, ctx.path);
         return status;
     }
 
@@ -102,7 +102,7 @@ static MC_Error open_fd(MC_Stream **stream, int fd, MC_String *path){
     MC_Error error = mc_open(stream, &file_vtab, sizeof(FileCtx), &ctx);
     if(error != MCE_OK){
         fd_close(&ctx.fd_ctx);
-        free(ctx.path);
+        mc_free(NULL, ctx.path);
     }
 
     return MCE_OK;
@@ -168,5 +168,5 @@ MC_Stream *mc_get_stderr(void){
 static void file_close(void *ctx){
     FileCtx *file_ctx = ctx;
     fd_close(&file_ctx->fd_ctx);
-    free(file_ctx->path);
+    mc_free(NULL, file_ctx->path);
 }

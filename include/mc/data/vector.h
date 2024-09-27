@@ -18,7 +18,7 @@
 #define MC_VECTOR_EMPTY(VECTOR) ((VECTOR) ? MC_VECTOR_SIZE(VECTOR) == 0 : false)
 #define MC_VECTOR_DATA(VECTOR) ((VECTOR) ? (VECTOR)->beg : NULL)
 
-#define MC_VECTOR_FREE(VECTOR) if((VECTOR) != NULL) free((VECTOR))
+#define MC_VECTOR_FREE(VECTOR) if((VECTOR) != NULL) mc_free(NULL, (VECTOR))
 
 #define MC_VECTOR_EACH(VECTOR, ELEMENT) \
     if((VECTOR)) \

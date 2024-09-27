@@ -1,6 +1,7 @@
 #include <mc/graphics/graphics.h>
 #include <mc/graphics/target.h>
 #include <mc/data/img/bmp.h>
+#include <mc/data/alloc.h>
 
 #include <malloc.h>
 #include <stdalign.h>
@@ -30,10 +31,8 @@ struct MC_GBuffer{
 };
 
 MC_Error mc_graphics_init(MC_Graphics **ret_g, const MC_GraphicsVtab *vtab, size_t ctx_size, const void *ctx){
-    MC_Graphics *g = malloc(sizeof(MC_Graphics) + ctx_size);
-    if(g == NULL){
-        return MCE_OUT_OF_MEMORY;
-    }
+    MC_Graphics *g;
+    MC_RETURN_ERROR(mc_alloc(NULL, sizeof(MC_Graphics) + ctx_size, (void**)&g));
 
     if(ctx != NULL){
         memcpy(g->data, ctx, ctx_size);
@@ -50,7 +49,7 @@ MC_Error mc_graphics_init(MC_Graphics **ret_g, const MC_GraphicsVtab *vtab, size
 
 void mc_graphics_destroy(MC_Graphics *g){
     g->vtab.destroy(g->target);
-    free(g);
+    mc_free(NULL, g);
 }
 
 MC_Error mc_graphics_begin(MC_Graphics *g){
@@ -76,10 +75,8 @@ MC_Error mc_graphics_create_buffer(MC_Graphics *g, MC_GBuffer **ret_buffer, MC_S
         return MCE_NOT_SUPPORTED;
     }
 
-    MC_GBuffer *buffer = malloc(sizeof(MC_GBuffer) + g->vtab.buffer_ctx_size);
-    if(buffer == NULL){
-        return MCE_OUT_OF_MEMORY;
-    }
+    MC_GBuffer *buffer;
+    MC_RETURN_ERROR(mc_alloc(NULL, sizeof(MC_GBuffer) + g->vtab.buffer_ctx_size, (void**)&buffer));
 
     memset(buffer, 0, sizeof(buffer) + g->vtab.buffer_ctx_size);
     buffer->target = (MC_TargetBuffer*)buffer->data;
@@ -87,7 +84,7 @@ MC_Error mc_graphics_create_buffer(MC_Graphics *g, MC_GBuffer **ret_buffer, MC_S
 
     MC_Error status = g->vtab.init_buffer(g->target, buffer->target, size_px);
     if(status != MCE_OK){
-        free(buffer);
+        mc_free(NULL, buffer);
     }
     else{
         *ret_buffer = buffer;
@@ -105,7 +102,7 @@ void mc_graphics_destroy_buffer(MC_GBuffer *buffer){
         buffer->g->vtab.destroy_buffer(buffer->g->target, buffer->target);
     }
 
-    free(buffer);
+    mc_free(NULL, buffer);
 }
 
 MC_Error mc_graphics_select_buffer(MC_Graphics *g, MC_GBuffer *buffer){

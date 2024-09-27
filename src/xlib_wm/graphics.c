@@ -1,5 +1,7 @@
 #include <mc/xlib_wm/graphics.h>
 
+#include <mc/data/alloc.h>
+
 #include <X11/Xutil.h>
 
 #include <stdint.h>
@@ -106,7 +108,7 @@ static MC_Error init_buffer(MC_TargetGraphics *g, MC_TargetBuffer *buffer, MC_Si
 
 static void destroy_buffer(MC_TargetGraphics *g, MC_TargetBuffer *buffer){
     if(g->tmp){
-        free(g->tmp);
+        mc_free(NULL, g->tmp);
     }
 
     XFreePixmap(g->dpy, buffer->pixmap);

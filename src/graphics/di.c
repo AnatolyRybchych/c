@@ -84,8 +84,8 @@ MC_Error mc_di_init(MC_Di **ret_di){
     MC_Arena *arena;
     MC_RETURN_ERROR(mc_arena_init(&arena, NULL));
 
-    MC_Di *di = malloc(sizeof(MC_Di));
-    if(di == NULL){
+    MC_Di *di;
+    if(mc_alloc(NULL, sizeof(MC_Di), (void**)&di)){
         mc_arena_destroy(arena);
         return MCE_OUT_OF_MEMORY;
     }
@@ -100,17 +100,14 @@ MC_Error mc_di_init(MC_Di **ret_di){
 
 void mc_di_destroy(MC_Di *di){
     mc_arena_destroy(di->arena);
-    free(di);
+    mc_free(NULL, di);
 }
 
 MC_Error mc_di_create(MC_Di *di, MC_DiBuffer **buffer, MC_Size2U size){
     (void)di;
 
-    MC_DiBuffer *res = malloc(sizeof(MC_DiBuffer) + sizeof(MC_AColor[size.height][size.width]));
-    if(res == NULL){
-        *buffer = NULL;
-        return MCE_OUT_OF_MEMORY;
-    }
+    MC_RETURN_ERROR(mc_alloc(NULL, sizeof(MC_DiBuffer) + sizeof(MC_AColor[size.height][size.width]), (void**)buffer));
+    MC_DiBuffer *res = *buffer;
 
     res->size = size;
     memset(res->pixels, 0, sizeof(MC_AColor[size.height][size.width]));
@@ -126,7 +123,7 @@ void mc_di_delete(MC_Di *di, MC_DiBuffer *buffer){
         return;
     }
 
-    free(buffer);
+    mc_free(NULL, buffer);
 }
 
 MC_Size2U mc_di_size(MC_DiBuffer *buffer){
@@ -253,10 +250,8 @@ MC_Error mc_di_fill_shape(MC_Di *di, MC_DiBuffer *buffer, const MC_DiShape *shap
 MC_Error mc_di_shape_create(MC_Di *di, MC_DiShape **ret_shape, MC_Size2U size){
     (void)di;
 
-    MC_DiShape *shape = malloc(sizeof(MC_DiShape) + sizeof(float[size.height][size.width]));
-    if(shape == NULL){
-        return MCE_OUT_OF_MEMORY;
-    }
+    MC_DiShape *shape;
+    MC_RETURN_ERROR(mc_alloc(NULL, sizeof(MC_DiShape) + sizeof(float[size.height][size.width]), (void**)&shape));
 
     shape->size = size;
 
@@ -274,7 +269,7 @@ MC_Error mc_di_shape_create(MC_Di *di, MC_DiShape **ret_shape, MC_Size2U size){
 
 void mc_di_shape_delete(MC_Di *di, MC_DiShape *shape){
     (void)di;
-    free(shape);
+    mc_free(NULL, shape);
 }
 
 MC_Error mc_di_shape_circle(MC_Di *di, MC_DiShape *shape, MC_Vec2f pos, float radius){

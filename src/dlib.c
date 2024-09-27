@@ -18,10 +18,8 @@ struct MC_DLib{
 };
 
 MC_Error mc_dlib_open(MC_DLib **lib, MC_Str path){
-    MC_DLib *new = malloc(sizeof(MC_DLib) + sizeof(char[MC_STR_LEN(path) + 1]));
-    if(!new){
-        return MCE_OUT_OF_MEMORY;
-    }
+    MC_DLib *new;
+    MC_RETURN_ERROR(mc_alloc(NULL, sizeof(MC_DLib) + sizeof(char[MC_STR_LEN(path) + 1]), (void**)&new));
 
     memcpy(new->path, path.beg, new->path_len = MC_STR_LEN(path));
     new->path[new->path_len] = '\0';
@@ -47,7 +45,7 @@ void mc_dlib_close(MC_DLib *lib){
     }
 #endif
 
-    free(lib);
+    mc_free(NULL, lib);
 }
 
 void *mc_dlib_get(MC_DLib *lib, MC_Str symbol){
@@ -60,7 +58,7 @@ void *mc_dlib_get(MC_DLib *lib, MC_Str symbol){
     assert(sym != NULL);
 
     res = dlsym(lib->dl, sym->data);
-    free(sym);
+    mc_free(NULL, sym);
 #endif
 
     return res;

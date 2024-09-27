@@ -80,8 +80,8 @@ MC_Error mc_wm_init(MC_WM **ret_wm, const MC_WMVtab *vtab){
 
     MC_Error init_status = vtab->init(wm->target, wm->log);
     if(init_status != MCE_OK){
-        free(wm->target_event);
-        free(wm);
+        mc_free(NULL, wm->target_event);
+        mc_free(NULL, wm);
         return init_status;
     }
 
@@ -103,7 +103,7 @@ void mc_wm_destroy(MC_WM *wm){
 
     MC_VECTOR_FREE(wm->windows);
 
-    free(wm);
+    mc_free(NULL, wm);
 }
 
 struct MC_TargetWM *mc_wm_get_target(MC_WM *wm){
@@ -118,10 +118,8 @@ MC_Error mc_wm_window_init(MC_WM *wm, MC_WMWindow **ret_window){
         return MCE_NOT_SUPPORTED;
     }
 
-    MC_WMWindow *window = malloc(sizeof(MC_WMWindow) + sizeof(v->window_size));
-    if(window == NULL){
-        return MCE_OUT_OF_MEMORY;
-    }
+    MC_WMWindow *window;
+    MC_RETURN_ERROR(mc_alloc(NULL, sizeof(MC_WMWindow) + sizeof(v->window_size), (void**)&window));
 
     memset(window, 0, sizeof(MC_WMWindow) + v->window_size);
     window->wm = wm;
@@ -129,7 +127,7 @@ MC_Error mc_wm_window_init(MC_WM *wm, MC_WMWindow **ret_window){
 
     Windows *new_windows = MC_VECTOR_PUSHN(wm->windows, 1, &window);
     if(new_windows == NULL){
-        free(window);
+        mc_free(NULL, window);
         return MCE_OUT_OF_MEMORY;
     }
     wm->windows = new_windows;
@@ -137,7 +135,7 @@ MC_Error mc_wm_window_init(MC_WM *wm, MC_WMWindow **ret_window){
     MC_Error status = v->init_window(wm->target, window->target);
     if(status != MCE_OK){
         wm->windows->end--;
-        free(window);
+        mc_free(NULL, window);
         return MCE_OUT_OF_MEMORY;
     }
 
@@ -154,7 +152,7 @@ void mc_wm_window_destroy(MC_WMWindow *window){
         v->destroy_window(wm->target, window->target);
     }
 
-    free(window);
+    mc_free(NULL, window);
 
     size_t idx = 0;
     MC_WMWindow **w;
