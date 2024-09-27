@@ -1,5 +1,7 @@
 #include <mc/data/json.h>
 
+#include <mc/data/string.h>
+
 #include <assert.h>
 #include <memory.h>
 #include <string.h>
@@ -23,11 +25,6 @@ enum SubType{
     SUBTYPE_KEY_VALUE_ARRAY,
 };
 
-struct String{
-    size_t length;
-    char data[];
-};
-
 struct Array{
     size_t capacity;
     size_t size;
@@ -35,7 +32,7 @@ struct Array{
 };
 
 struct Kv{
-    struct String *key;
+    MC_String *key;
     MC_Json *value;
 };
 
@@ -53,7 +50,7 @@ struct MC_Json{
         uint64_t u64;
         int64_t i64;
         double lf;
-        struct String *string;
+        MC_String *string;
         struct Array *arr;
         struct KvArray *kv_arr;
     } as;
@@ -77,14 +74,13 @@ static MC_Error loads_number(MC_Json **ret_json, struct Parser *p);
 static MC_Error loads_bool(MC_Json **ret_json, struct Parser *p);
 static MC_Error loads_null(MC_Json **ret_json, struct Parser *p);
 static MC_Error loads_string(MC_Json **ret_json, struct Parser *p);
-static MC_Error parse_string(struct String **ret_string, struct Parser *p);
+static MC_Error parse_string(MC_String **ret_string, struct Parser *p);
 static MC_Error dump_ident(MC_Stream *out, MC_Str ident, unsigned ident_cnt);
 static MC_Error dump_number(MC_Json *number, MC_Stream *out);
 static MC_Error dump_array(struct Array *arr, MC_Stream *out, MC_Str ident, unsigned ident_cnt);
 static MC_Error dump_kv_array(struct KvArray *arr, MC_Stream *out, MC_Str ident, unsigned ident_cnt);
-static MC_Error dump_string(const struct String *string, MC_Stream *out);
-static MC_Error string_fmt(MC_Alloc *alloc, struct String **string, const char *fmt, va_list args);
-static MC_Error object_add(MC_Json *json, struct String *key, MC_Json *item);
+static MC_Error dump_string(const MC_String *string, MC_Stream *out);
+static MC_Error object_add(MC_Json *json, MC_String *key, MC_Json *item);
 
 MC_Error mc_json_new(MC_Alloc *alloc, MC_Json **ret_json){
     MC_Json *json;
@@ -120,7 +116,7 @@ size_t mc_json_length(MC_Json *json){
         assert(json->subtype == SUBTYPE_ARRAY);
         return json->as.arr ? json->as.arr->size : 0;
     case MC_JSON_STRING:
-        return json->as.string ? json->as.string->length : 0;
+        return json->as.string ? json->as.string->len : 0;
     case MC_JSON_OBJECT:
         assert(json->subtype == SUBTYPE_KEY_VALUE_ARRAY);
         return json->as.kv_arr ? json->as.kv_arr->size : 0;
@@ -171,15 +167,10 @@ MC_Error mc_json_set_lf(MC_Json *json, double value){
 MC_Error mc_json_set_string(MC_Json *json, MC_Str str){
     MC_RETURN_INVALID(json == NULL);
 
-    struct String *string;
-    MC_RETURN_ERROR(mc_alloc(json->alloc, mc_str_len(str) + 1, (void**)&string));
-    string->length = mc_str_len(str);
-    memcpy(string->data, str.beg, mc_str_len(str));
-    string->data[string->length] = '\0';
-
     reset(json);
     json->type = MC_JSON_STRING;
-    json->as.string = string;
+    MC_RETURN_ERROR(mc_string(json->alloc, &json->as.string, str));
+
     return MCE_OK;
 }
 
@@ -188,8 +179,8 @@ MC_Error mc_json_set_stringf(MC_Json *json, const char *fmt, ...){
 
     va_list args;
     va_start(args, fmt);
-    struct String *string = NULL;
-    MC_Error status = string_fmt(json->alloc, &string, fmt, args);
+    MC_String *string = NULL;
+    MC_Error status = mc_string_fmt(json->alloc, &string, fmt, args);
     va_end(args);
 
     MC_RETURN_ERROR(status);
@@ -295,8 +286,8 @@ MC_Error mc_json_object_add(MC_Json *json, MC_Json *item, const char *key_fmt, .
 MC_Error mc_json_object_addv(MC_Json *json, MC_Json *item, const char *key_fmt, va_list args){
     MC_RETURN_INVALID(json == NULL);
 
-    struct String *key;
-    MC_RETURN_ERROR(string_fmt(json->alloc, &key, key_fmt, args));
+    MC_String *key;
+    MC_RETURN_ERROR(mc_string_fmt(json->alloc, &key, key_fmt, args));
 
     MC_Error status = object_add(json, key, item);
     if(status != MCE_OK){
@@ -455,7 +446,7 @@ static MC_Error loads_object(MC_Json **ret_json, struct Parser *p){
     }
 
     while(true){
-        struct String *key;
+        MC_String *key;
         status = parse_string(&key, p);
         if(status != MCE_OK){
             mc_json_delete(&obj);
@@ -616,7 +607,7 @@ static MC_Error loads_null(MC_Json **ret_json, struct Parser *p){
 }
 
 static MC_Error loads_string(MC_Json **ret_json, struct Parser *p){
-    struct String *ret_string;
+    MC_String *ret_string;
     MC_RETURN_ERROR(parse_string(&ret_string, p));
     
     MC_Error status = mc_json_new(p->alloc, ret_json);
@@ -631,7 +622,7 @@ static MC_Error loads_string(MC_Json **ret_json, struct Parser *p){
     return MCE_OK;
 }
 
-static MC_Error parse_string(struct String **ret_string, struct Parser *p){
+static MC_Error parse_string(MC_String **ret_string, struct Parser *p){
     if(mc_str_len(p->cur) < 2 || *p->cur.beg != '\"'){
         return MCE_INVALID_FORMAT;
     }
@@ -650,9 +641,9 @@ static MC_Error parse_string(struct String **ret_string, struct Parser *p){
         }
     }
 
-    struct String *string;
-    MC_RETURN_ERROR(mc_alloc(p->alloc, sizeof(struct String) + string_end - p->cur.beg, (void**)&string));
-    
+    MC_String *string;
+    MC_RETURN_ERROR(mc_string(p->alloc, &string, MC_STR(p->cur.beg, string_end)));
+
     char *dst = string->data;
     for(const char *ch = p->cur.beg + 1; ch != string_end; ch++){
         if(*ch != '\\'){
@@ -674,7 +665,7 @@ static MC_Error parse_string(struct String **ret_string, struct Parser *p){
 
     p->cur.beg = string_end + 1;
 
-    string->length = dst - string->data;
+    string->len = dst - string->data;
     *ret_string = string;
     return MCE_OK;
 }
@@ -740,7 +731,7 @@ static MC_Error dump_kv_array(struct KvArray *arr, MC_Stream *out, MC_Str ident,
     return MCE_OK;
 }
 
-static MC_Error dump_string(const struct String *string, MC_Stream *out){
+static MC_Error dump_string(const MC_String *string, MC_Stream *out){
     if(string == NULL){
         return mc_fmt(out, __STRING(""));
     }
@@ -751,7 +742,7 @@ static MC_Error dump_string(const struct String *string, MC_Stream *out){
 
     *buf_cur++ = '\"';
 
-    for(const char *ch = string->data, *end = ch + string->length; ch < end;){
+    for(const char *ch = string->data, *end = ch + string->len; ch < end;){
         for(; ch < end && buf_cur < buf_end; ch++){
             switch (*ch){
             case '\\':
@@ -799,23 +790,7 @@ static MC_Error dump_string(const struct String *string, MC_Stream *out){
     return MCE_OK;
 }
 
-static MC_Error string_fmt(MC_Alloc *alloc, struct String **ret_string, const char *fmt, va_list args){
-    *ret_string = NULL;
-    va_list args_cp;
-    va_copy(args_cp, args);
-    int len = vsnprintf(NULL, 0, fmt, args_cp);
-    va_end(args_cp);
-
-    struct String *string;
-    MC_RETURN_ERROR(mc_alloc(alloc, sizeof(struct String) + len + 1, (void**)&string));
-
-    string->length = len;
-    vsnprintf(string->data, len + 1, fmt, args);
-    *ret_string = string;
-    return MCE_OK;
-}
-
-static MC_Error object_add(MC_Json *json, struct String *key, MC_Json *item){
+static MC_Error object_add(MC_Json *json, MC_String *key, MC_Json *item){
     MC_RETURN_INVALID(json == NULL);
     if(json->type != MC_JSON_OBJECT){
         MC_RETURN_INVALID(json->type != MC_JSON_NULL);
@@ -845,7 +820,7 @@ static MC_Error object_add(MC_Json *json, struct String *key, MC_Json *item){
     }
 
     for(struct Kv *kv = json->as.kv_arr->kvs, *end = json->as.kv_arr->kvs + json->as.kv_arr->size; kv != end; kv++){
-        if(key->length == kv->key->length && strncmp(kv->key->data, key->data, key->length) == 0){
+        if(key->len == kv->key->len && strncmp(kv->key->data, key->data, key->len) == 0){
             mc_json_delete(&kv->value);
             kv->value = item;
 
