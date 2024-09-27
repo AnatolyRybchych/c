@@ -99,7 +99,7 @@ static MC_Error open_fd(MC_Stream **stream, int fd, MC_String *path){
     MC_StreamVtab file_vtab = vtbl_fd;
     file_vtab.close = file_close;
 
-    MC_Error error = mc_open(stream, &file_vtab, sizeof(FileCtx), &ctx);
+    MC_Error error = mc_open(NULL, stream, &file_vtab, sizeof(FileCtx), &ctx);
     if(error != MCE_OK){
         fd_close(&ctx.fd_ctx);
         mc_free(NULL, ctx.path);

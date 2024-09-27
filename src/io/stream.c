@@ -10,15 +10,17 @@
 #define OPTIONAL_SET(DST, ...) if(DST) *(DST) = (__VA_ARGS__)
 
 struct MC_Stream{
+    MC_Alloc *alloc;
     MC_StreamVtab vtab;
     uint8_t data[];
 };
 
-MC_Error mc_open(MC_Stream **stream, const MC_StreamVtab *vtab, size_t ctx_size, const void *ctx){
-    MC_RETURN_ERROR(mc_alloc(NULL, sizeof(MC_Stream) + ctx_size, (void**)stream));
+MC_Error mc_open(MC_Alloc *alloc, MC_Stream **stream, const MC_StreamVtab *vtab, size_t ctx_size, const void *ctx){
+    MC_RETURN_ERROR(mc_alloc(alloc, sizeof(MC_Stream) + ctx_size, (void**)stream));
     MC_Stream *res = *stream;
 
     res->vtab = *vtab;
+    res->alloc = alloc;
 
     if(ctx){
         memcpy(res->data, ctx, ctx_size);
@@ -36,7 +38,7 @@ void mc_close(MC_Stream *stream){
         stream->vtab.close(stream->data);
     }
 
-    mc_free(NULL, stream);
+    mc_free(stream->alloc, stream);
 }
 
 void *mc_ctx(MC_Stream *stream){

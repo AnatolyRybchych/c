@@ -2,6 +2,7 @@
 #define MC_IO_STREAM_H
 
 #include <mc/error.h>
+#include <mc/data/alloc.h>
 
 #include <stdint.h>
 #include <stddef.h>
@@ -17,7 +18,7 @@ enum MC_CursorFrom{
     MC_CURSOR_FROM_END,
 };
 
-MC_Error mc_open(MC_Stream **stream, const MC_StreamVtab *vtab, size_t ctx_size, const void *ctx);
+MC_Error mc_open(MC_Alloc *alloc, MC_Stream **stream, const MC_StreamVtab *vtab, size_t ctx_size, const void *ctx);
 void mc_close(MC_Stream *stream);
 void *mc_ctx(MC_Stream *stream);
 

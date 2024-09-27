@@ -50,7 +50,7 @@ MC_Error mc_socket_connect(MC_Stream **sock, const MC_SocketEndpoint *endpoint){
     MC_StreamVtab vtab = vtbl_fd;
     vtab.close = socket_close;
 
-    status = mc_open(sock, &vtab, sizeof(SocketCtx), &ctx);
+    status = mc_open(NULL, sock, &vtab, sizeof(SocketCtx), &ctx);
     if(status != MCE_OK){
         fd_close(&ctx.fd_ctx);
         return status;
@@ -90,7 +90,7 @@ MC_Error mc_socket_listen(MC_Stream **sock, const MC_SocketEndpoint *endpoint, u
     MC_StreamVtab vtab = vtbl_fd;
     vtab.close = socket_close;
 
-    status = mc_open(sock, &vtab, sizeof(SocketCtx), &ctx);
+    status = mc_open(NULL, sock, &vtab, sizeof(SocketCtx), &ctx);
     if(status != MCE_OK){
         fd_close(&ctx.fd_ctx);
         return status;
@@ -122,7 +122,7 @@ MC_Error mc_socket_accept(MC_Stream **client, MC_Stream *sock){
     MC_StreamVtab vtab = vtbl_fd;
     vtab.close = socket_close;
 
-    status = mc_open(client, &vtab, sizeof(SocketCtx), &client_ctx);
+    status = mc_open(NULL, client, &vtab, sizeof(SocketCtx), &client_ctx);
     if(status != MCE_OK){
         fd_close(&client_ctx.fd_ctx);
         return status;
