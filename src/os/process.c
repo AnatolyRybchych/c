@@ -39,14 +39,8 @@ MC_Error mc_process_run(MC_Process **ret_process, const MC_ProcessJob *job){
     }
 
     if(pid != 0){
-        MC_Process *process = malloc(sizeof(MC_Process));
-        if(process == NULL){
-            return MCE_OUT_OF_MEMORY;
-        }
-
-        *ret_process = process;
-
-        *process = (MC_Process){
+        MC_RETURN_ERROR(mc_alloc(NULL, sizeof(MC_Process), (void**)ret_process));
+        **ret_process = (MC_Process){
             .pid = pid,
         };
         return MCE_OK;
@@ -79,7 +73,7 @@ MC_Error mc_process_run(MC_Process **ret_process, const MC_ProcessJob *job){
 
 void mc_process_free(MC_Process *process){
     mc_process_kill(process);
-    free(process);
+    mc_free(NULL, process);
 }
 
 MC_Error mc_process_program(MC_Process **process, MC_Str absolute_path, size_t args_cnt, const MC_Str args[]){

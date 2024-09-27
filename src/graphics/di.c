@@ -82,7 +82,7 @@ static MC_Error bfs_run(RectBFS *bfs);
 
 MC_Error mc_di_init(MC_Di **ret_di){
     MC_Arena *arena;
-    MC_RETURN_ERROR(mc_arena_init(&arena));
+    MC_RETURN_ERROR(mc_arena_init(&arena, NULL));
 
     MC_Di *di = malloc(sizeof(MC_Di));
     if(di == NULL){

@@ -28,7 +28,7 @@
 
 int main(){
     MC_Arena *arena;
-    MC_REQUIRE(mc_arena_init(&arena));
+    MC_REQUIRE(mc_arena_init(&arena, NULL));
     MC_Alloc *alloc = mc_arena_allocator(arena);
 
     MC_Json *json;

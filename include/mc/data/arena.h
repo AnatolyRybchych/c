@@ -8,7 +8,7 @@
 
 typedef struct MC_Arena MC_Arena;
 
-MC_Error mc_arena_init(MC_Arena **arena);
+MC_Error mc_arena_init(MC_Arena **arena, MC_Alloc *base);
 void mc_arena_destroy(MC_Arena *arena);
 
 MC_Alloc *mc_arena_allocator(MC_Arena *arena);

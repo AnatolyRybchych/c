@@ -62,7 +62,7 @@ MC_Error mc_wm_init(MC_WM **ret_wm, const MC_WMVtab *vtab){
     MC_WM *wm;
     struct MC_TargetWMEvent *target_event;
 
-    MC_Error allocation_status = mc_malloc_all(
+    MC_Error allocation_status = mc_alloc_all(NULL,
         &wm, sizeof(MC_WM) + vtab->wm_size,
         &target_event, vtab->event_size,
         NULL);

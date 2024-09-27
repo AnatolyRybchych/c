@@ -10,6 +10,7 @@
 
 struct MC_Arena{
     MC_Alloc alloc;
+    MC_Alloc *base;
     struct Buffer{
         struct Buffer *next;
         uint8_t *capacity_end;
@@ -20,11 +21,11 @@ struct MC_Arena{
 
 void *alloc(MC_Alloc *this, size_t size);
 
-MC_Error mc_arena_init(MC_Arena **ret_arena){
+MC_Error mc_arena_init(MC_Arena **ret_arena, MC_Alloc *base){
     MC_Arena *arena;
     struct Buffer *buffer;
 
-    MC_RETURN_ERROR(mc_malloc_all(
+    MC_RETURN_ERROR(mc_alloc_all(base,
         &arena, sizeof(MC_Arena),
         &buffer, sizeof(struct Buffer) + INITIAL_CAPACITY,
         NULL));
@@ -37,6 +38,7 @@ MC_Error mc_arena_init(MC_Arena **ret_arena){
         .alloc = alloc,
         .free = NULL
     };
+    arena->base = base;
 
     arena->buffer = buffer;
 
@@ -46,8 +48,8 @@ MC_Error mc_arena_init(MC_Arena **ret_arena){
 
 void mc_arena_destroy(MC_Arena *arena){
     mc_arena_reset(arena);
-    free(arena->buffer);
-    free(arena);
+    mc_free(arena->base, arena->buffer);
+    mc_free(arena->base, arena);
 }
 
 MC_Alloc *mc_arena_allocator(MC_Arena *arena){
@@ -61,10 +63,8 @@ MC_Error mc_arena_alloc(MC_Arena *arena, size_t size, void **mem){
         size_t capacity = arena->buffer->capacity_end - arena->buffer->beg;
         size_t exp_capacity = capacity * 2 + 1;
         size_t new_capacity = MAX(exp_capacity, size);
-        struct Buffer *buffer = malloc(sizeof(struct Buffer) + new_capacity);
-        if(buffer == NULL){
-            return MCE_OUT_OF_MEMORY;
-        }
+        struct Buffer *buffer;
+        MC_RETURN_ERROR(mc_alloc(arena->base, sizeof(struct Buffer) + new_capacity, (void**)&buffer));
 
         buffer->capacity_end = buffer->beg + new_capacity;
         buffer->available = buffer->beg;
@@ -80,12 +80,12 @@ MC_Error mc_arena_alloc(MC_Arena *arena, size_t size, void **mem){
 void mc_arena_reset(MC_Arena *arena){
     for(struct Buffer *b = arena->buffer->next, *tmp; b;){
         tmp = b->next;
-        free(b);
+        mc_free(arena->base, b);
         b = tmp;
     }
 
-    arena->buffer->next = NULL;
     arena->buffer->available = arena->buffer->beg;
+    arena->buffer->next = NULL;
 }
 
 void *alloc(MC_Alloc *this, size_t size){
