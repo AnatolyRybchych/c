@@ -18,6 +18,7 @@ typedef unsigned MC_Error;
     MC_ERROR(AGAIN) \
     MC_ERROR(CONNECTION_REFUSED) \
     MC_ERROR(NOT_PERMITTED) \
+    MC_ERROR(INVALID_FORMAT) \
 
 #define MC_RETURN_ERROR(...) for(MC_Error __mc_return_error_status = (__VA_ARGS__); \
     __mc_return_error_status != MCE_OK && __mc_return_error_status != MCE_AGAIN;) \

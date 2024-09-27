@@ -31,16 +31,22 @@ int main(){
     MC_REQUIRE(mc_arena_init(&arena));
     MC_Alloc *alloc = mc_arena_allocator(arena);
 
-    MC_Json *json, *obj1, *obj2, *arr, *arr_item, *arr_item2;
+    MC_Json *json;
     MC_REQUIRE(mc_json_new(alloc, &json));
 
-    MC_REQUIRE(mc_json_object_add(json, &obj1, "obj1"));
-    MC_REQUIRE(mc_json_object_add(json, &obj2, "obj2"));
-    MC_REQUIRE(mc_json_object_add(obj1, &arr, "arr"));
-    MC_REQUIRE(mc_json_list_add(arr, &arr_item));
-    MC_REQUIRE(mc_json_list_add(arr, &arr_item2));
-    MC_REQUIRE(mc_json_set_stringf(arr_item, "asdasdas\""));
-    MC_REQUIRE(mc_json_set_stringf(arr_item2, "test2"));
+    // MC_REQUIRE(mc_json_object_add_new(json, &obj1, "obj1"));
+    // MC_REQUIRE(mc_json_object_add_new(json, &obj2, "obj2"));
+    // MC_REQUIRE(mc_json_object_add_new(obj1, &arr, "arr"));
+    // MC_REQUIRE(mc_json_list_add_new(arr, &arr_item));
+    // MC_REQUIRE(mc_json_list_add_new(arr, &arr_item2));
+    // MC_REQUIRE(mc_json_set_stringf(arr_item, "asdasdas\""));
+    // MC_REQUIRE(mc_json_set_stringf(arr_item2, "test2"));
+
+    MC_REQUIRE(MC_JSON_LIST_LOAD(json, {
+        "test": [], "qwe": {
+            "zxc": [[[]]]
+        }
+    }));
 
     mc_json_dump(json, MC_STDOUT);
 

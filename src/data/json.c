@@ -6,6 +6,8 @@
 #include <stdarg.h>
 #include <stdlib.h>
 #include <stdio.h>
+#include <ctype.h>
+#include <math.h>
 
 #define INITIAL_LIST_SIZE 8
 
@@ -57,17 +59,32 @@ struct MC_Json{
     } as;
 };
 
+struct Parser{
+    MC_Alloc *alloc;
+    MC_Str src;
+    MC_Str cur;
+};
+
 static void reset(MC_Json *json);
 static void delete_arr(MC_Alloc *alloc, struct Array *arr);
 static void delete_kv_arr(MC_Alloc *alloc, struct KvArray *kv_arr);
 
 static MC_Error json_dump(MC_Json *json, MC_Stream *out, MC_Str ident, unsigned ident_cnt);
+static MC_Error loads(MC_Json **json, struct Parser *p);
+static MC_Error loads_object(MC_Json **ret_json, struct Parser *p);
+static MC_Error loads_list(MC_Json **ret_json, struct Parser *p);
+static MC_Error loads_number(MC_Json **ret_json, struct Parser *p);
+static MC_Error loads_bool(MC_Json **ret_json, struct Parser *p);
+static MC_Error loads_null(MC_Json **ret_json, struct Parser *p);
+static MC_Error loads_string(MC_Json **ret_json, struct Parser *p);
+static MC_Error parse_string(struct String **ret_string, struct Parser *p);
 static MC_Error dump_ident(MC_Stream *out, MC_Str ident, unsigned ident_cnt);
 static MC_Error dump_number(MC_Json *number, MC_Stream *out);
 static MC_Error dump_array(struct Array *arr, MC_Stream *out, MC_Str ident, unsigned ident_cnt);
 static MC_Error dump_kv_array(struct KvArray *arr, MC_Stream *out, MC_Str ident, unsigned ident_cnt);
 static MC_Error dump_string(const struct String *string, MC_Stream *out);
 static MC_Error string_fmt(MC_Alloc *alloc, struct String **string, const char *fmt, va_list args);
+static MC_Error object_add(MC_Json *json, struct String *key, MC_Json *item);
 
 MC_Error mc_json_new(MC_Alloc *alloc, MC_Json **ret_json){
     MC_Json *json;
@@ -86,8 +103,8 @@ void mc_json_delete(MC_Json **json_ptr){
         return;
     }
 
-    *json_ptr = NULL;
     MC_Json *json = *json_ptr;
+    *json_ptr = NULL;
 
     reset(json);
     mc_free(json->alloc, json);
@@ -208,7 +225,18 @@ MC_Error mc_json_set_object(MC_Json *json){
     return MCE_OK;
 }
 
-MC_Error mc_json_list_add(MC_Json *json, MC_Json **item){
+MC_Error mc_json_list_add_new(MC_Json *json, MC_Json **item){
+    MC_RETURN_INVALID(json == NULL);
+    MC_RETURN_ERROR(mc_json_new(json->alloc, item));
+    MC_Error status = mc_json_list_add(json, *item);
+    if(status != MCE_OK){
+        mc_json_delete(item);
+    }
+
+    return status;
+}
+
+MC_Error mc_json_list_add(MC_Json *json, MC_Json *item){
     MC_RETURN_INVALID(json == NULL);
 
     if(json->type != MC_JSON_LIST){
@@ -234,78 +262,78 @@ MC_Error mc_json_list_add(MC_Json *json, MC_Json **item){
         json->as.arr = new_array;
     }
 
-    MC_Json *new_item;
-    MC_RETURN_ERROR(mc_json_new(json->alloc, &new_item));
-    json->as.arr->items[json->as.arr->size++] = new_item;
-    OPTIONAL_SET(item, new_item);
+    if(item == NULL){
+        MC_RETURN_ERROR(mc_json_new(json->alloc, &item));
+    }
+
+    json->as.arr->items[json->as.arr->size++] = item;
     return MCE_OK;
 }
 
-MC_Error mc_json_object_add(MC_Json *json, MC_Json **item, const char *key_fmt, ...){
-    *item = NULL;
-
+MC_Error mc_json_list_load(MC_Json *json, MC_Str str){
     MC_RETURN_INVALID(json == NULL);
-    if(json->type != MC_JSON_OBJECT){
-        MC_RETURN_INVALID(json->type != MC_JSON_NULL);
-        MC_RETURN_ERROR(mc_json_set_object(json));
+
+    MC_Json *item;
+    MC_RETURN_ERROR(mc_json_loads(json->alloc, &item, str));
+
+    MC_Error status = mc_json_list_add(json, item);
+    if(status != MCE_OK){
+        mc_json_delete(&item);
     }
 
-    assert(json->subtype == SUBTYPE_KEY_VALUE_ARRAY);
+    return status;
+}
 
-    if(json->as.kv_arr == NULL){
-        MC_RETURN_ERROR(mc_alloc(json->alloc, sizeof(struct KvArray) + sizeof(struct Kv[INITIAL_LIST_SIZE]), (void**)&json->as.kv_arr));
-        json->as.kv_arr->size = 0;
-        json->as.kv_arr->capacity = INITIAL_LIST_SIZE;
-    }
-    else if(json->as.kv_arr->size == json->as.kv_arr->capacity){
-        struct KvArray *new_array;
-        size_t new_capacity = json->as.kv_arr->size * 2;
-        MC_RETURN_ERROR(mc_alloc(json->alloc, sizeof(struct KvArray) + sizeof(struct Kv*[new_capacity]), (void**)&new_array));
-
-        memcpy(new_array, json->as.arr, sizeof(struct KvArray) + sizeof(struct Kv*[json->as.arr->size]));
-        new_array->capacity = new_capacity;
-        mc_free(json->alloc, json->as.kv_arr);
-        json->as.kv_arr = new_array;
-    }
-
-    struct String *key;
+MC_Error mc_json_object_add(MC_Json *json, MC_Json *item, const char *key_fmt, ...){
     va_list args;
     va_start(args, key_fmt);
-    MC_Error status = string_fmt(json->alloc, &key, key_fmt, args);
+    MC_Error status = mc_json_object_addv(json, item, key_fmt, args);
     va_end(args);
+    return status;
+}
 
-    MC_RETURN_ERROR(status);
+MC_Error mc_json_object_addv(MC_Json *json, MC_Json *item, const char *key_fmt, va_list args){
+    MC_RETURN_INVALID(json == NULL);
 
+    struct String *key;
+    MC_RETURN_ERROR(string_fmt(json->alloc, &key, key_fmt, args));
 
-    MC_Json *new_item;
-    status = mc_json_new(json->alloc, &new_item);
+    MC_Error status = object_add(json, key, item);
     if(status != MCE_OK){
         mc_free(json->alloc, key);
-        return status;
     }
 
-    for(struct Kv *kv = json->as.kv_arr->kvs, *end = json->as.kv_arr->kvs + json->as.kv_arr->size; kv != end; kv++){
-        if(key->length == kv->key->length && strncmp(kv->key->data, key->data, key->length) == 0){
-            mc_free(json->alloc, key);
-            mc_json_delete(&kv->value);
-            kv->value = new_item;
+    return status;
+}
 
-            OPTIONAL_SET(item, new_item);
-            return MCE_OK;
-        }
+MC_Error mc_json_object_add_new(MC_Json *json, MC_Json **item, const char *key_fmt, ...){
+    MC_RETURN_INVALID(json == NULL);
+    MC_RETURN_ERROR(mc_json_new(json->alloc, item));
+
+    va_list args;
+    va_start(args, key_fmt);
+    MC_Error status = mc_json_object_addv(json, *item, key_fmt, args);
+    va_end(args);
+
+    if(status != MCE_OK){
+        mc_json_delete(item);
     }
 
-    json->as.kv_arr->kvs[json->as.kv_arr->size++] = (struct Kv){
-        .key = key,
-        .value = new_item
-    };
-
-    OPTIONAL_SET(item, new_item);
-    return MCE_OK;
+    return status;
 }
 
 MC_Error mc_json_dump(MC_Json *json, MC_Stream *out){
-    return json_dump(json, out, MC_STRC("   "), 0);
+    return json_dump(json, out, MC_STRC("  "), 0);
+}
+
+MC_Error mc_json_loads(MC_Alloc *alloc, MC_Json **ret_json, MC_Str str){
+    struct Parser p = {
+        .alloc = alloc,
+        .src = str,
+        .cur = mc_str_trim(str),
+    };
+
+    return loads(ret_json, &p);
 }
 
 static void reset(MC_Json *json){
@@ -376,6 +404,279 @@ static MC_Error json_dump(MC_Json *json, MC_Stream *out, MC_Str ident, unsigned 
     default:
         return MCE_INVALID_INPUT;
     }
+}
+
+static MC_Error loads(MC_Json **ret_json, struct Parser *p){
+    if(mc_str_empty(p->cur)){
+        return MCE_INVALID_FORMAT;
+    }
+
+    switch (*p->cur.beg){
+    case '{':
+        return loads_object(ret_json, p);
+    case '[':
+        return loads_list(ret_json, p);
+    case '\"':
+        return loads_string(ret_json, p);
+    case '0': case '1': case '2': case '3': case '4': 
+    case '5': case '6': case '7': case '8': case '9':
+        return loads_number(ret_json, p);
+    case 't':case 'f':
+        return loads_bool(ret_json, p);
+    case 'n':
+        return loads_null(ret_json, p);
+    default:
+        return MCE_INVALID_FORMAT;
+    }
+}
+
+static MC_Error loads_object(MC_Json **ret_json, struct Parser *p){
+    *ret_json = NULL;
+
+    if(mc_str_empty(p->cur) || *p->cur.beg != '{'){
+        return MCE_INVALID_FORMAT;
+    }
+
+    p->cur.beg++;
+
+    MC_Json *obj;
+    MC_RETURN_ERROR(mc_json_new(p->alloc, &obj));
+    MC_Error status = mc_json_set_object(obj);
+    if(status != MCE_OK){
+        mc_json_delete(&obj);
+        return status;
+    }
+
+    p->cur = mc_str_ltrim(p->cur);
+    if(mc_str_len(p->cur) && *p->cur.beg == '}'){
+        p->cur.beg++;
+        *ret_json = obj;
+        return MCE_OK;
+    }
+
+    while(true){
+        struct String *key;
+        status = parse_string(&key, p);
+        if(status != MCE_OK){
+            mc_json_delete(&obj);
+            return status;
+        }
+
+        p->cur = mc_str_ltrim(p->cur);
+
+        if(mc_str_empty(p->cur) || *p->cur.beg != ':'){
+            mc_json_delete(&obj);
+            mc_free(p->alloc, key);
+            return MCE_INVALID_FORMAT;
+        }
+
+        p->cur.beg++;
+        p->cur = mc_str_ltrim(p->cur);
+
+        MC_Json *item;
+        status = loads(&item, p);
+        if(status != MCE_OK){
+            mc_json_delete(&obj);
+            mc_free(p->alloc, key);
+            return status;
+        }
+
+        status = object_add(obj, key, item);
+        if(status != MCE_OK){
+            mc_json_delete(&obj);
+            mc_free(p->alloc, key);
+            return status;
+        }
+
+        p->cur = mc_str_ltrim(p->cur);
+        if(mc_str_empty(p->cur)){
+            return MCE_INVALID_FORMAT;
+        }
+
+        if(*p->cur.beg == '}'){
+            p->cur.beg++;
+            *ret_json = obj;
+            return MCE_OK;
+        }
+        else if(*p->cur.beg != ','){
+            return MCE_INVALID_FORMAT;
+        }
+
+        p->cur.beg++;
+        p->cur = mc_str_ltrim(p->cur);
+    }
+}
+
+static MC_Error loads_list(MC_Json **ret_json, struct Parser *p){
+    *ret_json = NULL;
+
+    if(mc_str_empty(p->cur) || *p->cur.beg != '['){
+        return MCE_INVALID_FORMAT;
+    }
+
+    p->cur.beg++;
+
+    MC_Json *list;
+    MC_RETURN_ERROR(mc_json_new(p->alloc, &list));
+    MC_Error status = mc_json_set_list(list);
+    if(status != MCE_OK){
+        mc_json_delete(&list);
+        return status;
+    }
+
+    p->cur = mc_str_ltrim(p->cur);
+    if(mc_str_len(p->cur) && *p->cur.beg == ']'){
+        p->cur.beg++;
+        *ret_json = list;
+        return MCE_OK;
+    }
+
+    while(true){
+        MC_Json *item;
+        status = loads(&item, p);
+        if(status != MCE_OK){
+            mc_json_delete(&list);
+            return status;
+        }
+
+        status = mc_json_list_add(list, item);
+        if(status != MCE_OK){
+            mc_json_delete(&list);
+            return status;
+        }
+
+        p->cur = mc_str_ltrim(p->cur);
+        if(mc_str_empty(p->cur)){
+            return MCE_INVALID_FORMAT;
+        }
+
+        if(*p->cur.beg == ']'){
+            p->cur.beg++;
+            *ret_json = list;
+            return MCE_OK;
+        }
+        else if(*p->cur.beg != ','){
+            return MCE_INVALID_FORMAT;
+        }
+
+        p->cur.beg++;
+        p->cur = mc_str_ltrim(p->cur);
+    }
+}
+
+static MC_Error loads_number(MC_Json **ret_json, struct Parser *p){
+    *ret_json = NULL;
+
+    uint64_t num;
+    p->cur = mc_str_toull(p->cur, &num);
+
+    if(mc_str_empty(p->cur) || *p->cur.beg != '.'){
+        MC_RETURN_ERROR(mc_json_new(p->alloc, ret_json));
+        return mc_json_set_u64(*ret_json, num);
+    }
+
+    p->cur.beg++;
+
+    uint64_t num2;
+    MC_Str rest = mc_str_toull(p->cur, &num2);
+    size_t len = rest.beg - p->cur.beg;
+    p->cur = rest;
+
+    double value = (double)num + num2 * pow(0.1, len);
+    MC_RETURN_ERROR(mc_json_new(p->alloc, ret_json));
+    return mc_json_set_lf(*ret_json, value);
+}
+
+static MC_Error loads_bool(MC_Json **ret_json, struct Parser *p){
+    *ret_json = NULL;
+
+    if(mc_str_starts_with(p->cur, MC_STRC("true"))){
+        p->cur.beg += mc_str_len(MC_STRC("true"));
+        MC_RETURN_ERROR(mc_json_new(p->alloc, ret_json));
+        return mc_json_set_bool(*ret_json, true);
+    }
+    else if(mc_str_starts_with(p->cur, MC_STRC("false"))){
+        p->cur.beg += mc_str_len(MC_STRC("false"));
+        MC_RETURN_ERROR(mc_json_new(p->alloc, ret_json));
+        return mc_json_set_bool(*ret_json, false);
+    }
+
+    return MCE_INVALID_FORMAT;
+}
+
+static MC_Error loads_null(MC_Json **ret_json, struct Parser *p){
+    *ret_json = NULL;
+
+    if(mc_str_starts_with(p->cur, MC_STRC("null"))){
+        p->cur.beg += mc_str_len(MC_STRC("null"));
+        return mc_json_new(p->alloc, ret_json);
+    }
+
+    return MCE_INVALID_FORMAT;
+}
+
+static MC_Error loads_string(MC_Json **ret_json, struct Parser *p){
+    struct String *ret_string;
+    MC_RETURN_ERROR(parse_string(&ret_string, p));
+    
+    MC_Error status = mc_json_new(p->alloc, ret_json);
+    if(status != MCE_OK){
+        mc_free(p->alloc, ret_string);
+        return status;
+    }
+
+    MC_Json *json = *ret_json;
+    json->type = MC_JSON_STRING;
+    json->as.string = ret_string;
+    return MCE_OK;
+}
+
+static MC_Error parse_string(struct String **ret_string, struct Parser *p){
+    if(mc_str_len(p->cur) < 2 || *p->cur.beg != '\"'){
+        return MCE_INVALID_FORMAT;
+    }
+
+    const char *string_end = p->cur.beg + 1;
+    for(;*string_end != '\"'; string_end++){
+        if(string_end == p->cur.end){
+            return MCE_INVALID_FORMAT;
+        }
+
+        if(*string_end == '\\'){
+            ++string_end;
+            if(string_end == p->cur.end){
+                return MCE_INVALID_FORMAT;
+            }
+        }
+    }
+
+    struct String *string;
+    MC_RETURN_ERROR(mc_alloc(p->alloc, sizeof(struct String) + string_end - p->cur.beg, (void**)&string));
+    
+    char *dst = string->data;
+    for(const char *ch = p->cur.beg + 1; ch != string_end; ch++){
+        if(*ch != '\\'){
+            *dst++ = *ch;
+            continue;
+        }
+
+        switch (*ch++){
+        case '\\': *dst++ = '\\'; break;
+        case '\"': *dst++ = '\"'; break;
+        case 't': *dst++ = '\t'; break;
+        case 'n': *dst++ = '\n'; break;
+        case 'b': *dst++ = '\b'; break;
+        case 'f': *dst++ = '\f'; break;
+        case '0': *dst++ = '\0'; break;
+        default: return MCE_INVALID_FORMAT;
+        }
+    }
+
+    p->cur.beg = string_end + 1;
+
+    string->length = dst - string->data;
+    *ret_string = string;
+    return MCE_OK;
 }
 
 static MC_Error dump_ident(MC_Stream *out, MC_Str ident, unsigned ident_cnt){
@@ -496,7 +797,6 @@ static MC_Error dump_string(const struct String *string, MC_Stream *out){
     }
 
     return MCE_OK;
-
 }
 
 static MC_Error string_fmt(MC_Alloc *alloc, struct String **ret_string, const char *fmt, va_list args){
@@ -512,5 +812,51 @@ static MC_Error string_fmt(MC_Alloc *alloc, struct String **ret_string, const ch
     string->length = len;
     vsnprintf(string->data, len + 1, fmt, args);
     *ret_string = string;
+    return MCE_OK;
+}
+
+static MC_Error object_add(MC_Json *json, struct String *key, MC_Json *item){
+    MC_RETURN_INVALID(json == NULL);
+    if(json->type != MC_JSON_OBJECT){
+        MC_RETURN_INVALID(json->type != MC_JSON_NULL);
+        MC_RETURN_ERROR(mc_json_set_object(json));
+    }
+
+    assert(json->subtype == SUBTYPE_KEY_VALUE_ARRAY);
+
+    if(json->as.kv_arr == NULL){
+        MC_RETURN_ERROR(mc_alloc(json->alloc, sizeof(struct KvArray) + sizeof(struct Kv[INITIAL_LIST_SIZE]), (void**)&json->as.kv_arr));
+        json->as.kv_arr->size = 0;
+        json->as.kv_arr->capacity = INITIAL_LIST_SIZE;
+    }
+    else if(json->as.kv_arr->size == json->as.kv_arr->capacity){
+        struct KvArray *new_array;
+        size_t new_capacity = json->as.kv_arr->size * 2;
+        MC_RETURN_ERROR(mc_alloc(json->alloc, sizeof(struct KvArray) + sizeof(struct Kv*[new_capacity]), (void**)&new_array));
+
+        memcpy(new_array, json->as.arr, sizeof(struct KvArray) + sizeof(struct Kv*[json->as.arr->size]));
+        new_array->capacity = new_capacity;
+        mc_free(json->alloc, json->as.kv_arr);
+        json->as.kv_arr = new_array;
+    }
+
+    if(item == NULL){
+        MC_RETURN_ERROR(mc_json_new(json->alloc, &item));
+    }
+
+    for(struct Kv *kv = json->as.kv_arr->kvs, *end = json->as.kv_arr->kvs + json->as.kv_arr->size; kv != end; kv++){
+        if(key->length == kv->key->length && strncmp(kv->key->data, key->data, key->length) == 0){
+            mc_json_delete(&kv->value);
+            kv->value = item;
+
+            return MCE_OK;
+        }
+    }
+
+    json->as.kv_arr->kvs[json->as.kv_arr->size++] = (struct Kv){
+        .key = key,
+        .value = item
+    };
+
     return MCE_OK;
 }

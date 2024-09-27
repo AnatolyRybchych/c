@@ -9,6 +9,8 @@
 #include <stdbool.h>
 #include <stdint.h>
 
+#define MC_JSON_LIST_LOAD(LIST, ...) mc_json_list_load((LIST), MC_STRC(#__VA_ARGS__))
+
 typedef struct MC_Json MC_Json;
 
 typedef unsigned MC_JsonType;
@@ -37,9 +39,14 @@ MC_Error mc_json_set_null(MC_Json *json);
 MC_Error mc_json_set_list(MC_Json *json);
 MC_Error mc_json_set_object(MC_Json *json);
 
-MC_Error mc_json_list_add(MC_Json *json, MC_Json **item);
-MC_Error mc_json_object_add(MC_Json *json, MC_Json **item, const char *key_fmt, ...);
+MC_Error mc_json_list_add_new(MC_Json *json, MC_Json **item);
+MC_Error mc_json_list_add(MC_Json *json, MC_Json *item);
+MC_Error mc_json_list_load(MC_Json *json, MC_Str str);
+MC_Error mc_json_object_add(MC_Json *json, MC_Json *item, const char *key_fmt, ...);
+MC_Error mc_json_object_addv(MC_Json *json, MC_Json *item, const char *key_fmt, va_list args);
+MC_Error mc_json_object_add_new(MC_Json *json, MC_Json **item, const char *key_fmt, ...);
 
 MC_Error mc_json_dump(MC_Json *json, MC_Stream *out);
+MC_Error mc_json_loads(MC_Alloc *alloc, MC_Json **json, MC_Str str);
 
 #endif // MC_DATA_JSON_H
