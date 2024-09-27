@@ -4,7 +4,7 @@
 #include <mc/error.h>
 #include <mc/data/alloc.h>
 #include <mc/data/str.h>
-#include <mc/io/stream.h>
+#include <mc/data/stream.h>
 
 #include <stdbool.h>
 #include <stdint.h>

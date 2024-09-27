@@ -1,4 +1,4 @@
-#include <mc/io/stream.h>
+#include <mc/data/stream.h>
 
 #include <mc/data/struct.h>
 #include <mc/data/string.h>

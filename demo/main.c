@@ -9,7 +9,7 @@
 #include <mc/data/struct.h>
 #include <mc/data/arena.h>
 #include <mc/data/json.h>
-#include <mc/io/stream.h>
+#include <mc/data/stream.h>
 #include <mc/os/file.h>
 #include <mc/util/assert.h>
 

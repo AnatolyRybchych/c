@@ -1,7 +1,7 @@
 #ifndef MC_IO_FILE_H
 #define MC_IO_FILE_H
 
-#include <mc/io/stream.h>
+#include <mc/data/stream.h>
 #include <mc/data/str.h>
 
 #define MC_STDIN mc_get_stdin()

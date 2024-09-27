@@ -2,7 +2,7 @@
 #define MC_DATA_IMG_BMP_H
 
 #include <mc/error.h>
-#include <mc/io/stream.h>
+#include <mc/data/stream.h>
 
 #include <stdint.h>
 

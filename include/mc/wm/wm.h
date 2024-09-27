@@ -1,7 +1,7 @@
 #ifndef MC_WM_WM_H
 #define MC_WM_WM_H
 
-#include <mc/io/stream.h>
+#include <mc/data/stream.h>
 #include <mc/error.h>
 #include <mc/geometry/size.h>
 #include <mc/geometry/lina.h>
