@@ -131,14 +131,10 @@ MC_Error mc_fmtv(MC_Stream *stream, const char *fmt, va_list args){
         status = mc_write(stream, len, buffer, NULL);
     }
     else{
-        MC_String *buffer = mc_string_fmtv(fmt, args);
-        if(buffer){
-            status = mc_write(stream, buffer->len, buffer->data, NULL);
-            free(buffer);
-        }
-        else{
-            status = MCE_OUT_OF_MEMORY;
-        }
+        MC_String *buffer;
+        MC_RETURN_ERROR(mc_string_fmtv(NULL, &buffer, fmt, args));
+        status = mc_write(stream, buffer->len, buffer->data, NULL);
+        free(buffer);
     }
     
     return status;

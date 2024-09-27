@@ -28,10 +28,8 @@ MC_Error mc_fopen(MC_Stream **file, MC_Str path, MC_OpenMode mode){
     int flags = open_flags(mode);
     MC_RETURN_INVALID(flags < 0);
 
-    MC_String *path_string = mc_string(path);
-    if(path_string == NULL){
-        return MCE_OUT_OF_MEMORY;
-    }
+    MC_String *path_string;
+    MC_RETURN_ERROR(mc_string(NULL, &path_string, path));
 
     MC_Error status;
     if(mode & MC_OPEN_CREATE){
@@ -113,8 +111,7 @@ static MC_Error open_fd(MC_Stream **stream, int fd, MC_String *path){
 MC_Stream *mc_get_stdin(void){
     static MC_String *stdin_string = NULL;
     if(stdin_string == NULL){
-        stdin_string = mc_string(MC_STRC("<stdin>"));
-        if(stdin_string == NULL){
+        if(mc_string(NULL, &stdin_string, MC_STRC("<stdin>"))){
             return NULL;
         }
     }
@@ -133,8 +130,7 @@ MC_Stream *mc_get_stdin(void){
 MC_Stream *mc_get_stdout(void){
     static MC_String *stdout_string = NULL;
     if(stdout_string == NULL){
-        stdout_string = mc_string(MC_STRC("<stdout>"));
-        if(stdout_string == NULL){
+        if(mc_string(NULL, &stdout_string, MC_STRC("<stdout>"))){
             return NULL;
         }
     }
@@ -153,8 +149,7 @@ MC_Stream *mc_get_stdout(void){
 MC_Stream *mc_get_stderr(void){
     static MC_String *stderr_string = NULL;
     if(stderr_string == NULL){
-        stderr_string = mc_string(MC_STRC("<stdout>"));
-        if(stderr_string == NULL){
+        if(mc_string(NULL, &stderr_string, MC_STRC("<stderr>"))){
             return NULL;
         }
     }

@@ -55,7 +55,8 @@ void *mc_dlib_get(MC_DLib *lib, MC_Str symbol){
 
 #ifdef __linux__
     //TODO: avoid allocation
-    MC_String *sym = mc_string(symbol);
+    MC_String *sym;
+    mc_string(NULL, &sym, symbol);
     assert(sym != NULL);
 
     res = dlsym(lib->dl, sym->data);

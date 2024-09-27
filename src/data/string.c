@@ -1,50 +1,53 @@
 #include <mc/data/string.h>
 
-#include <malloc.h>
 #include <memory.h>
+#include <string.h>
+#include <stdarg.h>
+#include <stdio.h>
 
 extern inline MC_Str mc_string_str(const MC_String *string);
 
-MC_String *mc_string(MC_Str str){
-    MC_String *res = malloc(sizeof(MC_String) + MC_STR_LEN(str) + 1);
-    if(res){
-        res->len = MC_STR_LEN(str);
-        memcpy(res->data, str.beg, res->len);
-        res->data[res->len] = '\0';
-    }
+MC_Error mc_string(MC_Alloc *alloc, MC_String **out_string, MC_Str str){
+    MC_RETURN_ERROR(mc_stringn(alloc, out_string, MC_STR_LEN(str)));
+    
+    *out_string = NULL;
+    MC_RETURN_ERROR(mc_alloc(alloc, sizeof(MC_String) + MC_STR_LEN(str) + 1, (void**)out_string));
 
-    return res;
+    MC_String *res = *out_string;
+    memcpy(res->data, str.beg, res->len);
+
+    return MCE_OK;
 }
 
-MC_String *mc_stringn(size_t len){
-    MC_String *res = malloc(sizeof(MC_String) + len + 1);
-    if(res){
-        res->len = len;
-        res->data[0] = '\0';
-        res->data[res->len] = '\0';
-    }
+MC_Error mc_stringn(MC_Alloc *alloc, MC_String **out_string, size_t len){
+    *out_string = NULL;
+    MC_RETURN_ERROR(mc_alloc(alloc, sizeof(MC_String) + len + 1, (void**)out_string));
 
-    return res;
+    MC_String *res = *out_string;
+    res->len = len;
+    res->data[0] = '\0';
+    res->data[res->len] = '\0';
+
+    return MCE_OK;
 }
 
-MC_String *mc_string_fmtv(const char *fmt, va_list args){
+MC_Error mc_string_fmtv(MC_Alloc *alloc, MC_String **out_string, const char *fmt, va_list args){
     va_list args_cp;
     va_copy(args_cp, args);
     int len = vsnprintf(NULL, 0, fmt, args_cp);
     va_end(args_cp);
 
-    MC_String *string = mc_stringn(len);
-    if(string){
-        vsnprintf(string->data, len, fmt, args);
-    }
+    MC_RETURN_ERROR(mc_stringn(alloc, out_string, len));
+    MC_String *string = *out_string;
+    vsnprintf(string->data, len, fmt, args);
 
-    return string;
+    return MCE_OK;
 }
 
-MC_String *mc_string_fmt(const char *fmt, ...){
+MC_Error mc_string_fmt(MC_Alloc *alloc, MC_String **out_string, const char *fmt, ...){
     va_list args;
     va_start(args, fmt);
-    MC_String *res = mc_string_fmtv(fmt, args);
+    MC_Error status = mc_string_fmtv(alloc, out_string, fmt, args);
     va_end(args);
-    return res;
+    return status;
 }

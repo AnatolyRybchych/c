@@ -27,6 +27,7 @@ struct MC_Process{
 };
 
 static void *die_if_null(void *ptr);
+static void *die_if_null(void *ptr);
 
 MC_Error mc_process_run(MC_Process **ret_process, const MC_ProcessJob *job){
     MC_RETURN_INVALID(job->type >= __PROCESS_TYPES_CNT);
@@ -59,11 +60,12 @@ MC_Error mc_process_run(MC_Process **ret_process, const MC_ProcessJob *job){
     const MC_Str *args = job->as.program.args;
 
     char **argv = die_if_null(malloc(sizeof(char*[args_cnt+2])));
-    MC_String *str = die_if_null(mc_string(job->as.program.absolute_path));
+    MC_String *str;
+    if(mc_string(NULL, &str, job->as.program.absolute_path)) exit(1);
     argv[0] = str->data;
 
     for(size_t i = 0; i < job->as.program.args_cnt; i++){
-        str = die_if_null(mc_string(args[i]));
+        if(mc_string(NULL, &str, args[i])) exit(1);
         argv[i + 1] = str->data;
     }
 
