@@ -3,6 +3,7 @@
 #include <errno.h>
 #include <memory.h>
 #include <malloc.h>
+#include <mc/util/error.h>
 
 #include "_fd.h"
 #include <sys/types.h>

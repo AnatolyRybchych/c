@@ -3,6 +3,8 @@
 
 #include "_fd.h"
 
+#include <mc/util/error.h>
+
 #include <errno.h>
 
 const MC_StreamVtab vtbl_fd = {
@@ -65,7 +67,7 @@ MC_Error fd_get_cursor(void *ctx, size_t *cursor){
     return MCE_OK;
 }
 
-MC_Error fd_set_cursor(void *ctx, size_t cursor, MC_CursorFrom from){
+MC_Error fd_set_cursor(void *ctx, int64_t cursor, MC_CursorFrom from){
     FdCtx *fd_ctx = ctx;
 
     int seek = from == MC_CURSOR_FROM_BEG

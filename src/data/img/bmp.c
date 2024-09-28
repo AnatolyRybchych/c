@@ -1,5 +1,7 @@
 #include <mc/data/img/bmp.h>
 
+#include <mc/util/error.h>
+
 static MC_Error validate(const MC_BmpHdr *hdr, const MC_BmpDIBHdr *dib, const void *data);
 static MC_Error validate_core(const MC_BmpHdr *hdr, const MC_BmpCorehdr *dib);
 static MC_Error validate_info(const MC_BmpHdr *hdr, const MC_BmpInfohdr *dib, const void *data);

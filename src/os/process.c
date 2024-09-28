@@ -2,6 +2,7 @@
 
 #include <mc/data/string.h>
 #include <mc/util/memory.h>
+#include <mc/util/error.h>
 
 #include <errno.h>
 #include <stdlib.h>

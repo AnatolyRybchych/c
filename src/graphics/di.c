@@ -3,6 +3,7 @@
 #include <mc/data/arena.h>
 #include <mc/data/list.h>
 #include <mc/data/bit.h>
+#include <mc/util/error.h>
 
 #include <mc/geometry/rect.h>
 #include <mc/geometry/point.h>

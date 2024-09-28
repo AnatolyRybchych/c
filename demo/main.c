@@ -10,6 +10,7 @@
 #include <mc/data/arena.h>
 #include <mc/data/json.h>
 #include <mc/data/stream.h>
+#include <mc/data/mstream.h>
 #include <mc/os/file.h>
 #include <mc/util/assert.h>
 
@@ -48,7 +49,19 @@ int main(){
         }
     }));
 
-    mc_json_dump(json, MC_STDOUT);
+    MC_Stream *mstream;
+    MC_REQUIRE(mc_mstream(NULL, &mstream));
+
+    MC_REQUIRE(mc_json_dump(json, mstream));
+
+    size_t size = mc_mstream_size(mstream) + 1;
+
+    MC_String *string;
+    MC_REQUIRE(mc_stringn(NULL, &string, size));
+    MC_REQUIRE(mc_set_cursor(mstream, 0, MC_CURSOR_FROM_BEG));
+    MC_REQUIRE(mc_read(mstream, size, string->data, NULL));
+
+    mc_fmt(MC_STDOUT, "%s", string->data);
 
     // MC_Di *di;
     // MC_REQUIRE(mc_di_init(&di));

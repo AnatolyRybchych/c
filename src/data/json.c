@@ -1,6 +1,7 @@
 #include <mc/data/json.h>
 
 #include <mc/data/string.h>
+#include <mc/util/error.h>
 
 #include <assert.h>
 #include <memory.h>

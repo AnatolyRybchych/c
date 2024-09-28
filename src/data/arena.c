@@ -2,6 +2,7 @@
 
 #include <mc/util/memory.h>
 #include <mc/util/minmax.h>
+#include <mc/util/error.h>
 
 #include <malloc.h>
 #include <stdalign.h>

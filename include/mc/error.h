@@ -1,8 +1,6 @@
 #ifndef MC_ERROR_H
 #define MC_ERROR_H
 
-typedef unsigned MC_Error;
-
 #define MC_ITER_ERRORS() \
     MC_ERROR(OK) \
     MC_ERROR(UNKNOWN) \
@@ -20,18 +18,13 @@ typedef unsigned MC_Error;
     MC_ERROR(NOT_PERMITTED) \
     MC_ERROR(INVALID_FORMAT) \
 
-#define MC_RETURN_ERROR(...) for(MC_Error __mc_return_error_status = (__VA_ARGS__); \
-    __mc_return_error_status != MCE_OK && __mc_return_error_status != MCE_AGAIN;) \
-        return __mc_return_error_status
-#define MC_RETURN_INVALID(...) if(__VA_ARGS__) return MCE_INVALID_INPUT
+typedef unsigned MC_Error;
 
 enum MC_Error{
     #define MC_ERROR(ERROR, ...) MCE_##ERROR,
     MC_ITER_ERRORS()
     #undef MC_ERROR
 };
-
-MC_Error mc_error_from_errno(int err_no);
 
 inline const char *mc_strerror(MC_Error err){
     switch (err){
@@ -41,6 +34,5 @@ inline const char *mc_strerror(MC_Error err){
     default: return (const char *)0;
     }
 }
-
 
 #endif // MC_ERROR_H

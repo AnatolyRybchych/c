@@ -2,6 +2,7 @@
 #include <mc/graphics/target.h>
 #include <mc/data/img/bmp.h>
 #include <mc/data/alloc.h>
+#include <mc/util/error.h>
 
 #include <malloc.h>
 #include <stdalign.h>

@@ -1,7 +1,8 @@
 #include <mc/dlib.h>
 #include <mc/data/string.h>
-#include <dlfcn.h>
+#include <mc/util/error.h>
 
+#include <dlfcn.h>
 #include <malloc.h>
 #include <string.h>
 #include <stdlib.h>

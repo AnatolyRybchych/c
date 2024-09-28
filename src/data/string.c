@@ -1,5 +1,7 @@
 #include <mc/data/string.h>
 
+#include <mc/util/error.h>
+
 #include <memory.h>
 #include <string.h>
 #include <stdarg.h>

@@ -3,6 +3,7 @@
 #include <mc/data/struct.h>
 #include <mc/data/string.h>
 #include <mc/data/str.h>
+#include <mc/util/error.h>
 
 #include <malloc.h>
 #include <memory.h>

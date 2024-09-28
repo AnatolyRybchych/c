@@ -1,6 +1,7 @@
 #include <mc/os/file.h>
 
 #include <mc/data/string.h>
+#include <mc/util/error.h>
 
 #ifdef __linux__
 #include "_fd.h"

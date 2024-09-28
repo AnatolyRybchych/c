@@ -1,8 +1,8 @@
 #ifndef MC_IO_STREAM_H
 #define MC_IO_STREAM_H
 
-#include <mc/error.h>
 #include <mc/data/alloc.h>
+#include <mc/error.h>
 
 #include <stdint.h>
 #include <stddef.h>
@@ -48,7 +48,7 @@ struct MC_StreamVtab{
     MC_Error (*write)(void *ctx, size_t size, const void *data, size_t *written);
     MC_Error (*flush)(void *ctx);
     MC_Error (*get_cursor)(void *ctx, size_t *cursor);
-    MC_Error (*set_cursor)(void *ctx, size_t cursor, MC_CursorFrom from);
+    MC_Error (*set_cursor)(void *ctx, int64_t cursor, MC_CursorFrom from);
     void (*close)(void *ctx);
 };
 

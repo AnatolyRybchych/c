@@ -8,6 +8,7 @@
 #include <mc/os/file.h>
 #include <mc/util/assert.h>
 #include <mc/util/memory.h>
+#include <mc/util/error.h>
 
 #include <malloc.h>
 #include <memory.h>
