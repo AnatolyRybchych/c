@@ -535,7 +535,7 @@ static MC_TaskStatus run_after_all(MC_Task *task){
 static void set_pending(TaskNode *task, TaskNode *dependent){
     if(task->pending){
         TaskNode *last_dependend;
-        for(last_dependend = dependent; last_dependend; last_dependend = (void*)last_dependend->next);
+        for(last_dependend = dependent; last_dependend->next; last_dependend = (void*)last_dependend->next);
         last_dependend->next = (void*)task->pending;
         task->pending = last_dependend;
     }
