@@ -51,15 +51,25 @@ void *mc_ctx(MC_Stream *stream){
 }
 
 MC_Error mc_read_async(MC_Stream *stream, size_t size, void *data, size_t *read){
-    if(stream == NULL || stream->vtab.read == NULL){
+    size_t dummy;
+    if(stream == NULL) {
+        *(read ? read : &dummy) = 0;
+        return MCE_OK;
+    }
+
+    if(stream->vtab.read == NULL){
         return MCE_NOT_SUPPORTED;
     }
 
-    size_t dummy;
     return stream->vtab.read(stream->data, size, data, read ? read : &dummy);
 }
 
 MC_Error mc_read(MC_Stream *stream, size_t size, void *data, size_t *ret_read){
+    if(stream == NULL) {
+        *ret_read = 0;
+        return MCE_OK;
+    }
+
     size_t read = 0;
 
     while(true){
@@ -83,15 +93,25 @@ MC_Error mc_read(MC_Stream *stream, size_t size, void *data, size_t *ret_read){
 }
 
 MC_Error mc_write_async(MC_Stream *stream, size_t size, const void *data, size_t *written){
-    if(stream == NULL || stream->vtab.write == NULL){
+    size_t dummy;
+    if(stream == NULL) {
+        *(written ? written : &dummy) = 0;
+        return MCE_OK;
+    }
+
+    if(stream->vtab.write == NULL){
         return MCE_NOT_SUPPORTED;
     }
 
-    size_t dummy;
     return stream->vtab.write(stream->data, size, data, written ? written : &dummy);
 }
 
 MC_Error mc_write(MC_Stream *stream, size_t size, const void *data, size_t *ret_written){
+    if (stream == NULL) {
+        *ret_written = size;
+        return MCE_OK;
+    }
+
     size_t written = 0;
 
     while(true){

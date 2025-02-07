@@ -83,6 +83,8 @@ static int open_permissions(MC_OpenMode mode){
 }
 
 static MC_Error open_fd(MC_Stream **stream, int fd, MC_String *path){
+    *stream = NULL;
+
     if(path == NULL){
         return MCE_OUT_OF_MEMORY;
     }
