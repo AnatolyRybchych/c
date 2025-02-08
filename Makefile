@@ -12,6 +12,7 @@ objects			+= error.o
 objects			+= sched.o
 objects			+= time.o
 objects			+= util/error.o
+objects			+= net/address.o
 objects			+= data/string.o
 objects			+= data/json.o
 objects			+= data/vector.o
@@ -66,6 +67,7 @@ TEST_LDARGS		:= -static -L$(LIB_DIR) -l$(LIBMC)
 
 test_objects	+= main.o
 test_objects	+= time.o
+test_objects	+= address.o
 
 
 $(LIBMC_STATIC): $(addprefix $(LIBMC_OBJ_DIR)/, $(objects))

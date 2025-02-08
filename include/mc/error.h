@@ -17,6 +17,7 @@
     MC_ERROR(CONNECTION_REFUSED) \
     MC_ERROR(NOT_PERMITTED) \
     MC_ERROR(INVALID_FORMAT) \
+    MC_ERROR(TRUNCATED) \
 
 typedef unsigned MC_Error;
 

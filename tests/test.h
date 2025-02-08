@@ -2,6 +2,7 @@
 #define TEST_H
 
 #include <mc/time.h>
+#include <mc/net/address.h>
 
 #include <stdbool.h>
 #include <stddef.h>
@@ -39,6 +40,8 @@ TEST(time_sum);
 TEST(time_sum_overflow, MC_Time t1, MC_Time t2);
 TEST(time_sum_no_overflow, MC_Time t1, MC_Time t2);
 
+TEST(address_to_string, MC_Address addr, const char *res);
+
 #define RUN_TESTS() \
     RUN_TEST(time_diff_equ, (MC_Time){.sec = 0, .nsec = 0}, (MC_Time){.sec = 0, .nsec = 0}) \
     RUN_TEST(time_diff_lt, (MC_Time){.sec = 0, .nsec = 0}, (MC_Time){.sec = 1, .nsec = 0}) \
@@ -50,6 +53,13 @@ TEST(time_sum_no_overflow, MC_Time t1, MC_Time t2);
     RUN_TEST(time_sum_overflow, (MC_Time){.sec = 0, .nsec = 1}, (MC_Time){.sec = UINT64_MAX, .nsec = MC_NSEC_IN_SEC}) \
     RUN_TEST(time_sum_no_overflow, (MC_Time){.sec = UINT64_MAX - 1, .nsec = MC_NSEC_IN_SEC}, (MC_Time){.sec = 0, .nsec = 1}) \
     RUN_TEST(time_sum_no_overflow, (MC_Time){.sec = 0, .nsec = 1}, (MC_Time){.sec = UINT64_MAX - 1, .nsec = MC_NSEC_IN_SEC}) \
+    \
+    RUN_TEST(address_to_string, (MC_Address){.type = MC_ADDRTYPE_ETHERNET, .ether.data = {0, 0, 0, 0, 0, 0}}, "00:00:00:00:00:00") \
+    RUN_TEST(address_to_string, (MC_Address){.type = MC_ADDRTYPE_ETHERNET, .ether.data = {0xAA, 0xBB, 0xCC, 0xDD, 0xEE, 0xFF}}, "AA:BB:CC:DD:EE:FF") \
+    RUN_TEST(address_to_string, (MC_Address){.type = MC_ADDRTYPE_IPV4, .ipv4.data = {192, 168, 1, 1}}, "192.168.1.1") \
+    RUN_TEST(address_to_string, (MC_Address){.type = MC_ADDRTYPE_IPV6, .ipv6.data = {0x20, 0x00}}, "2000::") \
+    RUN_TEST(address_to_string, (MC_Address){.type = MC_ADDRTYPE_IPV6, .ipv6.data = {1, 2, 3, 4, 5, 6, 7, 8, 9, 10, 11, 12, 13, 14, 15, 16}}, "0102:0304:0506:0708:090a:0b0c:0d0e:0f10") \
+    RUN_TEST(address_to_string, (MC_Address){.type = MC_ADDRTYPE_IPV6, .ipv6.data = {0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0xff, 0xff, 192, 168, 1, 1}}, "::ffff:192.168.1.1") \
 
 
 struct TestAssertation{

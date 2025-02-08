@@ -56,6 +56,7 @@ int main(){
     });
 
     mc_task_wait(NULL, read_file_task, NULL);
+
     mc_close(random);
     mc_close(dst);
 
