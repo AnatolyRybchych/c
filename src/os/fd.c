@@ -4,6 +4,7 @@
 #include "_fd.h"
 
 #include <mc/util/error.h>
+#include <mc/util/minmax.h>
 
 #include <errno.h>
 
@@ -28,21 +29,25 @@ MC_Error fd_open(FdCtx *ctx, int fd){
 MC_Error fd_read(void *ctx, size_t size, void *data, size_t *read_size){
     FdCtx *fd_ctx = ctx;
 
-    ssize_t sz_read = read(fd_ctx->fd, data, size);
-    if(sz_read < 0){
-        *read_size = 0;
-        return mc_error_from_errno(errno);
+    ssize_t sz_read = 0;
+    while (true) {
+        ssize_t cur_read = read(fd_ctx->fd, data, size - sz_read);
+        if(cur_read <= 0) {
+            break;
+        }
+
+        sz_read += cur_read;
     }
 
     *read_size = sz_read;
-    return MCE_OK;
+    return mc_error_from_errno(errno);
 }
 
 MC_Error fd_write(void *ctx, size_t size, const void *data, size_t *written){
     FdCtx *fd_ctx = ctx;
 
     ssize_t sz_written = write(fd_ctx->fd, data, size);
-    if(sz_written < 0){
+    if(sz_written <= 0){
         *written = 0;
         return mc_error_from_errno(errno);
     }

@@ -4,6 +4,8 @@
 #include <mc/data/stream.h>
 #include <mc/data/str.h>
 
+// TODO: async stdio
+
 #define MC_STDIN mc_get_stdin()
 #define MC_STDOUT mc_get_stdout()
 #define MC_STDERR mc_get_stderr()

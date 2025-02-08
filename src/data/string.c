@@ -11,9 +11,6 @@ extern inline MC_Str mc_string_str(const MC_String *string);
 
 MC_Error mc_string(MC_Alloc *alloc, MC_String **out_string, MC_Str str){
     MC_RETURN_ERROR(mc_stringn(alloc, out_string, MC_STR_LEN(str)));
-    
-    *out_string = NULL;
-    MC_RETURN_ERROR(mc_alloc(alloc, sizeof(MC_String) + MC_STR_LEN(str) + 1, (void**)out_string));
 
     MC_String *res = *out_string;
     memcpy(res->data, str.beg, res->len);

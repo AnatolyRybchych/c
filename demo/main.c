@@ -1,143 +1,65 @@
-#include <stdio.h>
-
-#include <mc/dlib.h>
-#include <mc/sched.h>
-#include <mc/time.h>
-#include <mc/data/pqueue.h>
-#include <mc/data/list.h>
-#include <mc/data/string.h>
-#include <mc/data/struct.h>
-#include <mc/data/arena.h>
-#include <mc/data/json.h>
-#include <mc/data/stream.h>
-#include <mc/data/mstream.h>
-#include <mc/os/file.h>
 #include <mc/util/assert.h>
-
-#include <mc/wm/wm.h>
-#include <mc/wm/event.h>
-#include <mc/xlib_wm/wm.h>
-
-#include <mc/graphics/graphics.h>
-#include <mc/graphics/di.h>
-#include <mc/xlib_wm/graphics.h>
-
-#include <stdbool.h>
-#include <ctype.h>
-#include <string.h>
+#include <mc/util/minmax.h>
+#include <mc/sched.h>
+#include <mc/data/string.h>
 #include <stdlib.h>
 
+typedef struct ReadFileTask ReadFileTask;
+
+struct ReadFileTask{
+    size_t write_size;
+    char write_buf[256];
+
+    size_t max_size;
+    MC_Stream *src;
+    MC_Stream *dst;
+    MC_Error error;
+};
+
+static MC_TaskStatus read_file(MC_Task *this) {
+    ReadFileTask *data = mc_task_data(this, NULL);
+
+    if(data->write_size) {
+        size_t written;
+        data->error = mc_write_async(data->dst, data->write_size, data->write_buf, &written);
+        data->write_size -= written;
+
+        return data->error == MCE_AGAIN
+            ? MC_TASK_SUSPEND
+            : MC_TASK_DONE;
+    }
+
+    size_t read;
+    MC_Error read_error = mc_read_async(data->src, MIN(sizeof(data->write_buf), data->max_size), data->write_buf, &read);
+    data->write_size = read;
+    data->max_size -= read;
+
+    return data->max_size == 0 || (read == 0 && read_error != MCE_AGAIN)
+        ? MC_TASK_DONE
+        : MC_TASK_SUSPEND;
+}
+
 int main(){
-    MC_Arena *arena;
-    MC_REQUIRE(mc_arena_init(&arena, NULL));
-    MC_Alloc *alloc = mc_arena_allocator(arena);
+    MC_Sched *sched = NULL;
+    mc_sched_new(&sched);
 
-    MC_Json *json;
-    MC_REQUIRE(mc_json_new(alloc, &json));
+    MC_Task *read_file_task = NULL;
 
-    // MC_REQUIRE(mc_json_object_add_new(json, &obj1, "obj1"));
-    // MC_REQUIRE(mc_json_object_add_new(json, &obj2, "obj2"));
-    // MC_REQUIRE(mc_json_object_add_new(obj1, &arr, "arr"));
-    // MC_REQUIRE(mc_json_list_add_new(arr, &arr_item));
-    // MC_REQUIRE(mc_json_list_add_new(arr, &arr_item2));
-    // MC_REQUIRE(mc_json_set_stringf(arr_item, "asdasdas\""));
-    // MC_REQUIRE(mc_json_set_stringf(arr_item2, "test2"));
+    MC_Stream *random, *dst;
+    MC_REQUIRE(mc_fopen(&random, MC_STRC("/dev/random"), MC_OPEN_READ | MC_OPEN_ASYNC));
+    MC_REQUIRE(mc_fopen(&dst, MC_STRC("./random_data"), MC_OPEN_CREATE | MC_OPEN_READ | MC_OPEN_WRITE | MC_OPEN_ASYNC));
 
-    MC_REQUIRE(MC_JSON_LIST_LOAD(json, {
-        "test": [], "qwe": {
-            "zxc": [[[]]]
-        }
-    }));
+    mc_run_task(sched, &read_file_task, read_file, sizeof(ReadFileTask), &(ReadFileTask){
+        .max_size = 10000,
+        .src = random,
+        .dst = dst
+    });
 
-    MC_Stream *mstream;
-    MC_REQUIRE(mc_mstream(NULL, &mstream));
+    mc_task_wait(NULL, read_file_task, NULL);
+    mc_close(random);
+    mc_close(dst);
 
-    MC_REQUIRE(mc_json_dump(json, mstream));
-
-    size_t size = mc_mstream_size(mstream) + 1;
-
-    MC_String *string;
-    MC_REQUIRE(mc_stringn(NULL, &string, size));
-    MC_REQUIRE(mc_set_cursor(mstream, 0, MC_CURSOR_FROM_BEG));
-    MC_REQUIRE(mc_read(mstream, size, string->data, NULL));
-
-    mc_fmt(MC_STDOUT, "%s", string->data);
-
-    // MC_Di *di;
-    // MC_REQUIRE(mc_di_init(&di));
-
-    // MC_DiBuffer *buf;
-    // mc_di_create(di, &buf, (MC_Size2U){
-    //     .width = 800,
-    //     .height = 600
-    // });
-
-    // MC_DiShape *shape;
-    // mc_di_shape_create(di, &shape, (MC_Size2U){.width = 50, .height = 50});
-    // mc_di_shape_line(di, shape, mc_vec2f(0, 0), mc_vec2f(1, 1), 0.03);
-    // mc_di_shape_line(di, shape, mc_vec2f(0, 1), mc_vec2f(1, 0), 0.03);
-
-    // mc_di_shape_curve(di, shape, mc_vec2f(0, 0), 1, &(MC_SemiBezier4f){
-    //     .p2 = mc_vec2f(1, 1),
-    //     .c1 = mc_vec2f(0, 1),
-    //     .c2 = mc_vec2f(1, 0),
-    // }, 0.03);
-
-    // mc_di_shape_curve(di, shape, mc_vec2f(1, 0), 1, &(MC_SemiBezier4f){
-    //     .p2 = mc_vec2f(0, 1),
-    //     .c1 = mc_vec2f(1, 1),
-    //     .c2 = mc_vec2f(0, 0),
-    // }, 0.03);
-
-    // mc_di_clear(di, buf, (MC_AColor){.a = 0xff, .r = 0x15, .g =0x15, .b = 0x15});
-
-    // mc_di_fill_shape(di, buf, shape, MC_RECT2IU(100, 100, 200, 200), (MC_AColor){
-    //     .a = 0xff,
-    //     .r = 0x88,
-    //     .g = 0x44,
-    //     .b = 0x22,
-    // });
-    // mc_di_shape_delete(di, shape);
-
-    // mc_di_write(di, buf,
-    //     (MC_Rect2IU){ .x = 300, .y = 100, .width = 200, .height = 200},
-    //     (MC_Rect2IU){ .x = 100, .y = 100, .width = 200, .height = 200},
-    //     buf);
-
-    // MC_WM *wm;
-    // MC_REQUIRE(mc_wm_init(&wm, mc_xlib_wm_vtab));
-
-    // MC_WMWindow *window;
-    // MC_REQUIRE(mc_wm_window_init(wm, &window));
-
-    // MC_Graphics *g;
-    // MC_REQUIRE(mc_wm_window_get_graphic(window, &g));
-
-    // while(true){
-    //     MC_WMEvent event;
-    //     if(MC_REQUIRE(mc_wm_poll_event(wm, &event)) != MCE_OK){
-    //         mc_sleep(&(MC_Time){.nsec = 1000000});
-    //         continue;
-    //     }
-
-    //     switch (event.type){
-    //     case MC_WME_WINDOW_REDRAW_REQUESTED:{
-    //         MC_REQUIRE(mc_graphics_begin(g));
-    //         MC_REQUIRE(mc_graphics_write_pixels(g, mc_vec2i(0, 0), mc_di_size(buf), (void*)mc_di_pixels(buf), (MC_Vec2i){0, 0}));
-    //         MC_REQUIRE(mc_graphics_end(g));
-    //     }break;
-    //     case MC_WME_KEY_DOWN:
-    //         // mc_fmt(MC_STDOUT, "KEY_DOWN %s\n", mc_key_str(event.as.key_down.key));
-    //         break;
-    //     case MC_WME_KEY_UP:
-    //         // mc_fmt(MC_STDOUT, "KEY_UP %s\n", mc_key_str(event.as.key_up.key));
-    //         break;
-    //     default:
-    //         // mc_fmt(MC_STDOUT, "event %s\n", mc_wm_event_type_str(event.type));
-    //         break;
-    //     }
-    // }
-
-    // mc_wm_destroy(wm);
+    mc_sched_run(sched);
+    mc_sched_delete(sched);
 }
 
