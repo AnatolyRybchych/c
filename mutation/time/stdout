@@ -1,0 +1,73 @@
+cmp_result = mc_timecmp(&(MC_Time){.sec = 0, .nsec = 0}, &(MC_Time){.sec = 0, .nsec = 0})
+mc_fmt(MC_STDOUT, "cmp_result: %d\n", cmp_result)
+cmp_result: 0
+================================
+
+cmp_result = mc_timecmp(&(MC_Time){.sec = 0, .nsec = 0}, &(MC_Time){.sec = 1, .nsec = 0})
+mc_fmt(MC_STDOUT, "cmp_result: %d\n", cmp_result)
+cmp_result: -1
+================================
+
+cmp_result = mc_timecmp(&(MC_Time){.sec = 0, .nsec = 0}, &(MC_Time){.sec = 0, .nsec = 1})
+mc_fmt(MC_STDOUT, "cmp_result: %d\n", cmp_result)
+cmp_result: -1
+================================
+
+cmp_result = mc_timecmp(&(MC_Time){.sec = 1, .nsec = 0}, &(MC_Time){.sec = 0, .nsec = 0})
+mc_fmt(MC_STDOUT, "cmp_result: %d\n", cmp_result)
+cmp_result: 1
+================================
+
+cmp_result = mc_timecmp(&(MC_Time){.sec = 0, .nsec = 1}, &(MC_Time){.sec = 0, .nsec = 0})
+mc_fmt(MC_STDOUT, "cmp_result: %d\n", cmp_result)
+cmp_result: 1
+================================
+
+cmp_result = mc_timecmp(&(MC_Time){.sec = 0, .nsec = 1}, &(MC_Time){.sec = 0, .nsec = 0})
+mc_fmt(MC_STDOUT, "cmp_result: %d\n", cmp_result)
+cmp_result: 1
+================================
+
+mc_timesum(&(MC_Time){.nsec = 10LLU * MC_NSEC_IN_SEC}, &(MC_Time){0}, &timesum_result)
+mc_fmt(MC_STDOUT, "sec: %llu, nsec: %llu\n", timesum_result.sec, timesum_result.nsec)
+sec: 10, nsec: 0
+================================
+
+mc_timesum(&(MC_Time){.sec = UINT64_MAX}, &(MC_Time){.sec = 1}, &timesum_result)
+mc_fmt(MC_STDOUT, "sec: %llu, nsec: %llu\n", timesum_result.sec, timesum_result.nsec)
+sec: 0, nsec: 0
+================================
+
+mc_timesum(&(MC_Time){.sec = UINT64_MAX}, &(MC_Time){.sec = 2}, &timesum_result)
+mc_fmt(MC_STDOUT, "sec: %llu, nsec: %llu\n", timesum_result.sec, timesum_result.nsec)
+sec: 1, nsec: 0
+================================
+
+timesum_error = mc_timesum(&(MC_Time){.sec = UINT64_MAX, .nsec = MC_NSEC_IN_SEC}, &(MC_Time){.sec = 0, .nsec = 1}, &timesum_result)
+mc_fmt(MC_STDOUT, "sec: %llu, nsec: %llu\n", timesum_result.sec, timesum_result.nsec)
+sec: 0, nsec: 0
+mc_fmt(MC_STDOUT, "timesum_error: %s; (expected to be OVERFLOW)\n", mc_strerror(timesum_error))
+timesum_error: OVERFLOW; (expected to be OVERFLOW)
+================================
+
+timesum_error = mc_timesum(&(MC_Time){.sec = 0, .nsec = 1}, &(MC_Time){.sec = UINT64_MAX, .nsec = MC_NSEC_IN_SEC}, &timesum_result)
+mc_fmt(MC_STDOUT, "sec: %llu, nsec: %llu\n", timesum_result.sec, timesum_result.nsec)
+sec: 0, nsec: 2
+mc_fmt(MC_STDOUT, "timesum_error: %s; (expected to be OVERFLOW)\n", mc_strerror(timesum_error))
+timesum_error: OVERFLOW; (expected to be OVERFLOW)
+================================
+
+timesum_error = mc_timesum(&(MC_Time){.sec = UINT64_MAX - 1, .nsec = MC_NSEC_IN_SEC}, &(MC_Time){.sec = 0, .nsec = 1}, &timesum_result)
+mc_fmt(MC_STDOUT, "sec: %llu, nsec: %llu\n", timesum_result.sec, timesum_result.nsec)
+sec: 18446744073709551615, nsec: 0
+mc_fmt(MC_STDOUT, "timesum_error: %s; (expected to be OK)\n", mc_strerror(timesum_error))
+timesum_error: OK; (expected to be OK)
+================================
+
+timesum_error = mc_timesum(&(MC_Time){.sec = 0, .nsec = 1}, &(MC_Time){.sec = UINT64_MAX - 1, .nsec = MC_NSEC_IN_SEC}, &timesum_result)
+mc_fmt(MC_STDOUT, "sec: %llu, nsec: %llu\n", timesum_result.sec, timesum_result.nsec)
+sec: 18446744073709551615, nsec: 2
+mc_fmt(MC_STDOUT, "timesum_error: %s; (expected to be OK)\n", mc_strerror(timesum_error))
+timesum_error: OK; (expected to be OK)
+================================
+

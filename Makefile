@@ -62,17 +62,7 @@ DEMO_LDARGS		:= -L$(LIB_DIR) -l$(LIBMC) -lX11 -lm
 
 demo_objects	+= main.o
 
-
-TEST_BIN		:= bin/test
-TEST_OBJ_DIR	:= build/tests/obj
-TEST_SRC_DIR	:= tests
-TEST_CARGS		:= -ggdb -Wall -Wextra -Werror -pedantic -Iinclude
-TEST_LDARGS		:= -static -L$(LIB_DIR) -l$(LIBMC)
-
-test_objects	+= main.o
-test_objects	+= time.o
-test_objects	+= address.o
-
+all: libmc demo mutation
 
 $(LIBMC_STATIC): $(addprefix $(LIBMC_OBJ_DIR)/, $(objects))
 	@mkdir -p $(dir $@)
@@ -102,29 +92,13 @@ run: demo
 gdb: demo
 	if which gf2 >/dev/null; then gf2 $(DEMO_BIN); else gdb $(DEMO_BIN); fi
 
-
-# ::: TEST :::
-
-$(TEST_BIN): $(addprefix $(TEST_OBJ_DIR)/, $(test_objects))
-	@mkdir -p $(dir $(TEST_BIN))
-	$(CC) $(TEST_CARGS) -o $@ $^ $(TEST_LDARGS)
-
-$(TEST_OBJ_DIR)/%.o: $(TEST_SRC_DIR)/%.c
-	@mkdir -p $(dir $@)
-	$(CC) -c $(TEST_CARGS) -o $@ $^
-
-test: libmc $(TEST_BIN)
-	$(TEST_BIN)
-
 mutation: libmc
 	$(foreach test,$(MUTATION_TEST_SRC), \
 		$(CC) $(CARGS) -o $(test)/run $(test)/main.c -L$(LIB_DIR) -l$(LIBMC) && \
 		$(test)/run > $(test)/stdout 2> $(test)/stderr; \
-		rm -f $(test)/run)
-
-all: libmc demo test
+		rm -f $(test)/run;)
 
 clean:
 	rm -rf build bin lib
 
-.PHONY: test demo libmc run mutation
+.PHONY: demo libmc run mutation
