@@ -7,12 +7,16 @@ LIBMC_STATIC	:= $(LIB_DIR)/lib$(LIBMC).a
 LIBMC_OBJ_DIR	:= build/libmc/obj
 LIBMC_SRC_DIR	:= src
 
+MUTATION_SRC_DIR		:= mutation
+MUTATION_TEST_SRC		:= $(shell find $(MUTATION_SRC_DIR) -type f -name main.c | sed s!/main.c!!g)
+
 objects			+= dlib.o
 objects			+= error.o
 objects			+= sched.o
 objects			+= time.o
 objects			+= util/error.o
 objects			+= net/address.o
+objects			+= net/endpoint.o
 objects			+= data/string.o
 objects			+= data/json.o
 objects			+= data/vector.o
@@ -112,9 +116,15 @@ $(TEST_OBJ_DIR)/%.o: $(TEST_SRC_DIR)/%.c
 test: libmc $(TEST_BIN)
 	$(TEST_BIN)
 
+mutation: libmc
+	$(foreach test,$(MUTATION_TEST_SRC), \
+		$(CC) $(CARGS) -o $(test)/run $(test)/main.c -L$(LIB_DIR) -l$(LIBMC) && \
+		$(test)/run > $(test)/stdout 2> $(test)/stderr; \
+		rm -f $(test)/run)
+
 all: libmc demo test
 
 clean:
 	rm -rf build bin lib
 
-.PHONY: test demo libmc run
+.PHONY: test demo libmc run mutation

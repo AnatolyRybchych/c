@@ -2,6 +2,7 @@
 
 #include <mc/data/list.h>
 #include <mc/util/error.h>
+#include <mc/util/minmax.h>
 
 #include <memory.h>
 
@@ -67,7 +68,8 @@ static MC_Error read(void *_ctx, size_t size, void *data, size_t *ret_read){
     uint8_t *remaining_data = data;
 
     const size_t avail = ctx->size - ctx->cursor;
-    const size_t to_read = avail < size ? avail : size;
+    const size_t to_read = MIN(avail, size);
+    *ret_read = to_read;
 
     size_t off = OFFSET_IN_BLOCK(ctx->cursor);
     size_t block = BLOCK(ctx->cursor);
@@ -76,7 +78,6 @@ static MC_Error read(void *_ctx, size_t size, void *data, size_t *ret_read){
         if(to_block_end >= to_read){
             memcpy(remaining_data, ctx->blocks[block] + off, to_read);
             ctx->cursor += to_read;
-            *ret_read = to_read;
             return MCE_OK;
         }
 
@@ -100,7 +101,6 @@ static MC_Error read(void *_ctx, size_t size, void *data, size_t *ret_read){
         remaining_data += BLOCK_SIZE;
     }
 
-    *ret_read = to_read;
     return MCE_OK;
 }
 

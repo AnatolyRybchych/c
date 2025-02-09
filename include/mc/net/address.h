@@ -45,9 +45,7 @@ struct MC_Address {
 };
 
 const char *mc_address_type_str(MC_AddressType type);
-MC_Error mc_ethernet_addr_to_string(const MC_EthernetAddress *address, size_t bufsz, char *buf, size_t *written);
-MC_Error mc_ipv4_to_string(const MC_IPv4Address *address, size_t bufsz, char *buf, size_t *written);
-MC_Error mc_ipv6_to_string(const MC_IPv6Address *address, size_t bufsz, char *buf, size_t *written);
 MC_Error mc_address_to_string(const MC_Address *address, size_t bufsz, char *buf, size_t *written);
+MC_Error mc_address_write(MC_Stream *out, const MC_Address *address);
 
 #endif // MC_NET_ADDRESS_H

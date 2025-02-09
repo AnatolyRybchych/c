@@ -2,11 +2,19 @@
 #include <mc/util/error.h>
 #include <mc/util/util.h>
 #include <mc/util/minmax.h>
+#include <mc/util/memory.h>
+
+#include <mc/data/mstream.h>
+#include <mc/data/alloc/sarena.h>
 
 #include <memory.h>
 
 #include <string.h>
 #include <stdio.h>
+
+static MC_Error ethernet_addr_write(MC_Stream *out, const MC_EthernetAddress *address);
+static MC_Error ipv4_write(MC_Stream *out, const MC_IPv4Address *address);
+static MC_Error ipv6_write(MC_Stream *out, const MC_IPv6Address *address);
 
 const char *mc_address_type_str(MC_AddressType type){
     const char *result = NULL;
@@ -14,30 +22,52 @@ const char *mc_address_type_str(MC_AddressType type){
     return result;
 }
 
-MC_Error mc_ethernet_addr_to_string(const MC_EthernetAddress *address, size_t bufsz, char *buf, size_t *written){
-    size_t off = snprintf(buf, bufsz, "%02X:%02X:%02X:%02X:%02X:%02X",
+MC_Error mc_address_to_string(const MC_Address *address, size_t bufsz, char *buf, size_t *written){
+    char buffer[512];
+    MC_Sarena sarena;
+    MC_Alloc *alloc = mc_sarena(&sarena, sizeof buffer, buffer);
+    MC_Stream *out;
+    MC_RETURN_ERROR(mc_mstream(alloc, &out));
+
+    MC_Error error = mc_address_write(out, address);
+    size_t out_size = mc_mstream_size(out);
+    MC_RETURN_ERROR(mc_set_cursor(out, 0, MC_CURSOR_FROM_BEG));
+    MC_RETURN_ERROR(mc_read(out, bufsz, buf, written));
+
+    buf[MIN(bufsz - 1, out_size)] = 0;
+
+    if(out_size >= bufsz) {
+        return MCE_TRUNCATED;
+    }
+
+    return error;
+}
+
+MC_Error mc_address_write(MC_Stream *out, const MC_Address *address){
+    switch (address->type){
+    case MC_ADDRTYPE_ETHERNET: return ethernet_addr_write(out, &address->ether);
+    case MC_ADDRTYPE_IPV4: return ipv4_write(out, &address->ipv4);
+    case MC_ADDRTYPE_IPV6: return ipv6_write(out, &address->ipv6);
+    default: return MCE_INVALID_INPUT;
+    }
+}
+
+static MC_Error ethernet_addr_write(MC_Stream *out, const MC_EthernetAddress *address){
+    return mc_fmt(out, "%02X:%02X:%02X:%02X:%02X:%02X",
         address->data[0], address->data[1],
         address->data[2], address->data[3],
         address->data[4], address->data[5]);
-
-    MC_OPTIONAL_SET(written, MIN(off, bufsz));
-
-    return bufsz < off ? MCE_TRUNCATED : MCE_OK;
 }
 
-MC_Error mc_ipv4_to_string(const MC_IPv4Address *address, size_t bufsz, char *buf, size_t *written){
-    size_t off = snprintf(buf, bufsz, "%d.%d.%d.%d",
+static MC_Error ipv4_write(MC_Stream *out, const MC_IPv4Address *address){
+    return mc_fmt(out, "%d.%d.%d.%d",
         (int)address->data[0],
         (int)address->data[1],
         (int)address->data[2],
         (int)address->data[3]);
-
-    MC_OPTIONAL_SET(written, MIN(off, bufsz));
-
-    return bufsz < off ? MCE_TRUNCATED : MCE_OK;
 }
 
-MC_Error mc_ipv6_to_string(const MC_IPv6Address *address, size_t bufsz, char *buf, size_t *written) {
+static MC_Error ipv6_write(MC_Stream *out, const MC_IPv6Address *address) {
     static const uint8_t ipv4_mapped_ipv6_prefix[] = {
         0x00, 0x00, 0x00, 0x00, 0x00, 0x00, 0x00, 0x00, 0x00, 0x00, 0xff, 0xff
     };
@@ -45,26 +75,16 @@ MC_Error mc_ipv6_to_string(const MC_IPv6Address *address, size_t bufsz, char *bu
     const uint8_t *d = address->data;
 
     if(!memcmp(address->data, ipv4_mapped_ipv6_prefix, sizeof ipv4_mapped_ipv6_prefix)) {
-        size_t off = snprintf(buf, bufsz, "::ffff:");
-        if(off > bufsz) {
-            MC_OPTIONAL_SET(written, bufsz);
-            return MCE_TRUNCATED;
-        }
-        
-        MC_Error error = mc_ipv4_to_string(&(MC_IPv4Address){
+        MC_RETURN_ERROR(mc_fmt(out, "::ffff:"));
+
+        return ipv4_write(out, &(MC_IPv4Address){
             .data = {
                 address->data[12],
                 address->data[13],
                 address->data[14],
                 address->data[15]
             }
-        }, bufsz - off, buf + off, written);
-
-        if(written) {
-            *written += off;
-        }
-
-        return error;
+        });
     }
 
     const uint8_t *leap_beg = address->data;
@@ -89,39 +109,27 @@ MC_Error mc_ipv6_to_string(const MC_IPv6Address *address, size_t bufsz, char *bu
     }
 
     if(leap_beg == leap_end) {
-        size_t off = snprintf(buf, bufsz, "%02x%02x:%02x%02x:%02x%02x:%02x%02x:%02x%02x:%02x%02x:%02x%02x:%02x%02x",
-            d[0], d[1], d[2], d[3], d[4], d[5], d[6], d[7], d[8], d[9], d[10], d[11], d[12], d[13], d[14], d[15]);
-
-        MC_OPTIONAL_SET(written, MIN(off, bufsz));
-        return bufsz < off ? MCE_TRUNCATED : MCE_OK;
+        return mc_fmt(out, "%x:%x:%x:%x:%x:%x:%x:%x",
+            MC_U16(d[0], d[1]), MC_U16(d[2], d[3]), MC_U16(d[4], d[5]), \
+            MC_U16(d[6], d[7]), MC_U16(d[8], d[9]), MC_U16(d[10], d[11]), \
+            MC_U16(d[12], d[13]), MC_U16(d[14], d[15]));
     }
 
-    size_t off = 0;
     for(const uint8_t *cur = d; cur != leap_beg; cur += 2){
-        off += snprintf(buf + off, MAX(bufsz - off, 0), "%02x%02x:", cur[0], cur[1]);
+        MC_RETURN_ERROR(mc_fmt(out, "%x:", MC_U16(cur[0], cur[1])));
     }
 
     if(d == leap_beg) {
-        off += snprintf(buf + off, MAX(bufsz - off, 0), ":");
+        MC_RETURN_ERROR(mc_fmt(out, ":"));
     }
 
     for(const uint8_t *cur = leap_end; cur != address->data + sizeof address->data; cur += 2){
-        off += snprintf(buf + off, MAX(bufsz - off, 0), ":%02x%02x", cur[0], cur[1]);
+        MC_RETURN_ERROR(mc_fmt(out, ":%x", MC_U16(cur[0], cur[1])));
     }
 
     if(leap_end == address->data + sizeof address->data) {
-        off += snprintf(buf + off, MAX(bufsz - off, 0), ":");
+        MC_RETURN_ERROR(mc_fmt(out, ":"));
     }
 
-    MC_OPTIONAL_SET(written, MIN(off, bufsz));
-    return bufsz < off ? MCE_TRUNCATED : MCE_OK;
-}
-
-MC_Error mc_address_to_string(const MC_Address *address, size_t bufsz, char *buf, size_t *written){
-    switch (address->type){
-    case MC_ADDRTYPE_ETHERNET: return mc_ethernet_addr_to_string(&address->ether, bufsz, buf, written);
-    case MC_ADDRTYPE_IPV4: return mc_ipv4_to_string(&address->ipv4, bufsz, buf, written);
-    case MC_ADDRTYPE_IPV6: return mc_ipv6_to_string(&address->ipv6, bufsz, buf, written);
-    default: return MCE_INVALID_INPUT;
-    }
+    return MCE_OK;
 }

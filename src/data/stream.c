@@ -4,11 +4,11 @@
 #include <mc/data/string.h>
 #include <mc/data/str.h>
 #include <mc/util/error.h>
+#include <mc/util/assert.h>
+#include <mc/util/util.h>
 
 #include <malloc.h>
 #include <memory.h>
-
-#define OPTIONAL_SET(DST, ...) if(DST) *(DST) = (__VA_ARGS__)
 
 struct MC_Stream{
     MC_Alloc *alloc;
@@ -51,9 +51,8 @@ void *mc_ctx(MC_Stream *stream){
 }
 
 MC_Error mc_read_async(MC_Stream *stream, size_t size, void *data, size_t *read){
-    size_t dummy;
     if(stream == NULL) {
-        *(read ? read : &dummy) = 0;
+        MC_OPTIONAL_SET(read, 0);
         return MCE_OK;
     }
 
@@ -61,12 +60,13 @@ MC_Error mc_read_async(MC_Stream *stream, size_t size, void *data, size_t *read)
         return MCE_NOT_SUPPORTED;
     }
 
+    size_t dummy;
     return stream->vtab.read(stream->data, size, data, read ? read : &dummy);
 }
 
 MC_Error mc_read(MC_Stream *stream, size_t size, void *data, size_t *ret_read){
     if(stream == NULL) {
-        *ret_read = 0;
+        MC_OPTIONAL_SET(ret_read, 0);
         return MCE_OK;
     }
 
@@ -75,27 +75,23 @@ MC_Error mc_read(MC_Stream *stream, size_t size, void *data, size_t *ret_read){
     while(true){
         size_t cur_read;
         MC_Error error = mc_read_async(stream, size, data, &cur_read);
-        read += cur_read;
-        if(size < cur_read){
-            OPTIONAL_SET(ret_read, read);
-            return MCE_OVERFLOW;
-        }
+        MC_ASSERT_BUG(size >= cur_read);
 
+        read += cur_read;
         size -= cur_read;
 
         if(error == MCE_AGAIN){
             continue;
         }
 
-        OPTIONAL_SET(ret_read, read);
+        MC_OPTIONAL_SET(ret_read, read);
         return error;
     }
 }
 
 MC_Error mc_write_async(MC_Stream *stream, size_t size, const void *data, size_t *written){
-    size_t dummy;
     if(stream == NULL) {
-        *(written ? written : &dummy) = 0;
+        MC_OPTIONAL_SET(written, 0);
         return MCE_OK;
     }
 
@@ -103,6 +99,7 @@ MC_Error mc_write_async(MC_Stream *stream, size_t size, const void *data, size_t
         return MCE_NOT_SUPPORTED;
     }
 
+    size_t dummy;
     return stream->vtab.write(stream->data, size, data, written ? written : &dummy);
 }
 
@@ -117,19 +114,16 @@ MC_Error mc_write(MC_Stream *stream, size_t size, const void *data, size_t *ret_
     while(true){
         size_t cur_written;
         MC_Error error = mc_write_async(stream, size, data, &cur_written);
-        written += cur_written;
-        if(size > cur_written){
-            OPTIONAL_SET(ret_written, written);
-            return MCE_OVERFLOW;
-        }
+        MC_ASSERT_BUG(size <= cur_written);
 
+        written += cur_written;
         size -= cur_written;
 
         if(error == MCE_AGAIN){
             continue;
         }
 
-        OPTIONAL_SET(ret_written, written);
+        MC_OPTIONAL_SET(ret_written, written);
         return error;
     }
 
