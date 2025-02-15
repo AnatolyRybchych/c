@@ -1,0 +1,77 @@
+mc_run_task(sched, &root, do_some, sizeof(TaskData), &(TaskData){ .name = "ROOT", .iterations = 3 })
+================================
+
+mc_run_task_after(&subseq1, do_some, sizeof(TaskData), &(TaskData){ .name = "ROOT -> subsequent 1", .iterations = 3 }, root, ((void *)0))
+mc_run_task_after(&subseq2, do_some, sizeof(TaskData), &(TaskData){ .name = "ROOT -> subsequent 2", .iterations = 1 }, root, ((void *)0))
+================================
+
+mc_run_task_after(&subseq1_1, do_some, sizeof(TaskData), &(TaskData){ .name = "ROOT -> subsequent 1 -> subsequent 1_1", .iterations = 3 }, subseq1, ((void *)0))
+mc_run_task_after(&subseq1_2, do_some, sizeof(TaskData), &(TaskData){ .name = "ROOT -> subsequent 1 -> subsequent 1_2", .iterations = 3 }, subseq1, ((void *)0))
+mc_run_task_after(&subseq1_3, do_some, sizeof(TaskData), &(TaskData){ .name = "ROOT -> subsequent 1 -> subsequent 1_3", .iterations = 3 }, subseq1, ((void *)0))
+================================
+
+mc_run_task_after(&subseq2_1, do_some, sizeof(TaskData), &(TaskData){ .name = "ROOT -> subsequent 2 -> subsequent 2_1", .iterations = 3 }, subseq2, ((void *)0))
+mc_run_task_after(&subseq2_2, do_some, sizeof(TaskData), &(TaskData){ .name = "ROOT -> subsequent 2 -> subsequent 2_2", .iterations = 3 }, subseq2, ((void *)0))
+mc_run_task_after(&subseq2_3, do_some, sizeof(TaskData), &(TaskData){ .name = "ROOT -> subsequent 2 -> subsequent 2_3", .iterations = 3 }, subseq2, ((void *)0))
+================================
+
+mc_run_task_after(&tail, do_some, sizeof(TaskData), &(TaskData){ .name = "LAST", .iterations = 3 }, subseq1_1, subseq1_2, subseq1_3, subseq2_1, subseq2_2, subseq2_3, ((void *)0))
+================================
+
+mc_sched_run(sched)
+TASK ROOT; iterations: 3, suspend: false
+MC_TASK_CONTINUE
+TASK ROOT; iterations: 2, suspend: false
+MC_TASK_CONTINUE
+TASK ROOT; iterations: 1, suspend: false
+MC_TASK_DONE
+TASK ROOT -> subsequent 1; iterations: 3, suspend: false
+MC_TASK_CONTINUE
+TASK ROOT -> subsequent 2; iterations: 1, suspend: false
+MC_TASK_DONE
+TASK ROOT -> subsequent 2 -> subsequent 2_1; iterations: 3, suspend: false
+MC_TASK_CONTINUE
+TASK ROOT -> subsequent 2 -> subsequent 2_2; iterations: 3, suspend: false
+MC_TASK_CONTINUE
+TASK ROOT -> subsequent 2 -> subsequent 2_3; iterations: 3, suspend: false
+MC_TASK_CONTINUE
+TASK ROOT -> subsequent 1; iterations: 2, suspend: false
+MC_TASK_CONTINUE
+TASK ROOT -> subsequent 1; iterations: 1, suspend: false
+MC_TASK_DONE
+TASK ROOT -> subsequent 2 -> subsequent 2_3; iterations: 2, suspend: false
+MC_TASK_CONTINUE
+TASK ROOT -> subsequent 2 -> subsequent 2_2; iterations: 2, suspend: false
+MC_TASK_CONTINUE
+TASK ROOT -> subsequent 2 -> subsequent 2_1; iterations: 2, suspend: false
+MC_TASK_CONTINUE
+TASK ROOT -> subsequent 2 -> subsequent 2_1; iterations: 1, suspend: false
+MC_TASK_DONE
+TASK ROOT -> subsequent 2 -> subsequent 2_2; iterations: 1, suspend: false
+MC_TASK_DONE
+TASK ROOT -> subsequent 2 -> subsequent 2_3; iterations: 1, suspend: false
+MC_TASK_DONE
+TASK ROOT -> subsequent 1 -> subsequent 1_1; iterations: 3, suspend: false
+MC_TASK_CONTINUE
+TASK ROOT -> subsequent 1 -> subsequent 1_2; iterations: 3, suspend: false
+MC_TASK_CONTINUE
+TASK ROOT -> subsequent 1 -> subsequent 1_3; iterations: 3, suspend: false
+MC_TASK_CONTINUE
+TASK ROOT -> subsequent 1 -> subsequent 1_3; iterations: 2, suspend: false
+MC_TASK_CONTINUE
+TASK ROOT -> subsequent 1 -> subsequent 1_2; iterations: 2, suspend: false
+MC_TASK_CONTINUE
+TASK ROOT -> subsequent 1 -> subsequent 1_1; iterations: 2, suspend: false
+MC_TASK_CONTINUE
+TASK ROOT -> subsequent 1 -> subsequent 1_1; iterations: 1, suspend: false
+MC_TASK_DONE
+TASK ROOT -> subsequent 1 -> subsequent 1_2; iterations: 1, suspend: false
+MC_TASK_DONE
+TASK ROOT -> subsequent 1 -> subsequent 1_3; iterations: 1, suspend: false
+MC_TASK_DONE
+TASK LAST; iterations: 3, suspend: false
+MC_TASK_CONTINUE
+TASK LAST; iterations: 2, suspend: false
+MC_TASK_CONTINUE
+TASK LAST; iterations: 1, suspend: false
+MC_TASK_DONE

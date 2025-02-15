@@ -35,7 +35,7 @@ inline void mc_list_add(void *own_location, void *node){
 
     MC_List *node_last = node;
     while(node_last->next){
-        node_last->next = node_last->next->next;
+        node_last = node_last->next;
     }
 
     node_last->next = *(MC_List**)own_location;

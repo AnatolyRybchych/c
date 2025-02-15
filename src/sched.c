@@ -35,6 +35,7 @@ struct TaskHeader{
     size_t ref_count;
     MC_Sched *scheduler;
     MC_Time scheduled_on;
+    size_t dependencies;
     MC_TaskStatus (*do_some)(MC_Task *task);
 };
 
@@ -46,6 +47,8 @@ struct MC_Task{
 
 struct TaskNode{
     MC_List *next;
+    TaskNode *subsequent;
+    TaskNode *subsequent_next;
     size_t buffer_capacity;
 
     // MC_Task
@@ -62,7 +65,6 @@ struct MC_Sched{
     size_t running_tasks;
 
     MC_PQueue *scheduled_tasks;
-    TaskNode *pre_active;
     TaskNode *active;
     TaskNode *active_back;
     TaskNode *finished;
@@ -81,7 +83,9 @@ static void reschedule_active_tasks(MC_Sched *sched);
 static void flush_finished_tasks(MC_Sched *sched);
 static bool active_task_ready(TaskNode *task, const MC_Time *now);
 static void activate_scheduled_tasks(MC_Sched *sched);
-static void activate_pre_active_tasks(MC_Sched *sched);
+static TaskNode *pop_subsequent(TaskNode *task);
+static void push_subsequent(TaskNode *task, TaskNode *subseq);
+static void activate_subsequent_tasks(MC_Sched *sched, TaskNode *task);
 static MC_TaskStatus terminate_task(MC_Task *task);
 static int time_cmp(const void *lhs, const void *rhs);
 static MC_TaskStatus do_some(TaskNode *task);
@@ -94,7 +98,6 @@ MC_Error mc_sched_new(MC_Sched **sched){
     }
 
     MC_Sched *new = malloc(sizeof(MC_Sched));
-    *sched = new;
     if(new == NULL){
         return MCE_OUT_OF_MEMORY;
     }
@@ -104,9 +107,11 @@ MC_Error mc_sched_new(MC_Sched **sched){
 
     new->scheduled_tasks = mc_pqueue_create(10, time_cmp);
     if(new->scheduled_tasks == NULL){
+        free(new);
         return MCE_OUT_OF_MEMORY;
     }
 
+    *sched = new;
     return MCE_OK;
 }
 
@@ -143,7 +148,9 @@ MC_TaskStatus mc_sched_continue(MC_Sched *sched){
 
     mc_gettime(MC_GETTIME_SINCE_BOOT, &sched->now);
 
+    // apply mc_task_delay
     reschedule_active_tasks(sched);
+
     activate_scheduled_tasks(sched);
 
     MC_LIST_FORS(TaskNode, sched->active, task){
@@ -155,6 +162,7 @@ MC_TaskStatus mc_sched_continue(MC_Sched *sched){
 
         switch (do_some(task)){
         case MC_TASK_DONE:
+            activate_subsequent_tasks(sched, task);
             task->task.flags |= TASK_DONE;
             mc_list_add(&sched->finished, task);
             break;
@@ -170,9 +178,9 @@ MC_TaskStatus mc_sched_continue(MC_Sched *sched){
     }
 
     if(mc_list_empty(sched->active)) {
-        mc_list_add(&sched->active, mc_list_remove(&sched->active_back));
+        mc_list_add(&sched->active, sched->active_back);
+        sched->active_back = NULL;
     }
-    activate_pre_active_tasks(sched);
 
     if(!mc_list_empty(sched->active)) return res;
     else if(mc_pqueue_getv(sched->scheduled_tasks)) return MC_TASK_SUSPEND;
@@ -200,6 +208,12 @@ void mc_sched_set_suspend_interval(MC_Sched *sched, MC_Time suspend){
 }
 
 MC_Error mc_run_task(MC_Sched *sched, MC_Task **task, MC_TaskStatus (*do_some)(MC_Task *this), unsigned context_size, const void *context){
+    return mc_run_task_after_arr(sched, 0, NULL, task, do_some, context_size, context);
+}
+
+MC_Error mc_run_task_after_arr(MC_Sched *sched, size_t tasks_cnt, MC_Task **tasks,
+    MC_Task **task, MC_TaskStatus (*do_some)(MC_Task *this), unsigned context_size, const void *context)
+{
     if(sched->flags & SCHED_TERMINATING){
         return MCE_BUSY;
     }
@@ -209,11 +223,46 @@ MC_Error mc_run_task(MC_Sched *sched, MC_Task **task, MC_TaskStatus (*do_some)(M
         *task = NULL;
         return MCE_OUT_OF_MEMORY;
     }
-    else{
+
+    if(tasks_cnt == 0) {
         mc_list_add(&sched->active, new);
-        *task = TASK(new);
-        return MCE_OK;
     }
+    else{
+        new->task.dependencies = tasks_cnt;
+        for(MC_Task **dependency_ptr = tasks; dependency_ptr != &tasks[tasks_cnt]; dependency_ptr++) {
+            TaskNode *dependency_node = TASK_NODE(*dependency_ptr);
+            push_subsequent(dependency_node, new);
+        }
+    }
+
+    *task = TASK(new);
+    return MCE_OK;
+}
+
+MC_Error mc_run_task_afterv(MC_Task **task, MC_TaskStatus (*do_some)(MC_Task *this), unsigned context_size, const void *context, MC_Task *dependency, va_list dependencies) {
+    MC_Task *dependencies_arr[32] = {dependency};
+    size_t dependencies_cnt = 1;
+
+    for(MC_Task *cur; (cur = va_arg(dependencies, MC_Task*));) {
+        if(++dependencies_cnt > sizeof dependencies_arr / sizeof * dependencies_arr) {
+            return MCE_INVALID_INPUT;
+        }
+
+        dependencies_arr[dependencies_cnt-1] = cur;
+    }
+
+    return mc_run_task_after_arr(
+        mc_task_sched(dependency),
+        dependencies_cnt, dependencies_arr,
+        task, do_some, context_size, context);
+}
+
+MC_Error mc_run_task_after(MC_Task **task, MC_TaskStatus (*do_some)(MC_Task *this), unsigned context_size, const void *context, MC_Task *dependency, ...) {
+    va_list args;
+    va_start(args, dependency);
+    MC_Error error = mc_run_task_afterv(task, do_some, context_size, context, dependency, args);
+    va_end(args);
+    return error;
 }
 
 MC_Error mc_sched_task(MC_Sched *sched, MC_Task **task, MC_Time timeout, MC_TaskStatus (*do_some)(MC_Task *this), unsigned context_size, const void *context){
@@ -346,13 +395,19 @@ static TaskNode *create_task(MC_Sched *sched, MC_TaskStatus (*do_some)(MC_Task *
     TaskNode *new;
 
     if(!mc_list_empty(sched->garbage)){
-        new = mc_list_remove(&sched->garbage);
-        if(context_size > new->buffer_capacity){
-            new = realloc(new, sizeof(TaskNode) + context_size);
+        TaskNode *garbage = mc_list_remove(&sched->garbage);
+        if(context_size > garbage->buffer_capacity){
+            new = realloc(garbage, sizeof(TaskNode) + context_size);
             if(new == NULL){
-                free(new);
+                free(garbage);
                 return NULL;
             }
+
+            new->buffer_capacity = context_size;
+        }
+        else{
+            free(garbage);
+            return NULL;
         }
     }
     else{
@@ -364,7 +419,7 @@ static TaskNode *create_task(MC_Sched *sched, MC_TaskStatus (*do_some)(MC_Task *
         new->buffer_capacity = context_size;
     }
 
-    *new = (TaskNode){.buffer_capacity = new->buffer_capacity};
+    *new = (TaskNode){0};
 
     new->task.ref_count = 1;
     new->task.scheduler = sched;
@@ -408,9 +463,34 @@ static void activate_scheduled_tasks(MC_Sched *sched){
     }
 }
 
-static void activate_pre_active_tasks(MC_Sched *sched){
-    MC_LIST_FOR_LOCATIONS(TaskNode, sched->pre_active, pre_active){
-        mc_list_add(&sched->active, mc_list_remove(pre_active_location));
+static TaskNode *pop_subsequent(TaskNode *task){
+    TaskNode *result = task->subsequent;
+    if(task->subsequent) {
+        task->subsequent = task->subsequent->subsequent_next;
+    }
+
+    return result;
+}
+
+static void push_subsequent(TaskNode *task, TaskNode *subseq){
+    // only one at the time to avoid huge iterations
+    MC_ASSERT_BUG(subseq->subsequent_next == NULL);
+
+    if(!task->subsequent) {
+        task->subsequent = subseq;
+        return;
+    }
+
+    subseq->subsequent_next = task->subsequent;
+    task->subsequent = subseq;
+}
+
+static void activate_subsequent_tasks(MC_Sched *sched, TaskNode *task) {
+    for(TaskNode *subseq; (subseq = pop_subsequent(task));) {
+        MC_ASSERT_BUG(subseq->task.dependencies != 0);
+        if(--subseq->task.dependencies == 0) {
+            mc_list_add(&sched->active_back, subseq);
+        }
     }
 }
 
