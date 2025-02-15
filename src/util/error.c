@@ -1,6 +1,7 @@
 #include <mc/util/error.h>
 
 #include <errno.h>
+#include <string.h>
 
 MC_Error mc_error_from_errno(int err_no){
     switch (err_no){
@@ -12,6 +13,9 @@ MC_Error mc_error_from_errno(int err_no){
     case ECONNREFUSED: return MCE_CONNECTION_REFUSED;
     case EPERM: return MCE_NOT_PERMITTED;
     case EACCES: return MCE_NOT_PERMITTED;
-    default: return MCE_UNKNOWN;
+    case EADDRINUSE: return MCE_ADDRESS_IN_USE;
+    default:
+        mc_fmt(MC_STDERR, "mc_error_from_errno(%i: %s) -> MCE_UNKNOWN\n", errno, strerror(errno));
+        return MCE_UNKNOWN;
     }
 }

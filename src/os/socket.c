@@ -8,6 +8,7 @@
 #include <sys/types.h>
 #include <sys/socket.h>
 #include <arpa/inet.h>
+#include <sys/fcntl.h>
 #include <poll.h>
 #include <unistd.h>
 
@@ -25,12 +26,20 @@ enum Flags {
 
     // listen socket
     FLAG_LISTEN     = 1 << 3,
+
     FLAG_BIND       = 1 << 4,
+
     // has local endpoint info
     FLAG_LOCAL      = 1 << 5,
 
     // connection established
-    FLAG_CONNECTED  = 1 << 6
+    FLAG_CONNECTED  = 1 << 6,
+
+    FLAG_ASYNC  = 1 << 6,
+
+    FLAG_REUSE_ADDRESS  = 1 << 7,
+
+    FLAG_REUSE_PORT  = 1 << 8,
 };
 
 struct SocketCtx{
@@ -43,6 +52,8 @@ struct SocketCtx{
 static MC_Error sock_read(void *ctx, size_t size, void *data, size_t *read_size);
 static MC_Error sock_write(void *ctx, size_t size, const void *data, size_t *written);
 static void sock_close(void *ctx);
+
+static MC_Error set_sock_flags(SocketCtx *ctx);
 static MC_Error finish_async_connect(SocketCtx *ctx);
 
 const MC_StreamVtab vtbl = {
@@ -54,8 +65,18 @@ const MC_StreamVtab vtbl = {
 static MC_Error read_endpoint(const MC_Endpoint *endpoint,
     int *domain, int *type, int *protocol, struct sockaddr *addr, socklen_t *addrlen);
 
-MC_Error mc_socket(MC_Stream **sock) {
+MC_Error mc_socket(MC_Stream **sock, MC_SocketFlags flags) {
     SocketCtx ctx = {0};
+
+    if(flags & MC_SOCKET_ASYNC)
+        ctx.flags |= FLAG_ASYNC;
+
+    if(flags & MC_SOCKET_REUSE_ADDRESS)
+        ctx.flags |= FLAG_REUSE_ADDRESS;
+
+    if(flags & MC_SOCKET_REUSE_PORT)
+        ctx.flags |= FLAG_REUSE_PORT;
+
     return mc_open(NULL, sock, &vtbl, sizeof ctx, &ctx);
 }
 
@@ -75,6 +96,8 @@ MC_Error mc_socket_bind(MC_Stream *sock, const MC_Endpoint *endpoint) {
         }
 
         ctx->flags |= FLAG_CREATE;
+
+        MC_RETURN_ERROR(set_sock_flags(ctx));
     }
 
     if(!(ctx->flags & FLAG_BIND)) {
@@ -109,6 +132,8 @@ MC_Error mc_socket_connect(MC_Stream *sock, const MC_Endpoint *endpoint) {
         }
 
         ctx->flags |= FLAG_CREATE;
+
+        MC_RETURN_ERROR(set_sock_flags(ctx));
     }
 
     if(!(ctx->flags & FLAG_CONNECT)) {
@@ -293,6 +318,33 @@ static void sock_close(void *_ctx) {
     }
 }
 
+static MC_Error set_sock_flags(SocketCtx *ctx) {
+    int flags = fcntl(ctx->fd, F_GETFL, 0);
+    if (flags == -1) {
+        return mc_error_from_errno(errno);
+    }
+
+    if (ctx->flags & FLAG_ASYNC) {
+        flags |= O_NONBLOCK;
+    }
+
+    if (ctx->flags & FLAG_REUSE_ADDRESS
+    && setsockopt(ctx->fd, SOL_SOCKET, SO_REUSEADDR, &(int){1}, sizeof(int))) {
+        return mc_error_from_errno(errno);
+    }
+
+    if (ctx->flags & FLAG_REUSE_PORT
+    && setsockopt(ctx->fd, SOL_SOCKET, SO_REUSEPORT, &(int){1}, sizeof(int))) {
+        return mc_error_from_errno(errno);
+    }
+
+    if (fcntl(ctx->fd, F_SETFL, flags) == -1) {
+        return mc_error_from_errno(errno);
+    }
+
+    return MCE_OK;
+}
+
 static MC_Error finish_async_connect(SocketCtx *ctx){
     if(ctx->flags & FLAG_CONNECT && !(ctx->flags & FLAG_CONNECTED)) {
         struct pollfd pfd;
@@ -313,3 +365,5 @@ static MC_Error finish_async_connect(SocketCtx *ctx){
 
     return MCE_OK;
 }
+
+

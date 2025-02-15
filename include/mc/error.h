@@ -18,6 +18,7 @@
     MC_ERROR(NOT_PERMITTED) \
     MC_ERROR(INVALID_FORMAT) \
     MC_ERROR(TRUNCATED) \
+    MC_ERROR(ADDRESS_IN_USE) \
 
 typedef unsigned MC_Error;
 
