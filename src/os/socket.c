@@ -5,184 +5,311 @@
 #include <malloc.h>
 #include <mc/util/error.h>
 
-#include "_fd.h"
 #include <sys/types.h>
 #include <sys/socket.h>
 #include <arpa/inet.h>
+#include <poll.h>
+#include <unistd.h>
 
 typedef struct SocketCtx SocketCtx;
+typedef unsigned Flags;
+enum Flags {
+    // socket has been created
+    FLAG_CREATE     = 1 << 0,
 
-struct SocketCtx{
-    FdCtx fd_ctx;
-    MC_String *local_addr;
-    MC_String *remote_addr;
-    MC_SocketEndpoint local;
-    MC_SocketEndpoint remote;
+    // ready for IO
+    FLAG_CONNECT    = 1 << 1,
+
+    // has remote endpoint info
+    FLAG_REMOTE     = 1 << 2,
+
+    // listen socket
+    FLAG_LISTEN     = 1 << 3,
+    FLAG_BIND       = 1 << 4,
+    // has local endpoint info
+    FLAG_LOCAL      = 1 << 5,
+
+    // connection established
+    FLAG_CONNECTED  = 1 << 6
 };
 
-static MC_Error endpoint_type(MC_SocketType socket_type, int *domain, int *type, int *protocol);
-static MC_Error endpoint_sockaddr(MC_SocketEndpoint *endpoint, struct sockaddr *addr, socklen_t *addrlen);
+struct SocketCtx{
+    int fd;
+    MC_Endpoint local_endpoint;
+    MC_Endpoint remote_endpoint;
+    Flags flags;
+};
 
-static void socket_close(void *ctx);
+static MC_Error sock_read(void *ctx, size_t size, void *data, size_t *read_size);
+static MC_Error sock_write(void *ctx, size_t size, const void *data, size_t *written);
+static void sock_close(void *ctx);
+static MC_Error finish_async_connect(SocketCtx *ctx);
 
-MC_Error mc_socket_connect(MC_Stream **sock, const MC_SocketEndpoint *endpoint){
-    SocketCtx ctx = {
-        .remote = *endpoint
-    };
+const MC_StreamVtab vtbl = {
+    .read = sock_read,
+    .write = sock_write,
+    .close = sock_close,
+};
 
-    int domain, type, protocol;
-    MC_RETURN_ERROR(endpoint_type(ctx.remote.type, &domain, &type, &protocol));
+static MC_Error read_endpoint(const MC_Endpoint *endpoint,
+    int *domain, int *type, int *protocol, struct sockaddr *addr, socklen_t *addrlen);
 
-    struct sockaddr_storage addr;
-    socklen_t addrlen;
-    MC_RETURN_ERROR(endpoint_sockaddr(&ctx.remote, (struct sockaddr *)&addr, &addrlen));
-
-    MC_Error status = fd_open(&ctx.fd_ctx, socket(domain, type, protocol));
-    if(status != MCE_OK){
-        fd_close(&ctx.fd_ctx);
-        return mc_error_from_errno(errno);
-    }
-
-    if(connect(ctx.fd_ctx.fd, (struct sockaddr *)&addr, addrlen)){
-        fd_close(&ctx.fd_ctx);
-        return mc_error_from_errno(errno);
-    }
-
-    MC_StreamVtab vtab = vtbl_fd;
-    vtab.close = socket_close;
-
-    status = mc_open(NULL, sock, &vtab, sizeof(SocketCtx), &ctx);
-    if(status != MCE_OK){
-        fd_close(&ctx.fd_ctx);
-        return status;
-    }
-
-    return MCE_OK;
+MC_Error mc_socket(MC_Stream **sock) {
+    SocketCtx ctx = {0};
+    return mc_open(NULL, sock, &vtbl, sizeof ctx, &ctx);
 }
 
-MC_Error mc_socket_listen(MC_Stream **sock, const MC_SocketEndpoint *endpoint, unsigned queue){
-    SocketCtx ctx = {
-        .local = *endpoint
-    };
-
-    int domain, type, protocol;
-    MC_RETURN_ERROR(endpoint_type(ctx.local.type, &domain, &type, &protocol));
-
-    struct sockaddr_storage addr;
-    socklen_t addrlen;
-    MC_RETURN_ERROR(endpoint_sockaddr(&ctx.local, (struct sockaddr *)&addr, &addrlen));
-
-    MC_Error status = fd_open(&ctx.fd_ctx, socket(domain, type, protocol));
-    if(status != MCE_OK){
-        fd_close(&ctx.fd_ctx);
-        return mc_error_from_errno(errno);
-    }
-
-    if(bind(ctx.fd_ctx.fd, (struct sockaddr*)&addr, addrlen)){
-        fd_close(&ctx.fd_ctx);
-        return mc_error_from_errno(errno);
-    }
-
-    if(listen(ctx.fd_ctx.fd, queue)){
-        fd_close(&ctx.fd_ctx);
-        return mc_error_from_errno(errno);
-    }
-
-    MC_StreamVtab vtab = vtbl_fd;
-    vtab.close = socket_close;
-
-    status = mc_open(NULL, sock, &vtab, sizeof(SocketCtx), &ctx);
-    if(status != MCE_OK){
-        fd_close(&ctx.fd_ctx);
-        return status;
-    }
-
-    return MCE_OK;
-}
-
-MC_Error mc_socket_accept(MC_Stream **client, MC_Stream *sock){
+MC_Error mc_socket_bind(MC_Stream *sock, const MC_Endpoint *endpoint) {
+    MC_RETURN_INVALID(sock == NULL);
     SocketCtx *ctx = mc_ctx(sock);
-    SocketCtx client_ctx = {
-        .local = ctx->local
-    };
 
+    int domain, type, protocol;
     struct sockaddr_storage addr;
     socklen_t addrlen;
+    MC_RETURN_ERROR(read_endpoint(endpoint, &domain, &type, &protocol, (struct sockaddr*)&addr, &addrlen));
 
-    int client_fd = accept(ctx->fd_ctx.fd, (struct sockaddr*)&addr, &addrlen);
-    if(client_fd < 0){
-        return mc_error_from_errno(errno);
+    if (!(ctx->flags & FLAG_CREATE)) {
+        ctx->fd = socket(domain, type, protocol);
+        if(ctx->fd < 0) {
+            return mc_error_from_errno(errno);
+        }
+
+        ctx->flags |= FLAG_CREATE;
     }
 
-    MC_Error status = fd_open(&client_ctx.fd_ctx, client_fd);
-    if(status != MCE_OK){
-        fd_close(&client_ctx.fd_ctx);
-        return mc_error_from_errno(errno);
+    if(!(ctx->flags & FLAG_BIND)) {
+        if(bind(ctx->fd, (struct sockaddr*)&addr, addrlen)) {
+            return mc_error_from_errno(errno);
+        }
+
+        ctx->local_endpoint = *endpoint;
+        ctx->flags |= FLAG_BIND;
+        ctx->flags |= FLAG_LOCAL;
     }
-
-    MC_StreamVtab vtab = vtbl_fd;
-    vtab.close = socket_close;
-
-    status = mc_open(NULL, client, &vtab, sizeof(SocketCtx), &client_ctx);
-    if(status != MCE_OK){
-        fd_close(&client_ctx.fd_ctx);
-        return status;
+    else if(memcmp(&ctx->local_endpoint, endpoint, sizeof *endpoint)) {
+        return MCE_BUSY;
     }
 
     return MCE_OK;
 }
 
-static MC_Error endpoint_type(MC_SocketType socket_type, int *domain, int *type, int *protocol){
-    switch (socket_type){
-    case MC_SOCKET_IPV4 | MC_SOCKET_DGRAM:
-        *domain = AF_INET;
+MC_Error mc_socket_connect(MC_Stream *sock, const MC_Endpoint *endpoint) {
+    MC_RETURN_INVALID(sock == NULL);
+    SocketCtx *ctx = mc_ctx(sock);
+
+    int domain, type, protocol;
+    struct sockaddr_storage addr;
+    socklen_t addrlen;
+    MC_RETURN_ERROR(read_endpoint(endpoint, &domain, &type, &protocol, (struct sockaddr*)&addr, &addrlen));
+
+    if (!(ctx->flags & FLAG_CREATE)) {
+        ctx->fd = socket(domain, type, protocol);
+        if(ctx->fd < 0) {
+            return mc_error_from_errno(errno);
+        }
+
+        ctx->flags |= FLAG_CREATE;
+    }
+
+    if(!(ctx->flags & FLAG_CONNECT)) {
+        if(connect(ctx->fd, (struct sockaddr*)&addr, addrlen)) {
+            if(errno != EINPROGRESS){
+                return mc_error_from_errno(errno);
+            }
+        }
+        else {
+            ctx->flags |= FLAG_CONNECTED;
+        }
+
+        ctx->remote_endpoint = *endpoint;
+        ctx->flags |= FLAG_CONNECT;
+        ctx->flags |= FLAG_REMOTE;
+    }
+    else if(memcmp(&ctx->local_endpoint, endpoint, sizeof *endpoint)) {
+        return MCE_BUSY;
+    }
+
+    return MCE_OK;
+}
+
+MC_Error mc_socket_listen(MC_Stream *socket, unsigned queue) {
+    MC_RETURN_INVALID(socket == NULL);
+    SocketCtx *ctx = mc_ctx(socket);
+
+    MC_RETURN_INVALID(!(ctx->flags & FLAG_CREATE));
+    MC_RETURN_INVALID(!(ctx->flags & FLAG_BIND));
+
+    if(listen(ctx->fd, queue)) {
+        return mc_error_from_errno(errno);
+    }
+
+    return MCE_OK;
+}
+
+MC_Error mc_socket_accept(MC_Stream *socket, MC_Stream **client) {
+    MC_RETURN_INVALID(socket == NULL);
+    SocketCtx *ctx = mc_ctx(socket);
+
+    MC_RETURN_INVALID(!(ctx->flags & FLAG_CREATE));
+    MC_RETURN_INVALID(!(ctx->flags & FLAG_BIND));
+
+    struct sockaddr_storage addr;
+    socklen_t addrlen;
+    int client_fd = accept(ctx->fd, (struct sockaddr*)&addr, &addrlen);
+    if(client_fd < 0) {
+        return mc_error_from_errno(errno);
+    }
+
+    SocketCtx client_ctx = {
+        .fd = client_fd,
+        .flags = FLAG_CREATE | FLAG_BIND | FLAG_LOCAL | FLAG_CONNECT | FLAG_CONNECTED,
+        .local_endpoint = ctx->local_endpoint,
+        .remote_endpoint = ctx->remote_endpoint,
+    };
+
+    return mc_open(NULL, client, &vtbl, sizeof client_ctx, &client_ctx);
+}
+
+static MC_Error read_endpoint(const MC_Endpoint *endpoint,
+    int *domain, int *type, int *protocol, struct sockaddr *addr, socklen_t *addrlen)
+{
+    MC_RETURN_INVALID(endpoint == NULL);
+    if(endpoint->type == MC_ENDPOINT_UDP) {
         *type = SOCK_DGRAM;
         *protocol = 0;
-        return MCE_OK;
-    case MC_SOCKET_IPV4 | MC_SOCKET_STREAM:
-        *domain = AF_INET;
+
+        if(endpoint->udp.address.type == MC_ADDRTYPE_IPV4) {
+            *domain = AF_INET;
+
+            struct sockaddr_in in_addr = {
+                .sin_port = htons(endpoint->udp.port),
+                .sin_family = AF_INET
+            };
+
+            memcpy(&in_addr.sin_addr, endpoint->udp.address.ipv4.data, sizeof endpoint->udp.address.ipv4.data);
+            *addrlen = sizeof in_addr;
+            memcpy(addr, &in_addr, sizeof in_addr);
+        }
+        else if(endpoint->udp.address.type == MC_ADDRTYPE_IPV6){
+            *domain = AF_INET6;
+            struct sockaddr_in6 in6_addr = {
+                .sin6_family = AF_INET6,
+                .sin6_port = htons(endpoint->udp.port)
+            };
+
+            memcpy(&in6_addr.sin6_addr, endpoint->udp.address.ipv6.data, sizeof endpoint->udp.address.ipv6.data);
+            *addrlen = sizeof in6_addr;
+            memcpy(addr, &in6_addr, sizeof in6_addr);
+        }
+        else{
+            return MCE_INVALID_INPUT;
+        }
+    }
+    else if(endpoint->type == MC_ENDPOINT_TCP) {
         *type = SOCK_STREAM;
         *protocol = 0;
-        return MCE_OK;
-    default:
-        return MCE_INVALID_INPUT;
+
+        if(endpoint->udp.address.type == MC_ADDRTYPE_IPV4) {
+            *domain = AF_INET;
+
+            struct sockaddr_in in_addr = {
+                .sin_port = htons(endpoint->udp.port),
+                .sin_family = AF_INET
+            };
+
+            memcpy(&in_addr.sin_addr, endpoint->udp.address.ipv4.data, sizeof endpoint->udp.address.ipv4.data);
+            *addrlen = sizeof in_addr;
+            memcpy(addr, &in_addr, sizeof in_addr);
+        }
+        else if(endpoint->udp.address.type == MC_ADDRTYPE_IPV6){
+            *domain = AF_INET6;
+            struct sockaddr_in6 in6_addr = {
+                .sin6_family = AF_INET6,
+                .sin6_port = htons(endpoint->udp.port)
+            };
+
+            memcpy(&in6_addr.sin6_addr, endpoint->udp.address.ipv6.data, sizeof endpoint->udp.address.ipv6.data);
+            *addrlen = sizeof in6_addr;
+            memcpy(addr, &in6_addr, sizeof in6_addr);
+        }
+        else{
+            return MCE_INVALID_INPUT;
+        }
+    }
+    else {
+        return MCE_NOT_IMPLEMENTED;
+    }
+
+    return MCE_OK;
+}
+
+static MC_Error sock_read(void *_ctx, size_t size, void *data, size_t *read_size) {
+    SocketCtx *ctx = _ctx;
+    *read_size = 0;
+
+    MC_RETURN_INVALID(!(ctx->flags & FLAG_CREATE));
+    MC_RETURN_INVALID(!(ctx->flags & FLAG_CONNECT));
+
+    MC_RETURN_ERROR(finish_async_connect(ctx));
+
+    ssize_t sz_read = 0;
+    while (true) {
+        ssize_t cur_read = read(ctx->fd, data, size - sz_read);
+        if(cur_read <= 0) {
+            break;
+        }
+
+        sz_read += cur_read;
+    }
+
+    *read_size = sz_read;
+    return mc_error_from_errno(errno);
+}
+
+static MC_Error sock_write(void *_ctx, size_t size, const void *data, size_t *written) {
+    SocketCtx *ctx = _ctx;
+    *written = 0;
+
+    MC_RETURN_INVALID(!(ctx->flags & FLAG_CREATE));
+    MC_RETURN_INVALID(!(ctx->flags & FLAG_CONNECT));
+
+    MC_RETURN_ERROR(finish_async_connect(ctx));
+
+    ssize_t sz_written = write(ctx->fd, data, size);
+    if(sz_written <= 0){
+        *written = 0;
+        return mc_error_from_errno(errno);
+    }
+
+    *written = sz_written;
+    return MCE_OK;
+}
+
+static void sock_close(void *_ctx) {
+    SocketCtx *ctx = _ctx;
+
+    if(ctx->flags | FLAG_CREATE) {
+        close(ctx->fd);
     }
 }
 
-static MC_Error endpoint_sockaddr(MC_SocketEndpoint *endpoint, struct sockaddr *addr, socklen_t *addrlen){
-    switch (endpoint->type){
-    case MC_SOCKET_IPV4 | MC_SOCKET_DGRAM:{
-        struct sockaddr_in *a = (void*)addr;
-        *addrlen = sizeof(struct sockaddr_in);
-        *a = (struct sockaddr_in){
-            .sin_family = AF_INET,
-            .sin_port = htons(endpoint->transport.as.udp.port)
-        };
+static MC_Error finish_async_connect(SocketCtx *ctx){
+    if(ctx->flags & FLAG_CONNECT && !(ctx->flags & FLAG_CONNECTED)) {
+        struct pollfd pfd;
+        pfd.fd = ctx->fd;
+        pfd.events = POLLOUT;
 
-        memcpy(&a->sin_addr, &endpoint->network.as.ipv4, sizeof(endpoint->network.as.ipv4));
-    } return MCE_OK;
-    case MC_SOCKET_IPV4 | MC_SOCKET_STREAM:{
-        struct sockaddr_in *a = (void*)addr;
-        *addrlen = sizeof(struct sockaddr_in);
-        *a = (struct sockaddr_in){
-            .sin_family = AF_INET,
-            .sin_port = htons(endpoint->transport.as.udp.port)
-        };
-
-        memcpy(&a->sin_addr, &endpoint->network.as.ipv4, sizeof(endpoint->network.as.ipv4));
-    } return MCE_OK;
-    default: return MCE_INVALID_INPUT;
-    }
-}
-
-static void socket_close(void *ctx){
-    SocketCtx *sock_ctx = ctx;
-    fd_close(sock_ctx);
-    if(sock_ctx->local_addr){
-        mc_free(NULL, sock_ctx->local_addr);
+        int events = poll(&pfd, 1, 0);
+        if(events < 0) {
+            return mc_error_from_errno(errno);
+        }
+        else if(events == 0) {
+            return MCE_AGAIN;
+        }
+        else{
+            ctx->flags |= FLAG_CONNECTED;
+        }
     }
 
-    if(sock_ctx->remote_addr){
-        mc_free(NULL, sock_ctx->remote_addr);
-    }
+    return MCE_OK;
 }
