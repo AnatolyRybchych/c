@@ -4,6 +4,7 @@
 #include <mc/util/enum.h>
 #include <mc/error.h>
 #include <mc/data/stream.h>
+#include <mc/data/str.h>
 
 #include <stddef.h>
 #include <stdint.h>
@@ -47,5 +48,7 @@ struct MC_Address {
 const char *mc_address_type_str(MC_AddressType type);
 MC_Error mc_address_to_string(const MC_Address *address, size_t bufsz, char *buf, size_t *written);
 MC_Error mc_address_write(MC_Stream *out, const MC_Address *address);
+MC_Error mc_address_parse(MC_Address *address, MC_Str str, MC_Str *match);
+MC_Error mc_address_parsec(MC_Address *address, const char *str, MC_Str *match);
 
 #endif // MC_NET_ADDRESS_H

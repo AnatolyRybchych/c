@@ -52,6 +52,108 @@ MC_Error mc_address_write(MC_Stream *out, const MC_Address *address){
     }
 }
 
+MC_Error mc_address_parse(MC_Address *address, MC_Str str, MC_Str *out_match) {
+    MC_Str match, oct1, oct2, oct3, oct4;
+    bool ipv4_matches = mc_str_match(str, "^(%d+)%.(%d+)%.(%d+)%.(%d+)",
+        &match, &oct1, &oct2, &oct3, &oct4);
+
+    bool ipv6_mapped_ipv4_matches = !ipv4_matches 
+        && mc_str_match(str, "^::[fF][fF][fF][fF]:(%d+)%.(%d+)%.(%d+)%.(%d+)",
+        &match, &oct1, &oct2, &oct3, &oct4);
+
+    if(ipv4_matches || ipv6_mapped_ipv4_matches) {
+        uint64_t octets[4];
+        mc_str_toull(oct1, &octets[0]);
+        mc_str_toull(oct2, &octets[1]);
+        mc_str_toull(oct3, &octets[2]);
+        mc_str_toull(oct4, &octets[3]);
+
+        MC_RETURN_INVALID(octets[0] & ~(uint64_t)0xFF);
+        MC_RETURN_INVALID(octets[1] & ~(uint64_t)0xFF);
+        MC_RETURN_INVALID(octets[2] & ~(uint64_t)0xFF);
+        MC_RETURN_INVALID(octets[3] & ~(uint64_t)0xFF);
+
+        if (ipv4_matches) {
+            *address = (MC_Address) {
+                .type = MC_ADDRTYPE_IPV4,
+                .ipv4.data = {octets[0], octets[1], octets[2], octets[3]}
+            };
+        }
+        else {
+            *address = (MC_Address) {
+                .type = MC_ADDRTYPE_IPV6,
+                .ipv6.data = {0, 0, 0, 0, 0, 0, 0, 0, 0 ,0, 0xff, 0xff, octets[0], octets[1], octets[2], octets[3]}
+            };
+        }
+        MC_OPTIONAL_SET(out_match, match);
+        return MCE_OK;
+    }
+
+    size_t chunks_cnt = 0;
+    MC_Str *leap = NULL;
+    MC_Str chunks[8];
+    for(MC_Str cur = str; chunks_cnt != 8;) {
+        MC_Str chunk_match, chunk, delim;
+        if(!mc_str_match(cur, "^(%x+)(:*)", &chunk_match, &chunk, &delim)){
+            break;
+        }
+
+        if(mc_str_len(chunk) > 4) {
+            chunks[chunks_cnt++] = MC_STR(chunk.beg, chunk.beg + 4);
+            break;
+        }
+
+        chunks[chunks_cnt++] = chunk;
+        if (mc_str_len(delim) == 2) {
+            leap = chunks + chunks_cnt;
+        }
+        cur.beg = chunk_match.end;
+    }
+
+    if(chunks_cnt == 8 || leap) {
+        *address = (MC_Address) { .type = MC_ADDRTYPE_IPV6 };
+        uint8_t *addr_byte = address->ipv6.data;
+
+        for(MC_Str *chunk = chunks; chunk != leap; chunk++) {
+            uint64_t val;
+            mc_str_hex_toull(*chunk, &val);
+            *addr_byte++ = val >> 8;
+            *addr_byte++ = val & 0xff;
+        }
+
+        addr_byte = &address->ipv6.data[sizeof address->ipv6.data - 1];
+        for(MC_Str *chunk = &chunks[chunks_cnt - 1]; chunk >= leap; chunk--) {
+            uint64_t val;
+            mc_str_hex_toull(*chunk, &val);
+            *addr_byte-- = val & 0xff;
+            *addr_byte-- = val >> 8;
+        }
+
+        MC_OPTIONAL_SET(out_match, match);
+        return MCE_OK;
+    }
+
+    if(chunks_cnt == 6 && !leap) {
+        *address = (MC_Address) { .type = MC_ADDRTYPE_ETHERNET };
+        for(int chunk = 0; chunk != 6; chunk++) {
+            MC_RETURN_INVALID(mc_str_len(chunks[chunk]) > 2);
+
+            uint64_t val;
+            mc_str_hex_toull(chunks[chunk], &val);
+            address->ether.data[chunk] = val;
+        }
+
+        MC_OPTIONAL_SET(out_match, match);
+        return MCE_OK;
+    }
+
+    return MCE_INVALID_INPUT;
+}
+
+MC_Error mc_address_parsec(MC_Address *address, const char *str, MC_Str *match) {
+    return mc_address_parse(address, MC_STR(str, str + strlen(str)), match);
+}
+
 static MC_Error ethernet_addr_write(MC_Stream *out, const MC_EthernetAddress *address){
     return mc_fmt(out, "%02X:%02X:%02X:%02X:%02X:%02X",
         address->data[0], address->data[1],

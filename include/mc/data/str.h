@@ -106,6 +106,23 @@ inline MC_Str mc_str_toull(MC_Str str, uint64_t *val){
     return str;
 }
 
+inline MC_Str mc_str_hex_toull(MC_Str str, uint64_t *val) {
+    for(*val = 0; mc_str_len(str) && isxdigit(*str.beg); str.beg++){
+        *val *= 16;
+        if(*str.beg >= 'a' && *str.beg <= 'f') {
+            *val += *str.beg - 'a' + 10; 
+        }
+        else if(*str.beg >= 'A' && *str.beg <= 'F') {
+            *val += *str.beg - 'A' + 10; 
+        }
+        else {
+            *val += *str.beg - '0';
+        }
+    }
+
+    return str;
+}
+
 inline bool mc_str_starts_with(MC_Str str, MC_Str substr){
     if(mc_str_len(substr) > mc_str_len(str)) {
         return false;

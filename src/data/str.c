@@ -54,6 +54,7 @@ extern inline MC_Str mc_str_ltrim(MC_Str str);
 extern inline MC_Str mc_str_rtrim(MC_Str str);
 extern inline MC_Str mc_str_trim(MC_Str str);
 extern inline MC_Str mc_str_toull(MC_Str str, uint64_t *val);
+extern inline MC_Str mc_str_hex_toull(MC_Str str, uint64_t *val);
 extern inline bool mc_str_equ(MC_Str str, MC_Str other);
 extern inline MC_Str mc_str_substr(MC_Str str, MC_Str substr);
 extern inline MC_Str mc_str_pop_front(MC_Str *str, size_t cnt);
@@ -180,11 +181,11 @@ static const char *read_atom(MC_Str str, Atom *atom) {
             case 'g': case 'p': case 'c':
             MC_ASSERT_BUG(get_well_known_atom(*str.beg, atom) && "UNDEFINED WELL-KNOWN ATOM");
             return str.beg + 1;
-        default:
-            *atom = (Atom){.type = ATOM_SEQUENCE, .sequence = MC_STR(str.beg, str.beg + 1) };
-            return str.beg + 1;
         }
     }
+
+    *atom = (Atom){.type = ATOM_SEQUENCE, .sequence = MC_STR(str.beg, str.beg + 1) };
+    return str.beg + 1;
 
     return NULL;
 }
@@ -345,6 +346,7 @@ bool mc_str_matchv(MC_Str str, const char *fmt, MC_Str *whole, va_list args) {
     MC_Str fmt_str = MC_STR(fmt, fmt + strlen(fmt));
 
     if(*fmt == '^') {
+        fmt_str.beg++;
         whole->beg = str.beg;
         return matchv_from_beg(str, fmt_str, whole, args) == MATCH;
     }

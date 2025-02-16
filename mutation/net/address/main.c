@@ -49,4 +49,30 @@ int main(){
     }));
     NL();
     DELIM();
+
+    MC_Address address;
+    MC_Str match;
+    LR(mc_address_parsec(&address, "192.168.1.1", &match));
+    LR(mc_address_write(MC_STDOUT, &address));
+    NL();
+    LR(mc_fmt(MC_STDOUT, "%.*s\n", match.end - match.beg, match.beg));
+    DELIM()
+
+    LR(mc_address_parsec(&address, "::ffff:192.168.1.1", &match));
+    LR(mc_address_write(MC_STDOUT, &address));
+    NL();
+    LR(mc_fmt(MC_STDOUT, "%.*s\n", match.end - match.beg, match.beg));
+    DELIM()
+
+    LR(mc_address_parsec(&address, "2000::fad1", &match));
+    LR(mc_address_write(MC_STDOUT, &address));
+    NL();
+    LR(mc_fmt(MC_STDOUT, "%.*s\n", match.end - match.beg, match.beg));
+    DELIM()
+
+    LR(rand(&address, "11:22:33:44:55:66", &match));
+    LR(mc_address_write(MC_STDOUT, &address));
+    NL();
+    LR(mc_fmt(MC_STDOUT, "%.*s\n", match.end - match.beg, match.beg));
+    DELIM()
 }

@@ -22,3 +22,31 @@ mc_address_write(mc_get_stdout(), &(MC_Address){ .type = MC_ADDRTYPE_IPV6, .ipv6
 ::ffff:192.168.1.1
 ================================
 
+mc_address_parsec(&address, "192.168.1.1", &match)
+mc_address_write(mc_get_stdout(), &address)
+192.168.1.1
+mc_fmt(mc_get_stdout(), "%.*s\n", match.end - match.beg, match.beg)
+192.168.1.1
+================================
+
+mc_address_parsec(&address, "::ffff:192.168.1.1", &match)
+mc_address_write(mc_get_stdout(), &address)
+::ffff:192.168.1.1
+mc_fmt(mc_get_stdout(), "%.*s\n", match.end - match.beg, match.beg)
+::ffff:192.168.1.1
+================================
+
+mc_address_parsec(&address, "2000::fad1", &match)
+mc_address_write(mc_get_stdout(), &address)
+2000::fad1
+mc_fmt(mc_get_stdout(), "%.*s\n", match.end - match.beg, match.beg)
+2000::fad1
+================================
+
+mc_address_parsec(&address, "11:22:33:44:55:66", &match)
+mc_address_write(mc_get_stdout(), &address)
+11:22:33:44:55:66
+mc_fmt(mc_get_stdout(), "%.*s\n", match.end - match.beg, match.beg)
+11:22:33:44:55:66
+================================
+
