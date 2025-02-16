@@ -1,0 +1,10 @@
+mc_str_match(MC_STRC("    192.168.1.1   "), "(%d+)%.(%d+)%.(%d+)%.(%d+)", &match, &oct1, &oct2, &oct3, &oct4, &untouched)
+mc_str_match -> true
+match: 192.168.1.1
+oct1: 192
+oct2: 168
+oct3: 1
+oct4: 1
+untouched: UNTOUCHED
+================================
+

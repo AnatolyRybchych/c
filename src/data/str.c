@@ -352,8 +352,8 @@ bool mc_str_matchv(MC_Str str, const char *fmt, MC_Str *whole, va_list args) {
     for(const char *cur = str.beg; cur != str.end; cur++) {
         va_list cp;
         va_copy(cp, args);
-        whole->beg = str.beg;
-        MatchStatus matches = matchv_from_beg(str, fmt_str, whole, cp);
+        whole->beg = cur;
+        MatchStatus matches = matchv_from_beg(MC_STR(cur, str.end), fmt_str, whole, cp);
         va_end(cp);
 
         if(matches == MATCH) {
