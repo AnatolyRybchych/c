@@ -18,3 +18,33 @@ mc_endpoint_write(mc_get_stdout(), &(MC_Endpoint){ .type = MC_ENDPOINT_TCP, .tcp
 tcp://[2000::1]:1234
 ================================
 
+mc_endpoint_parsec(&endpoint, "11:22:33:44:55:fF", ((void *)0))
+mc_endpoint_write(mc_get_stdout(), &endpoint)
+11:22:33:44:55:FF
+================================
+
+mc_endpoint_parsec(&endpoint, "127.0.0.1", ((void *)0))
+mc_endpoint_write(mc_get_stdout(), &endpoint)
+127.0.0.1
+================================
+
+mc_endpoint_parsec(&endpoint, "2001::1", ((void *)0))
+mc_endpoint_write(mc_get_stdout(), &endpoint)
+2001::1
+================================
+
+mc_endpoint_parsec(&endpoint, "tcp://192.168.1.1:8000", ((void *)0))
+mc_endpoint_write(mc_get_stdout(), &endpoint)
+tcp://192.168.1.1:8000
+================================
+
+mc_endpoint_parsec(&endpoint, "udp://8.8.8.8:67", ((void *)0))
+mc_endpoint_write(mc_get_stdout(), &endpoint)
+udp://8.8.8.8:67
+================================
+
+mc_endpoint_parsec(&endpoint, "udp://[::]:67", ((void *)0))
+mc_endpoint_write(mc_get_stdout(), &endpoint)
+udp://[::]:67
+================================
+

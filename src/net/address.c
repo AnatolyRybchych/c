@@ -94,7 +94,11 @@ MC_Error mc_address_parse(MC_Address *address, MC_Str str, MC_Str *out_match) {
     MC_Str chunks[8];
     for(MC_Str cur = str; chunks_cnt != 8;) {
         MC_Str chunk_match, chunk, delim;
-        if(!mc_str_match(cur, "^(%x+)(:*)", &chunk_match, &chunk, &delim)){
+        if(!mc_str_match(cur, "^(%x*)(:*)", &chunk_match, &chunk, &delim)){
+            break;
+        }
+
+        if(chunks_cnt && mc_str_empty(chunk)) {
             break;
         }
 
@@ -111,6 +115,8 @@ MC_Error mc_address_parse(MC_Address *address, MC_Str str, MC_Str *out_match) {
     }
 
     if(chunks_cnt == 8 || leap) {
+        if(!leap) leap = &chunks[chunks_cnt];
+
         *address = (MC_Address) { .type = MC_ADDRTYPE_IPV6 };
         uint8_t *addr_byte = address->ipv6.data;
 

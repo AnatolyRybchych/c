@@ -54,4 +54,36 @@ int main(){
     }));
     NL();
     DELIM();
+
+    MC_Endpoint endpoint;
+
+    LR(mc_endpoint_parsec(&endpoint, "11:22:33:44:55:fF", NULL));
+    LR(mc_endpoint_write(MC_STDOUT, &endpoint));
+    NL();
+    DELIM();
+
+    LR(mc_endpoint_parsec(&endpoint, "127.0.0.1", NULL));
+    LR(mc_endpoint_write(MC_STDOUT, &endpoint));
+    NL();
+    DELIM();
+
+    LR(mc_endpoint_parsec(&endpoint, "2001::1", NULL));
+    LR(mc_endpoint_write(MC_STDOUT, &endpoint));
+    NL();
+    DELIM();
+
+    LR(mc_endpoint_parsec(&endpoint, "tcp://192.168.1.1:8000", NULL));
+    LR(mc_endpoint_write(MC_STDOUT, &endpoint));
+    NL();
+    DELIM();
+
+    LR(mc_endpoint_parsec(&endpoint, "udp://8.8.8.8:67", NULL));
+    LR(mc_endpoint_write(MC_STDOUT, &endpoint));
+    NL();
+    DELIM();
+
+    LR(mc_endpoint_parsec(&endpoint, "udp://[::]:67", NULL));
+    LR(mc_endpoint_write(MC_STDOUT, &endpoint));
+    NL();
+    DELIM();
 }

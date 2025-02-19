@@ -9,10 +9,12 @@
     CB(space,       's', MC_STRC("[ \r\n\t]"),   ##__VA_ARGS__) \
     CB(alpha,       'a', MC_STRC("[a-zA-Z]"),    ##__VA_ARGS__) \
     CB(letter,      'l', MC_STRC("[a-z]"),       ##__VA_ARGS__) \
+    CB(word,        'w', MC_STRC("[a-zA-Z]"),       ##__VA_ARGS__) \
     CB(capital,     'u', MC_STRC("[A-Z]"),       ##__VA_ARGS__) \
     CB(digit,       'd', MC_STRC("[0-9]"),       ##__VA_ARGS__) \
     CB(hex,         'x', MC_STRC("[0-9a-fA-F]"), ##__VA_ARGS__) \
     CB(printable,   'g', MC_STRC("[\x21-\x7E]"), ##__VA_ARGS__) \
+    CB(wildcard,    '.', MC_STRC("[\x00-\xff]"), ##__VA_ARGS__) \
     // CB(punct,       'p', MC_STRC("[]"),          ##__VA_ARGS__)
     // CB(control,     'c', MC_STRC("[]"),          ##__VA_ARGS__)
 
@@ -28,7 +30,6 @@ struct Atom {
     union{
         uint8_t range[32];
         MC_Str sequence;
-        MC_Str group;
     };
 };
 
@@ -161,7 +162,6 @@ static const char *read_range(MC_Str str, Atom *atom) {
 }
 
 static const char *read_atom(MC_Str str, Atom *atom) {
-    // FIXME
     if(*str.beg == '[') {
         const char *end = read_range(str, atom);
         if(end) {
@@ -175,13 +175,22 @@ static const char *read_atom(MC_Str str, Atom *atom) {
             return str.end;
         }
 
-        else switch (*++str.beg){
+        switch (*++str.beg){
             case 's': case 'a': case 'l':
             case 'u': case 'd': case 'x':
             case 'g': case 'p': case 'c':
-            MC_ASSERT_BUG(get_well_known_atom(*str.beg, atom) && "UNDEFINED WELL-KNOWN ATOM");
-            return str.beg + 1;
+            case 'w':
+                MC_ASSERT_BUG(get_well_known_atom(*str.beg, atom) && "UNDEFINED WELL-KNOWN ATOM");
+                return str.beg + 1;
+            default:
+                *atom = (Atom){.type = ATOM_SEQUENCE, .sequence = MC_STR(str.beg, str.beg + 1)};
+                return str.beg + 1;
         }
+    }
+
+    if(*str.beg == '.') {
+        MC_ASSERT_BUG(get_well_known_atom('.', atom) && "UNDEFINED WELL-KNOWN ATOM");
+        return str.beg + 1;
     }
 
     *atom = (Atom){.type = ATOM_SEQUENCE, .sequence = MC_STR(str.beg, str.beg + 1) };

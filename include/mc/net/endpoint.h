@@ -45,5 +45,7 @@ struct MC_Endpoint{
 const char *mc_endpoint_type_str(MC_EndpointType type);
 MC_Error mc_endpoint_to_string(const MC_Endpoint *endpoint, size_t bufsz, char *buf, size_t *written);
 MC_Error mc_endpoint_write(MC_Stream *out, const MC_Endpoint *endpoint);
+MC_Error mc_endpoint_parse(MC_Endpoint *endpoint, MC_Str str, MC_Str *match);
+MC_Error mc_endpoint_parsec(MC_Endpoint *endpoint, const char *str, MC_Str *match);
 
 #endif // MC_NET_ENDPOINT_H

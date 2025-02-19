@@ -3,6 +3,7 @@
 #include <mc/data/alloc/sarena.h>
 #include <mc/util/error.h>
 #include <mc/util/minmax.h>
+#include <mc/util/util.h>
 
 #include <stdio.h>
 #include <string.h>
@@ -65,6 +66,92 @@ MC_Error mc_endpoint_write(MC_Stream *out, const MC_Endpoint *endpoint){
     default:
         return MCE_INVALID_INPUT;
     }
+}
+
+MC_Error mc_endpoint_parse(MC_Endpoint *endpoint, MC_Str str, MC_Str *res_match) {
+    *endpoint = (MC_Endpoint){0};
+
+    MC_Str match, proto, urn;
+    if(mc_str_match(str, "^(%w+)://(.*)", &match, &proto, &urn)) {
+        MC_Address address;
+        MC_Str port_str = {0};
+        MC_Str enplaced_addr;
+        MC_Str dummy;
+        if(mc_str_match(urn, "^%[([0-9a-fA-F:]+)%]:?(%d*)", &dummy, &enplaced_addr, &port_str)) {
+            MC_RETURN_INVALID(mc_address_parse(&address, enplaced_addr, NULL));
+        }
+        else {
+            MC_Str address_match;
+            MC_RETURN_INVALID(mc_address_parse(&address, urn, &address_match));
+            MC_RETURN_INVALID(address.type != MC_ADDRTYPE_IPV4);
+            MC_Str port_src = MC_STR(address_match.end, urn.end);
+            mc_str_match(port_src, "^:(%d+)", &dummy, &port_str);
+        }
+
+        uint64_t port = 0;
+        mc_str_toull(port_str, &port);
+        MC_RETURN_INVALID(port >> 16);
+
+        if(mc_str_equ(proto, MC_STRC("tcp"))) {
+            *endpoint = (MC_Endpoint) {
+                .type = MC_ENDPOINT_TCP,
+                .tcp = {
+                    .port = port,
+                    .address = address
+                }
+            };
+            MC_OPTIONAL_SET(res_match, match);
+            return MCE_OK;
+        }
+
+        if(mc_str_equ(proto, MC_STRC("udp"))) {
+            *endpoint = (MC_Endpoint) {
+                .type = MC_ENDPOINT_UDP,
+                .tcp = {
+                    .port = port,
+                    .address = address
+                }
+            };
+            MC_OPTIONAL_SET(res_match, match);
+            return MCE_OK;
+        }
+
+        return MCE_INVALID_INPUT;
+    }
+
+    MC_Address address;
+    MC_RETURN_ERROR(mc_address_parse(&address, str, &match));
+
+    switch (address.type){
+    case MC_ADDRTYPE_ETHERNET:
+        *endpoint = (MC_Endpoint) {
+            .type = MC_ENDPOINT_ETHERNET,
+            .ether = address.ether
+        };
+        MC_OPTIONAL_SET(res_match, match);
+        return MCE_OK;
+    case MC_ADDRTYPE_IPV4:
+        *endpoint = (MC_Endpoint) {
+            .type = MC_ENDPOINT_IPV4,
+            .ipv4 = address.ipv4
+        };
+        MC_OPTIONAL_SET(res_match, match);
+        return MCE_OK;
+    case MC_ADDRTYPE_IPV6:
+        *endpoint = (MC_Endpoint) {
+            .type = MC_ENDPOINT_IPV6,
+            .ipv6 = address.ipv6
+        };
+        MC_OPTIONAL_SET(res_match, match);
+        return MCE_OK;
+    default:
+        return MCE_INVALID_INPUT;
+    }
+
+}
+
+MC_Error mc_endpoint_parsec(MC_Endpoint *endpoint, const char *str, MC_Str *res_match) {
+    return mc_endpoint_parse(endpoint, MC_STR(str, str + strlen(str)), res_match);
 }
 
 static MC_Error validate_endpoint(const MC_Endpoint *endpoint){
