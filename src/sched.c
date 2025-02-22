@@ -2,6 +2,7 @@
 #include <mc/data/pqueue.h>
 #include <mc/data/list.h>
 #include <mc/util/assert.h>
+#include <mc/util/error.h>
 
 #include <stddef.h>
 #include <stdint.h>
@@ -27,7 +28,8 @@ enum TaskFlags{
     TASK_SCHEDULED = 1 << 1,
     TASK_DELAYED = 1 << 2,
     TASK_TODELETE = 1 << 3,
-    TASK_DONE = 1 << 4
+    TASK_DONE = 1 << 4,
+    TASK_NEW = 1 << 5,
 };
 
 struct TaskHeader{
@@ -207,39 +209,32 @@ void mc_sched_set_suspend_interval(MC_Sched *sched, MC_Time suspend){
     sched->suspend = suspend;
 }
 
-MC_Error mc_run_task(MC_Sched *sched, MC_Task **task, MC_TaskStatus (*do_some)(MC_Task *this), unsigned context_size, const void *context){
-    return mc_run_task_after_arr(sched, 0, NULL, task, do_some, context_size, context);
+MC_Error mc_task_run(MC_Task *task) {
+    return mc_task_run_aftern(task, 0, NULL);
 }
 
-MC_Error mc_run_task_after_arr(MC_Sched *sched, size_t tasks_cnt, MC_Task **tasks,
-    MC_Task **task, MC_TaskStatus (*do_some)(MC_Task *this), unsigned context_size, const void *context)
-{
-    if(sched->flags & SCHED_TERMINATING){
-        return MCE_BUSY;
-    }
+MC_Error mc_task_run_aftern(MC_Task *task, size_t tasks_cnt, MC_Task **tasks) {
+    MC_RETURN_INVALID(task == NULL);
 
-    TaskNode *new = create_task(sched, do_some, context_size, context);
-    if(new == NULL){
-        *task = NULL;
-        return MCE_OUT_OF_MEMORY;
-    }
+    MC_Sched *sched = mc_task_get_sched(task);
+    TaskNode *node = TASK_NODE(task);
 
     if(tasks_cnt == 0) {
-        mc_list_add(&sched->active, new);
+        mc_list_add(&sched->active, node);
     }
     else{
-        new->task.dependencies = tasks_cnt;
+        node->task.dependencies = tasks_cnt;
         for(MC_Task **dependency_ptr = tasks; dependency_ptr != &tasks[tasks_cnt]; dependency_ptr++) {
             TaskNode *dependency_node = TASK_NODE(*dependency_ptr);
-            push_subsequent(dependency_node, new);
+            push_subsequent(dependency_node, node);
         }
     }
 
-    *task = TASK(new);
+    task->hdr.flags &= ~TASK_NEW;
     return MCE_OK;
 }
 
-MC_Error mc_run_task_afterv(MC_Task **task, MC_TaskStatus (*do_some)(MC_Task *this), unsigned context_size, const void *context, MC_Task *dependency, va_list dependencies) {
+MC_Error mc_task_run_afterv(MC_Task *task, MC_Task *dependency, va_list dependencies) {
     MC_Task *dependencies_arr[32] = {dependency};
     size_t dependencies_cnt = 1;
 
@@ -251,31 +246,35 @@ MC_Error mc_run_task_afterv(MC_Task **task, MC_TaskStatus (*do_some)(MC_Task *th
         dependencies_arr[dependencies_cnt-1] = cur;
     }
 
-    return mc_run_task_after_arr(
-        mc_task_sched(dependency),
-        dependencies_cnt, dependencies_arr,
-        task, do_some, context_size, context);
+    return mc_task_run_aftern( task, dependencies_cnt, dependencies_arr);
 }
 
-MC_Error mc_run_task_after(MC_Task **task, MC_TaskStatus (*do_some)(MC_Task *this), unsigned context_size, const void *context, MC_Task *dependency, ...) {
+MC_Error mc_task_run_after(MC_Task *task, MC_Task *dependency, ...) {
     va_list args;
     va_start(args, dependency);
-    MC_Error error = mc_run_task_afterv(task, do_some, context_size, context, dependency, args);
+    MC_Error error = mc_task_run_afterv(task, dependency, args);
     va_end(args);
     return error;
 }
 
-MC_Error mc_sched_task(MC_Sched *sched, MC_Task **task, MC_Time timeout, MC_TaskStatus (*do_some)(MC_Task *this), unsigned context_size, const void *context){
+MC_Error mc_task_sched(MC_Task *task, MC_Time timeout) {
+    MC_RETURN_INVALID(task == NULL);
+    MC_RETURN_INVALID(!(task->hdr.flags & TASK_NEW));
+
+    MC_Sched *sched = mc_task_get_sched(task);
+
+    MC_Time scheduled_on;
+    MC_RETURN_ERROR(mc_timesum(&sched->now, &timeout, &scheduled_on));
+    MC_RETURN_ERROR(schedule(sched, TASK_NODE(task)));
+
+    task->hdr.flags &= ~TASK_NEW;
+    return MCE_OK;
+}
+
+MC_Error mc_task_new(MC_Sched *sched, MC_Task **task, MC_TaskStatus (*do_some)(MC_Task *this), unsigned context_size, const void *context) {
     if(sched->flags & SCHED_TERMINATING){
         *task = NULL;
         return MCE_BUSY;
-    }
-
-    MC_Time scheduled_on;
-    MC_Error status = mc_timesum(&sched->now, &timeout, &scheduled_on);
-    if(status != MCE_OK){
-        *task = NULL;
-        return status;
     }
 
     TaskNode *new = create_task(sched, do_some, context_size, context);
@@ -284,16 +283,7 @@ MC_Error mc_sched_task(MC_Sched *sched, MC_Task **task, MC_Time timeout, MC_Task
         return MCE_OUT_OF_MEMORY;
     }
 
-    new->task.scheduled_on = scheduled_on;
-    status = schedule(sched, new);
-    if(status != MCE_OK){
-        *task = NULL;
-        free(new);
-        return MCE_OUT_OF_MEMORY;
-    }
-
     *task = TASK(new);
-
     return MCE_OK;
 }
 
@@ -305,7 +295,7 @@ void *mc_task_data(MC_Task *task, unsigned *size){
     return task->buffer;
 }
 
-MC_Sched *mc_task_sched(MC_Task *task){
+MC_Sched *mc_task_get_sched(MC_Task *task){
     return task->hdr.scheduler;
 }
 
@@ -342,7 +332,7 @@ void mc_task_unref(MC_Task *task){
         return;
     }
 
-    if(task->hdr.flags & TASK_TODELETE){
+    if(task->hdr.flags & (TASK_TODELETE | TASK_NEW)){
         free(task);
     }
 }
@@ -425,6 +415,7 @@ static TaskNode *create_task(MC_Sched *sched, MC_TaskStatus (*do_some)(MC_Task *
     new->task.scheduler = sched;
     new->task.do_some = do_some;
     new->buffer_size = context_size;
+    new->task.flags |= TASK_NEW;;
 
     if(context)
         memcpy(new->buffer, context, context_size);

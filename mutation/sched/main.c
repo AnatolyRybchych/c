@@ -37,58 +37,87 @@ int main(){
     MC_REQUIRE(mc_sched_new(&sched));
 
     MC_Task *root;
-    LR(mc_run_task(sched, &root, do_some, sizeof(TaskData), &(TaskData){
+    MC_Task *subseq1, *subseq2;
+    MC_Task *subseq1_1, *subseq1_2, *subseq1_3;
+    MC_Task *subseq2_1, *subseq2_2, *subseq2_3;
+    MC_Task *tail;
+
+    LR(mc_task_new(sched, &root, do_some, sizeof(TaskData), &(TaskData){
         .name = "ROOT",
         .iterations = 3
     }));
-    DELIM();
 
-    MC_Task *subseq1, *subseq2;
-    LR(mc_run_task_after(&subseq1, do_some, sizeof(TaskData), &(TaskData){
+    LR(mc_task_new(sched, &subseq1, do_some, sizeof(TaskData), &(TaskData){
         .name = "ROOT -> subsequent 1",
         .iterations = 3
-    }, root, NULL));
-    LR(mc_run_task_after(&subseq2, do_some, sizeof(TaskData), &(TaskData){
+    }));
+    LR(mc_task_new(sched, &subseq2, do_some, sizeof(TaskData), &(TaskData){
         .name = "ROOT -> subsequent 2",
         .iterations = 1
-    }, root, NULL));
-    DELIM();
+    }));
 
-    MC_Task *subseq1_1, *subseq1_2, *subseq1_3;
-    LR(mc_run_task_after(&subseq1_1, do_some, sizeof(TaskData), &(TaskData){
+    LR(mc_task_new(sched, &subseq1_1, do_some, sizeof(TaskData), &(TaskData){
         .name = "ROOT -> subsequent 1 -> subsequent 1_1",
         .iterations = 3
-    }, subseq1, NULL));
-    LR(mc_run_task_after(&subseq1_2, do_some, sizeof(TaskData), &(TaskData){
+    }));
+    LR(mc_task_new(sched, &subseq1_2, do_some, sizeof(TaskData), &(TaskData){
         .name = "ROOT -> subsequent 1 -> subsequent 1_2",
         .iterations = 3
-    }, subseq1, NULL));
-    LR(mc_run_task_after(&subseq1_3, do_some, sizeof(TaskData), &(TaskData){
+    }));
+    LR(mc_task_new(sched, &subseq1_3, do_some, sizeof(TaskData), &(TaskData){
         .name = "ROOT -> subsequent 1 -> subsequent 1_3",
         .iterations = 3
-    }, subseq1, NULL));
-    DELIM();
+    }));
 
-    MC_Task *subseq2_1, *subseq2_2, *subseq2_3;
-    LR(mc_run_task_after(&subseq2_1, do_some, sizeof(TaskData), &(TaskData){
+    LR(mc_task_new(sched, &subseq2_1, do_some, sizeof(TaskData), &(TaskData){
         .name = "ROOT -> subsequent 2 -> subsequent 2_1",
         .iterations = 3
-    }, subseq2, NULL));
-    LR(mc_run_task_after(&subseq2_2, do_some, sizeof(TaskData), &(TaskData){
+    }));
+    LR(mc_task_new(sched, &subseq2_2, do_some, sizeof(TaskData), &(TaskData){
         .name = "ROOT -> subsequent 2 -> subsequent 2_2",
         .iterations = 3
-    }, subseq2, NULL));
-    LR(mc_run_task_after(&subseq2_3, do_some, sizeof(TaskData), &(TaskData){
+    }));
+    LR(mc_task_new(sched, &subseq2_3, do_some, sizeof(TaskData), &(TaskData){
         .name = "ROOT -> subsequent 2 -> subsequent 2_3",
         .iterations = 3
-    }, subseq2, NULL));
-    DELIM();
+    }));
 
-    MC_Task *tail;
-    LR(mc_run_task_after(&tail, do_some, sizeof(TaskData), &(TaskData){
+    LR(mc_task_new(sched, &tail, do_some, sizeof(TaskData), &(TaskData){
         .name = "LAST",
         .iterations = 3
-    }, subseq1_1, subseq1_2, subseq1_3, subseq2_1, subseq2_2, subseq2_3, NULL));
+    }));
+
+    DELIM();
+    NL();
+
+    LR(mc_task_run(root));
+    L(mc_task_unref(root));
+    DELIM();
+
+    LR(mc_task_run_after(subseq1, root, NULL));
+    L(mc_task_unref(subseq1));
+    LR(mc_task_run_after(subseq2, root, NULL));
+    L(mc_task_unref(subseq2));
+    DELIM();
+
+    LR(mc_task_run_after(subseq1_1, subseq1, NULL));
+    L(mc_task_unref(subseq1_1));
+    LR(mc_task_run_after(subseq1_2, subseq1, NULL));
+    L(mc_task_unref(subseq1_2));
+    LR(mc_task_run_after(subseq1_3, subseq1, NULL));
+    L(mc_task_unref(subseq1_3));
+    DELIM();
+
+    LR(mc_task_run_after(subseq2_1, subseq2, NULL));
+    L(mc_task_unref(subseq2_1));
+    LR(mc_task_run_after(subseq2_2, subseq2, NULL));
+    L(mc_task_unref(subseq2_2));
+    LR(mc_task_run_after(subseq2_3, subseq2, NULL));
+    L(mc_task_unref(subseq2_3));
+    DELIM();
+
+    LR(mc_task_run_after(tail, subseq1_1, subseq1_2, subseq1_3, subseq2_1, subseq2_2, subseq2_3, NULL));
+    L(mc_task_unref(tail));
     DELIM();
 
     L(mc_sched_run(sched));

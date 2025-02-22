@@ -32,17 +32,17 @@ void mc_sched_run(MC_Sched *sched);
 bool mc_sched_is_terminating(MC_Sched *sched);
 void mc_sched_set_suspend_interval(MC_Sched *sched, MC_Time suspend);
 
-MC_Error mc_sched_task(MC_Sched *sched, MC_Task **task, MC_Time timeout, MC_TaskStatus (*do_some)(MC_Task *this), unsigned context_size, const void *context);
-MC_Error mc_run_task(MC_Sched *sched, MC_Task **task, MC_TaskStatus (*do_some)(MC_Task *this), unsigned context_size, const void *context);
-MC_Error mc_run_task_after_arr(MC_Sched *sched, size_t tasks_cnt, MC_Task **tasks,
-    MC_Task **task, MC_TaskStatus (*do_some)(MC_Task *this), unsigned context_size, const void *context);
-MC_Error mc_run_task_afterv(MC_Task **task, MC_TaskStatus (*do_some)(MC_Task *this), unsigned context_size, const void *context, MC_Task *dependency, va_list dependencies);
-MC_Error mc_run_task_after(MC_Task **task, MC_TaskStatus (*do_some)(MC_Task *this), unsigned context_size, const void *context, MC_Task *dependency, ...);
+MC_Error mc_task_new(MC_Sched *sched, MC_Task **task, MC_TaskStatus (*do_some)(MC_Task *this), unsigned context_size, const void *context);
+MC_Error mc_task_sched(MC_Task *task, MC_Time timeout);
+MC_Error mc_task_run(MC_Task *task);
+MC_Error mc_task_run_aftern(MC_Task *task, size_t tasks_cnt, MC_Task **tasks);
+MC_Error mc_task_run_afterv(MC_Task *task, MC_Task *dependency, va_list dependencies);
+MC_Error mc_task_run_after(MC_Task *task, MC_Task *dependency, ...);
 
 MC_Error mc_task_delay(MC_Task *task, MC_Time delay);
 
 void *mc_task_data(MC_Task *task, unsigned *size);
-MC_Sched *mc_task_sched(MC_Task *task);
+MC_Sched *mc_task_get_sched(MC_Task *task);
 
 MC_Task *mc_task_ref(MC_Task *task);
 void mc_task_unref(MC_Task *task);
