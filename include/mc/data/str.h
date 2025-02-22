@@ -7,6 +7,7 @@
 #include <stdarg.h>
 #include <stddef.h>
 #include <stdint.h>
+#include <string.h>
 #include <ctype.h>
 
 typedef struct MC_Str MC_Str;
@@ -72,6 +73,10 @@ struct MC_Str{
 */
 bool mc_str_matchv(MC_Str str, const char *fmt, MC_Str *whole, va_list args);
 bool mc_str_match(MC_Str str, const char *fmt, MC_Str *whole, ...);
+
+inline MC_Str mc_strc(const char *str) {
+    return str ? MC_STR(str, str + strlen(str)) : MC_STR(NULL, NULL);
+}
 
 inline size_t mc_str_len(MC_Str str){
     return str.end - str.beg;

@@ -8,16 +8,6 @@
 #define MC_LIST_FOR(TYPE, LIST, ELEMENT) \
     for(TYPE *ELEMENT = (LIST); ELEMENT; ELEMENT = (TYPE*)ELEMENT->next)
 
-#define MC_LIST_FORS(TYPE, LIST, ELEMENT) \
-    if((LIST)) for(TYPE *ELEMENT##_prev = NULL, **ELEMENT##_location = &(LIST), *ELEMENT = *ELEMENT##_location, *__##ELEMENT##_tmp; \
-    *ELEMENT##_location; __##ELEMENT##_tmp = ELEMENT##_prev, ELEMENT##_prev = *ELEMENT##_location, \
-    ELEMENT##_location = __##ELEMENT##_tmp ? (TYPE**)&__##ELEMENT##_tmp->next->next : &__##ELEMENT##_tmp, ELEMENT = *ELEMENT##_location)
-
-#define MC_LIST_FOR_LOCATIONS(TYPE, LIST, ELEMENT) \
-    if((LIST)) for(TYPE *ELEMENT##_prev = NULL, **ELEMENT##_location = &(LIST), *__##ELEMENT##_tmp; \
-    *ELEMENT##_location; __##ELEMENT##_tmp = ELEMENT##_prev, ELEMENT##_prev = *ELEMENT##_location, \
-    ELEMENT##_location = __##ELEMENT##_tmp ? (TYPE**)&__##ELEMENT##_tmp->next->next : &__##ELEMENT##_tmp)
-
 typedef struct MC_List MC_List;
 
 struct MC_List{

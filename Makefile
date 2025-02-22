@@ -20,6 +20,7 @@ objects			+= net/endpoint.o
 objects			+= data/string.o
 objects			+= data/json.o
 objects			+= data/vector.o
+objects			+= data/hmap.o
 objects			+= data/pqueue.o
 objects			+= data/list.o
 objects			+= data/struct.o

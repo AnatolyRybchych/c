@@ -48,7 +48,7 @@ struct MC_Task{
 };
 
 struct TaskNode{
-    MC_List *next;
+    TaskNode *next;
     TaskNode *subsequent;
     TaskNode *subsequent_next;
     size_t buffer_capacity;
@@ -136,8 +136,8 @@ void mc_sched_delete(MC_Sched *sched){
 
     flush_finished_tasks(sched);
 
-    MC_LIST_FOR_LOCATIONS(TaskNode, sched->garbage, garbage){
-        free(mc_list_remove(garbage_location));
+    for(TaskNode *garbage; (garbage = mc_list_remove(&sched->garbage));){
+        free(garbage);
     }
 
     free(sched);
@@ -155,8 +155,7 @@ MC_TaskStatus mc_sched_continue(MC_Sched *sched){
 
     activate_scheduled_tasks(sched);
 
-    MC_LIST_FORS(TaskNode, sched->active, task){
-        mc_list_remove(task_location);
+    for(TaskNode *task; (task = mc_list_remove(&sched->active));){
         if(!active_task_ready(task, &sched->now)){
             mc_list_add(sched->active_back, task);
             continue;
@@ -486,26 +485,30 @@ static void activate_subsequent_tasks(MC_Sched *sched, TaskNode *task) {
 }
 
 static void flush_finished_tasks(MC_Sched *sched){
-    MC_LIST_FORS(TaskNode, sched->finished, finished){
+    for(TaskNode *finished; (finished = mc_list_remove(&sched->finished));) {
         if(finished->task.ref_count == 0){
-            mc_list_add(&sched->garbage, mc_list_remove(finished_location));
+            mc_list_add(&sched->garbage, finished);
         }
         else{
             finished->task.flags |= TASK_TODELETE;
-            mc_list_remove(finished_location);
         }
     }
 }
 
 static void reschedule_active_tasks(MC_Sched *sched){
-    MC_LIST_FORS(TaskNode, sched->active, active){
+    for(TaskNode **active_location = &sched->active; *active_location;) {
+        TaskNode *active = *active_location;
         if(active->task.flags & (TASK_DELAYED | TASK_SCHEDULED)){
             active->task.flags &= ~(TASK_DELAYED | TASK_SCHEDULED);
 
             mc_list_remove(active_location);
             if(schedule(sched, active) != MCE_OK){
                 mc_list_add(&active_location, active);
+                active_location = &active->next;
             }
+        }
+        else {
+            active_location = &active->next;
         }
     }
 }
