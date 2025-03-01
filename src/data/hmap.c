@@ -7,13 +7,6 @@
 
 #define INITIAL_CAPACITY 16
 
-struct MC_HMapBucket {
-    MC_HMapBucket *next;
-    void *value;
-    size_t key_size;
-    uint8_t key[];
-};
-
 struct MC_HMap {
     MC_Alloc *alloc;
     size_t items_count;
@@ -22,19 +15,14 @@ struct MC_HMap {
     MC_HMapBucket **buckets;
 };
 
-extern inline void **mc_hmap_get_s(MC_HMap *hmap, MC_Str key);
-extern inline void **mc_hmap_get_c(MC_HMap *hmap, const char *key);
-extern inline void *mc_hmap_get_value_s(MC_HMap *hmap, MC_Str key);
 extern inline void *mc_hmap_get_value_c(MC_HMap *hmap, const char *key);
-extern inline MC_Error mc_hmap_set_s(MC_HMap *hmap, MC_Str key, void *value);
 extern inline MC_Error mc_hmap_setc(MC_HMap *hmap, const char *key, void *value);
-extern inline MC_Error mc_hmap_dels(MC_HMap *hmap, MC_Str key);
 extern inline MC_Error mc_hmap_delc(MC_HMap *hmap, const char *key);
 
 static size_t get_hash(size_t size, const void *data);
-static MC_Error alloc_bucket(MC_Alloc *alloc, MC_HMapBucket **bucket, size_t key_size, const void *key, void *value);
-static MC_HMapBucket **get_bucket_location(MC_HMap *hmap, size_t key_size, const void *key);
-static bool is_bucket_of(MC_HMapBucket *bucket, size_t key_size, const void *key);
+static MC_Error alloc_bucket(MC_Alloc *alloc, MC_HMapBucket **bucket, MC_Str key, void *value);
+static MC_HMapBucket **get_bucket_location(MC_HMap *hmap, MC_Str key);
+static bool is_bucket_of(MC_HMapBucket *bucket, MC_Str key);
 static MC_Error hmap_new(MC_Alloc *alloc, MC_HMap **hmap, size_t capacity);
 static MC_Error rearrange(MC_HMap *hmap, size_t new_size);
 
@@ -53,28 +41,19 @@ void mc_hmap_delete(MC_HMap *hmap) {
     mc_free(hmap->alloc, hmap);
 }
 
-MC_Error mc_hmap_set(MC_HMap *hmap, size_t key_size, const void *key, void *value) {
-    if(hmap->items_count > hmap->buckets_cnt) {
-        MC_RETURN_ERROR(rearrange(hmap, hmap->items_count * 2));
+MC_Error mc_hmap_set(MC_HMap *hmap, MC_Str key, void *value) {
+    MC_HMapBucket *bucket = mc_hmap_get_or_new(hmap, key);
+    if(bucket) {
+        bucket->value = value;
+        return MCE_OK;
     }
-
-    MC_HMapBucket **bucket_location = get_bucket_location(hmap, key_size, key);
-    MC_LIST_FOR(MC_HMapBucket, *bucket_location, bucket) {
-        if(is_bucket_of(bucket, key_size, key)) {
-            bucket->value = value;
-            return MCE_OK;
-        }
+    else{
+        return MCE_OUT_OF_MEMORY;
     }
-
-    MC_HMapBucket *new_bucket;
-    MC_RETURN_ERROR(alloc_bucket(hmap->alloc, &new_bucket, key_size, key, value));
-    mc_list_add(bucket_location, new_bucket);
-    hmap->items_count++;
-    return MCE_OK;
 }
 
-MC_Error mc_hmap_del(MC_HMap *hmap, size_t key_size, const void *key) {
-    MC_HMapBucket **bucket_location = get_bucket_location(hmap, key_size, key);
+MC_Error mc_hmap_del(MC_HMap *hmap, MC_Str key) {
+    MC_HMapBucket **bucket_location = get_bucket_location(hmap, key);
     if(bucket_location == NULL) {
         return MCE_NOT_FOUND;
     }
@@ -83,21 +62,45 @@ MC_Error mc_hmap_del(MC_HMap *hmap, size_t key_size, const void *key) {
     return MCE_OK;
 }
 
-void **mc_hmap_get(MC_HMap *hmap, size_t key_size, const void *key) {
-    MC_HMapBucket **bucket_location = get_bucket_location(hmap, key_size, key);
+MC_HMapBucket *mc_hmap_get_or_new(MC_HMap *hmap, MC_Str key) {
+    MC_HMapBucket **bucket_location = get_bucket_location(hmap, key);
+    MC_LIST_FOR(MC_HMapBucket, *bucket_location, bucket) {
+        if(is_bucket_of(bucket, key)) {
+            return bucket;
+        }
+    }
+
+    if(hmap->items_count > hmap->buckets_cnt) {
+        if(rearrange(hmap, hmap->items_count * 2) != MCE_OK) {
+            return NULL;
+        }
+    }
+
+    MC_HMapBucket *new_bucket;
+    if(alloc_bucket(hmap->alloc, &new_bucket, key, NULL) != MCE_OK) {
+        return NULL;
+    }
+
+    mc_list_add(bucket_location, new_bucket);
+    hmap->items_count++;
+    return new_bucket;
+}
+
+MC_HMapBucket *mc_hmap_get(MC_HMap *hmap, MC_Str key) {
+    MC_HMapBucket **bucket_location = get_bucket_location(hmap, key);
 
     MC_LIST_FOR(MC_HMapBucket, *bucket_location, bucket) {
-        if(is_bucket_of(bucket, key_size, key)) {
-            return &bucket->value;
+        if(is_bucket_of(bucket, key)) {
+            return bucket;
         }
     }
 
     return NULL;
 }
 
-void *mc_hmap_get_value(MC_HMap *hmap, size_t key_size, const void *key) {
-    void **value_ptr = mc_hmap_get(hmap, key_size, key);
-    return value_ptr ? *value_ptr : NULL;
+void *mc_hmap_get_value(MC_HMap *hmap, MC_Str key) {
+    MC_HMapBucket *bucket = mc_hmap_get(hmap, key);
+    return bucket ? bucket->value : NULL;
 }
 
 size_t mc_hmap_size(MC_HMap *hmap) {
@@ -154,29 +157,30 @@ static size_t get_hash(size_t size, const void *data) {
     return hash;
 }
 
-static MC_Error alloc_bucket(MC_Alloc *alloc, MC_HMapBucket **bucket, size_t key_size, const void *key, void *value) {
+static MC_Error alloc_bucket(MC_Alloc *alloc, MC_HMapBucket **bucket, MC_Str key, void *value) {
     MC_HMapBucket *new;
+    size_t key_size = mc_str_len(key);
     MC_RETURN_ERROR(mc_alloc(alloc, sizeof *new + key_size, (void**)&new));
-    *new = (MC_HMapBucket) {
+    memcpy(new, &(MC_HMapBucket) {
         .key_size = key_size,
-        .value = value
-    };
+        .value = value,
+    }, sizeof *new);
 
-    memcpy(new->key, key, key_size);
+    memcpy((char*)new->key, key.beg, key_size);
     *bucket = new;
     return MCE_OK;
 }
 
-static MC_HMapBucket **get_bucket_location(MC_HMap *hmap, size_t key_size, const void *key) {
-    size_t hash = get_hash(key_size, key);
+static MC_HMapBucket **get_bucket_location(MC_HMap *hmap, MC_Str key) {
+    size_t hash = get_hash(mc_str_len(key), key.beg);
     size_t idx = hash % hmap->buckets_cnt;
 
     return &hmap->buckets[idx];
 }
 
-static bool is_bucket_of(MC_HMapBucket *bucket, size_t key_size, const void *key) {
-    return key_size == bucket->key_size
-        && memcmp(key, bucket->key, key_size) == 0;
+static bool is_bucket_of(MC_HMapBucket *bucket, MC_Str key) {
+    return mc_str_len(key) == bucket->key_size
+        && memcmp(key.beg, bucket->key, mc_str_len(key)) == 0;
 }
 
 static MC_Error hmap_new(MC_Alloc *alloc, MC_HMap **hmap, size_t capacity) {

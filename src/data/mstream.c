@@ -8,7 +8,7 @@
 
 #define BLOCK_SIZE 0x7F
 #define BLOCK(CURSOR) ((CURSOR) >> 7)
-#define SIZE_IN_BLOCKS(SIZE_IN_BYTES) (BLOCK((SIZE_IN_BYTES) + BLOCK_SIZE - 1))
+#define SIZE_IN_BLOCKS(SIZE_IN_BYTES) (BLOCK((SIZE_IN_BYTES) + BLOCK_SIZE))
 #define OFFSET_IN_BLOCK(CURSOR) ((CURSOR) & BLOCK_SIZE)
 #define SIZE_TO_BLOCK_END(CURSOR) (BLOCK_SIZE - OFFSET_IN_BLOCK(CURSOR))
 
@@ -60,6 +60,13 @@ size_t mc_mstream_size(MC_Stream *mstream){
 
     Ctx *ctx = mc_ctx(mstream);
     return ctx->size;
+}
+
+void mc_mstream_truncate(MC_Stream *mstream) {
+    if(mstream != NULL){
+        Ctx *ctx = mc_ctx(mstream);
+        ctx->size = ctx->cursor;
+    }
 }
 
 static MC_Error read(void *_ctx, size_t size, void *data, size_t *ret_read){
@@ -204,7 +211,7 @@ static MC_Error alloc_more_blocks(Ctx *ctx, size_t min){
     mc_list_add(&ctx->g, buffer);
 
     if(ctx->blocks){
-        memcpy(new_blocks, ctx->blocks, ctx->blocks_cnt);
+        memcpy(new_blocks, ctx->blocks, sizeof(void*[ctx->blocks_cnt]));
         mc_free(ctx->alloc, ctx->blocks);
     }
 

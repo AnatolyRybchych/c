@@ -192,7 +192,30 @@ MC_Error mc_socket_accept(MC_Stream *socket, MC_Stream **client) {
         .remote_endpoint = ctx->remote_endpoint,
     };
 
-    return mc_open(NULL, client, &vtbl, sizeof client_ctx, &client_ctx);
+    int prev_flags = fcntl(client_ctx.fd, F_GETFL, 0);
+    if (prev_flags == -1) {
+        close(client_ctx.fd);
+        return mc_error_from_errno(errno);
+    }
+
+    int fd_flags = 0;
+    if (ctx->flags & FLAG_ASYNC) {
+        client_ctx.flags |= FLAG_ASYNC;
+        fd_flags |= O_NONBLOCK;
+    }
+
+    if (fcntl(client_ctx.fd, F_SETFL, prev_flags | fd_flags) == -1) {
+        close(client_ctx.fd);
+        return mc_error_from_errno(errno);
+    }
+
+    MC_Error error = mc_open(NULL, client, &vtbl, sizeof client_ctx, &client_ctx);
+    if(error) {
+        close(client_ctx.fd);
+        return error;
+    }
+
+    return MCE_OK;
 }
 
 static MC_Error read_endpoint(const MC_Endpoint *endpoint,
