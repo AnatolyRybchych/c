@@ -105,7 +105,7 @@ MC_Error mc_write_async(MC_Stream *stream, size_t size, const void *data, size_t
 
 MC_Error mc_write(MC_Stream *stream, size_t size, const void *data, size_t *ret_written){
     if (stream == NULL) {
-        *ret_written = size;
+        MC_OPTIONAL_SET(ret_written, size);
         return MCE_OK;
     }
 

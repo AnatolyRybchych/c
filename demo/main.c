@@ -30,13 +30,14 @@ int main(){
     MC_REQUIRE(mc_http_reader_new(NULL, &reader, client));
 
     const MC_HttpMessage *msg;
-    while (MC_REQUIRE(mc_http_reader_read(reader, &msg)) == MCE_AGAIN) mc_sleep(&(MC_Time){.nsec = 1000000});
+    while (MC_REQUIRE(mc_http_reader_read(reader, &msg, MC_STDOUT)) == MCE_AGAIN) mc_sleep(&(MC_Time){.nsec = 1000000});
 
     MC_HttpComposer *composer;
     MC_REQUIRE(mc_http_composer_new(NULL, &composer));
     MC_REQUIRE(mc_http_composer_begin_response(composer));
     MC_REQUIRE(mc_http_composer_set_version(composer, (MC_HttpVersion){.major = 1, .minor = 1}));
     MC_REQUIRE(mc_http_composer_get_message(composer, &msg));
+
 
     MC_HttpWriter *writer;
     MC_REQUIRE(mc_http_writer_new(NULL, &writer));

@@ -7,13 +7,19 @@
 #include <mc/data/mstream.h>
 #include <mc/data/encoding/url.h>
 #include <mc/data/list.h>
+#include <mc/util/util.h>
 
 typedef unsigned ReaderState;
 enum ReaderState {
-    READER_FIRST_LINE,
-    READER_HEADER_LINE,
-    READER_DONE,
-    READER_ERROR,
+    READERF_INCOMPLETE      = 1 << 7,
+
+    READER_ERROR            = 0,
+    READER_BEGIN            = 1,
+    READER_DONE             = 2,
+    READER_FIRST_LINE       = 3 | READERF_INCOMPLETE,
+    READER_HEADER_LINE      = 4 | READERF_INCOMPLETE,
+    READER_BODY             = 5 | READERF_INCOMPLETE,
+    READER_BODY_SIZED       = 6 | READERF_INCOMPLETE,
 };
 
 typedef unsigned MC_HttpMessageType;
@@ -61,6 +67,8 @@ struct MC_HttpReader {
     MC_Arena *msg_arena;
     MC_Stream *line;
     MC_HttpMessage *message;
+    size_t body_size;
+    size_t body_remaining;
 };
 
 struct MC_HttpWriter {
@@ -69,12 +77,16 @@ struct MC_HttpWriter {
     const MC_HttpMessage *msg;
 };
 
+static MC_Error read_sized(MC_HttpReader *reader, MC_Stream *dst, size_t size, size_t *remaining);
 static MC_Error read_line(MC_HttpReader *reader, size_t max_size);
 static MC_Error reset_line(MC_HttpReader *reader);
+static MC_Error reader_begin(MC_HttpReader *reader);
 static MC_Error read_first_line(MC_HttpReader *reader);
 static MC_Error read_header_line(MC_HttpReader *reader);
+static MC_Error read_body_sized(MC_HttpReader *reader, MC_Stream *body);
+static MC_Error read_body(MC_HttpReader *reader, MC_Stream *body);
 static MC_Error parse_http_version(MC_Str src, MC_HttpVersion *version);
-static MC_Error reader_read(MC_HttpReader *reader);
+static MC_Error reader_read(MC_HttpReader *reader, MC_Stream *body);
 
 MC_Error mc_http_reader_new(MC_Alloc *alloc, MC_HttpReader **out_reader, MC_Stream *source) {
     *out_reader = NULL;
@@ -93,7 +105,7 @@ MC_Error mc_http_reader_new(MC_Alloc *alloc, MC_HttpReader **out_reader, MC_Stre
         .alloc = alloc,
         .msg_arena = msg_arena,
         .source = source,
-        .state = READER_FIRST_LINE,
+        .state = READER_BEGIN,
     };
     reader->msg_alloc = mc_arena_allocator(reader->msg_arena);
 
@@ -164,9 +176,8 @@ MC_Error mc_http_writer_write(MC_HttpWriter *writer) {
 
     MC_LIST_FOR(MC_HttpHeader, (void*)writer->msg->headers, hdr) {
         MC_Str key = hdr->key;
-        MC_Str value = mc_string_str(hdr->value);
         MC_RETURN_ERROR(mc_fmt(writer->dst, "%.*s: %.*s\r\n",
-            mc_str_len(key), key.beg, mc_str_len(value),value.beg));
+            mc_str_len(key), key.beg, mc_str_len(hdr->value), hdr->value.beg));
     }
 
     MC_RETURN_ERROR(mc_fmt(writer->dst, "\r\n"));
@@ -253,9 +264,9 @@ const char *mc_http_code_status(unsigned code) {
     }
 }
 
-MC_Error mc_http_reader_read(MC_HttpReader *reader, const MC_HttpMessage **message) {
+MC_Error mc_http_reader_read(MC_HttpReader *reader, const MC_HttpMessage **message, MC_Stream *body) {
     while (reader->state != READER_DONE) {
-        MC_Error status = reader_read(reader);
+        MC_Error status = reader_read(reader, body);
         if(status != MCE_OK) {
             if(status != MCE_AGAIN) {
                 reader->state = READER_ERROR;
@@ -265,15 +276,19 @@ MC_Error mc_http_reader_read(MC_HttpReader *reader, const MC_HttpMessage **messa
         }
     }
 
-    *message = reader->message;
+    MC_OPTIONAL_SET(message, reader->message);
     return MCE_OK;
 }
 
 MC_Error mc_http_reader_finish(MC_HttpReader *reader) {
+    while(reader->state & READERF_INCOMPLETE ) {
+        MC_RETURN_ERROR(mc_http_reader_read(reader, NULL, NULL));
+    }
+
     mc_arena_reset(reader->msg_arena);
     MC_RETURN_INVALID(reader->state == READER_ERROR);
 
-    reader->state = READER_FIRST_LINE;
+    reader->state = READER_BEGIN;
     reader->message = NULL;
     reader->line = NULL;
     return MCE_OK;
@@ -388,7 +403,7 @@ MC_Error mc_http_composer_set_headers(MC_HttpComposer *composer, const MC_HttpHe
     MC_RETURN_INVALID(composer->message == NULL);
 
     MC_LIST_FOR(MC_HttpHeader, (void*)headers, hdr) {
-        MC_RETURN_ERROR(mc_http_composer_set_header(composer, hdr->key, mc_string_str(hdr->value)));
+        MC_RETURN_ERROR(mc_http_composer_set_header(composer, hdr->key, hdr->value));
     }
 
     return MCE_OK;
@@ -420,7 +435,7 @@ MC_Error mc_http_composer_set_header(MC_HttpComposer *composer, MC_Str key, MC_S
 
     *new_hdr = (MC_HttpHeader) {
         .key = MC_STR(bucket->key, bucket->key + bucket->key_size),
-        .value = value,
+        .value = mc_string_str(value),
         .next = NULL
     };
 
@@ -485,15 +500,30 @@ MC_Error mc_http_get_header(const MC_HttpMessage *msg, MC_Str key, MC_Str *value
         return MCE_NOT_FOUND;
     }
 
-    *value = mc_string_str(hdr->value);
+    *value = hdr->value;
+    return MCE_OK;
+}
+
+static MC_Error read_sized(MC_HttpReader *reader, MC_Stream *dst, size_t size, size_t *remaining) {
+    *remaining = size;
+    while (*remaining) {
+        if(reader->bufsz) {
+            size_t to_write = MIN(*remaining, reader->bufsz);
+            size_t cur_wrote;
+            MC_Error error = mc_write(dst, to_write, reader->buf, &cur_wrote);
+            *remaining -= cur_wrote;
+            MC_RETURN_ERROR(error);
+        }
+        else {
+            size_t to_read = MIN(*remaining, sizeof reader->buf);
+            MC_RETURN_ERROR(mc_read_async(reader->source, to_read, reader->buf, &reader->bufsz));
+        }
+    }
+
     return MCE_OK;
 }
 
 static MC_Error read_line(MC_HttpReader *reader, size_t max_size) {
-    if(reader->line == NULL) {
-        MC_RETURN_ERROR(mc_mstream(reader->msg_alloc, &reader->line));
-    }
-
     while (true) {
         if(reader->bufsz) {
             MC_Str buf = MC_STR(reader->buf, reader->buf + reader->bufsz);
@@ -527,10 +557,16 @@ static MC_Error reset_line(MC_HttpReader *reader) {
     return MCE_OK;
 }
 
-static MC_Error read_first_line(MC_HttpReader *reader) {
+static MC_Error reader_begin(MC_HttpReader *reader) {
     MC_RETURN_INVALID(reader->message != NULL);
-
     MC_RETURN_ERROR(mc_mstream(reader->msg_alloc, &reader->line));
+
+    reader->state = READER_FIRST_LINE;
+
+    return MCE_OK;
+}
+
+static MC_Error read_first_line(MC_HttpReader *reader) {
     MC_RETURN_ERROR(read_line(reader, ~0));
 
     size_t bufsz = 0;
@@ -639,7 +675,7 @@ static MC_Error read_header_line(MC_HttpReader *reader) {
 
     size_t line_size = mc_mstream_size(reader->line);
     if(line_size == 0) {
-        reader->state = READER_DONE;
+        reader->state = READER_BODY;
         return reset_line(reader);
     }
 
@@ -653,12 +689,12 @@ static MC_Error read_header_line(MC_HttpReader *reader) {
         if(!mc_str_empty(delim)) {
             MC_RETURN_ERROR(mc_get_cursor(reader->line, &key_size));
             key_size -= chunk.end - delim.beg;
-            MC_RETURN_ERROR(mc_set_cursor(reader->line, 0, MC_CURSOR_FROM_BEG));
             break;
         }
     }
 
     MC_RETURN_INVALID(key_size > sizeof buf);
+    MC_RETURN_ERROR(mc_set_cursor(reader->line, 0, MC_CURSOR_FROM_BEG));
     MC_RETURN_ERROR(mc_read_async(reader->line, key_size, buf, &bufsz));
 
     MC_Str key = MC_STR(buf, buf + bufsz);
@@ -680,7 +716,7 @@ static MC_Error read_header_line(MC_HttpReader *reader) {
     MC_String *value;
     size_t value_size = line_size - key_size - 1;
     MC_RETURN_ERROR(mc_stringn(reader->msg_alloc, &value, value_size));
-    MC_RETURN_ERROR(mc_set_cursor(reader->line, key_size, MC_CURSOR_FROM_BEG));
+    MC_RETURN_ERROR(mc_set_cursor(reader->line, key_size + 1, MC_CURSOR_FROM_BEG));
     value->len = 0;
 
     MC_RETURN_ERROR(mc_read_async(reader->line, sizeof buf, buf, &bufsz));
@@ -696,12 +732,12 @@ static MC_Error read_header_line(MC_HttpReader *reader) {
     }
 
     value->data[value->len] = '\0';
-    bucket->value = value;
 
     *hdr = (MC_HttpHeader) {
         .key = MC_STR(bucket->key, bucket->key + bucket->key_size),
-        .value = value
+        .value = mc_string_str(value)
     };
+    bucket->value = hdr;
 
     if(reader->message->headers == NULL) {
         mc_list_add(&reader->message->headers, hdr);
@@ -714,10 +750,39 @@ static MC_Error read_header_line(MC_HttpReader *reader) {
     return reset_line(reader);
 }
 
-static MC_Error parse_http_version(MC_Str src, MC_HttpVersion *version) {
-    MC_Str whole, major_str, minor_str;
-    MC_RETURN_INVALID(!mc_str_match(src, "^HTTP/(%d+)%.(%d+)", &whole, &major_str, &minor_str));
-    MC_RETURN_INVALID(mc_str_len(whole) != mc_str_len(src));
+static MC_Error read_body(MC_HttpReader *reader, MC_Stream *body) {
+    (void)body; // UNUSED
+
+    MC_Str content_length;
+    if(mc_http_get_header(reader->message, MC_STRC("Content-Length"), &content_length) == MCE_OK) {
+        uint64_t body_size;
+        mc_str_toull(content_length, &body_size);
+
+        reader->body_size = body_size;
+        reader->body_remaining = body_size;
+        mc_fmt(MC_STDOUT, "len: %.*s; %zu\n", mc_str_len(content_length), content_length.beg, body_size);
+        reader->state = READER_BODY_SIZED;
+    }
+    else{
+        reader->state = READER_DONE;
+    }
+
+    return MCE_OK;
+}
+
+static MC_Error read_body_sized(MC_HttpReader *reader, MC_Stream *body) {
+    while (reader->body_remaining) {
+        MC_RETURN_ERROR(read_sized(reader, body, reader->body_remaining, &reader->body_remaining));
+    }
+
+    reader->state = READER_DONE;
+    return MCE_OK;
+}
+
+static MC_Error parse_http_version(MC_Str version_str, MC_HttpVersion *version) {
+    MC_Str matched, major_str, minor_str;
+    MC_RETURN_INVALID(!mc_str_match(version_str, "^HTTP/(%d+)%.(%d+)", &matched, &major_str, &minor_str));
+    MC_RETURN_INVALID(mc_str_len(matched) != mc_str_len(version_str));
 
     uint64_t major, minor;
     mc_str_toull(major_str, &major);
@@ -727,10 +792,13 @@ static MC_Error parse_http_version(MC_Str src, MC_HttpVersion *version) {
     return MCE_OK;
 }
 
-static MC_Error reader_read(MC_HttpReader *reader) {
+static MC_Error reader_read(MC_HttpReader *reader, MC_Stream *body) {
     switch (reader->state) {
+    case READER_BEGIN: return reader_begin(reader);
     case READER_FIRST_LINE: return read_first_line(reader);
     case READER_HEADER_LINE: return read_header_line(reader);
+    case READER_BODY: return read_body(reader, body);
+    case READER_BODY_SIZED: return read_body_sized(reader, body);
     default: return MCE_INVALID_INPUT;
     }
 }
