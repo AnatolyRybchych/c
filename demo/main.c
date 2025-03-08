@@ -7,7 +7,8 @@
 #include <mc/net/endpoint.h>
 #include <mc/os/socket.h>
 
-#include <mc/net/proto/http.h>
+#include <mc/net/proto/http/reader.h>
+#include <mc/net/proto/http/writer.h>
 #include <mc/data/list.h>
 
 int main(){
@@ -29,15 +30,14 @@ int main(){
     MC_HttpReader *reader;
     MC_REQUIRE(mc_http_reader_new(NULL, &reader, client));
 
-    const MC_HttpMessage *msg;
-    while (MC_REQUIRE(mc_http_reader_read(reader, &msg, MC_STDOUT)) == MCE_AGAIN) mc_sleep(&(MC_Time){.nsec = 1000000});
+    MC_HttpMessage *msg;
+    MC_REQUIRE(mc_http_message_create(NULL, &msg));
+    while (MC_REQUIRE(mc_http_reader_read(reader, msg, MC_STDOUT)) == MCE_AGAIN) mc_sleep(&(MC_Time){.nsec = 1000000});
 
-    MC_HttpComposer *composer;
-    MC_REQUIRE(mc_http_composer_new(NULL, &composer));
-    MC_REQUIRE(mc_http_composer_begin_response(composer));
-    MC_REQUIRE(mc_http_composer_set_version(composer, (MC_HttpVersion){.major = 1, .minor = 1}));
-    MC_REQUIRE(mc_http_composer_get_message(composer, &msg));
+    mc_http_message_delete(msg);
+    MC_REQUIRE(mc_http_message_create(NULL, &msg));
 
+    mc_http_set_response(msg, 200);
 
     MC_HttpWriter *writer;
     MC_REQUIRE(mc_http_writer_new(NULL, &writer));
