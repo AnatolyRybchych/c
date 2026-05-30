@@ -25,6 +25,8 @@ static void destroy(struct MC_TargetWM *wm);
 static MC_Error init_window(struct MC_TargetWM *wm, struct MC_TargetWMWindow *window);
 static void destroy_window(struct MC_TargetWM *wm, struct MC_TargetWMWindow *window);
 static MC_Error create_window_graphic(struct MC_TargetWM *wm, struct MC_TargetWMWindow *window, struct MC_Graphics **g);
+static MC_Error set_window_title(struct MC_TargetWM *wm, struct MC_TargetWMWindow *window, MC_Str title);
+static MC_Error set_window_size(struct MC_TargetWM *wm, struct MC_TargetWMWindow *window, MC_Size2U size);
 static bool poll_event(struct MC_TargetWM *wm, struct MC_TargetWMEvent *event);
 static unsigned translate_event(struct MC_TargetWM *wm, const struct MC_TargetWMEvent *event, MC_TargetIndication indications[MC_WM_MAX_INDICATIONS_PER_EVENT]);
 
@@ -45,6 +47,9 @@ static MC_WMVtab vtab = {
     .init_window = init_window,
     .destroy_window = destroy_window,
     .create_window_graphic = create_window_graphic,
+
+    .set_window_title = set_window_title,
+    .set_window_size = set_window_size,
 
     .poll_event = poll_event,
     .translate_event = translate_event,
@@ -104,6 +109,21 @@ static void destroy_window(struct MC_TargetWM *wm, struct MC_TargetWMWindow *win
 
 static MC_Error create_window_graphic(struct MC_TargetWM *wm, struct MC_TargetWMWindow *window, struct MC_Graphics **g){
     return mc_xlib_graphics_init(g, wm->dpy, window->window_id);
+}
+
+static MC_Error set_window_title(struct MC_TargetWM *wm, struct MC_TargetWMWindow *window, MC_Str title){
+    char buffer[256];
+    size_t len = MIN(mc_str_len(title), sizeof(buffer) - 1);
+    memcpy(buffer, title.beg, len);
+    buffer[len] = '\0';
+
+    XStoreName(wm->dpy, window->window_id, buffer);
+    return MCE_OK;
+}
+
+static MC_Error set_window_size(struct MC_TargetWM *wm, struct MC_TargetWMWindow *window, MC_Size2U size){
+    XResizeWindow(wm->dpy, window->window_id, size.width, size.height);
+    return MCE_OK;
 }
 
 static bool poll_event(struct MC_TargetWM *wm, struct MC_TargetWMEvent *event){
