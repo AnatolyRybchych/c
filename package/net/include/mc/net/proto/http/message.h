@@ -10,15 +10,15 @@
 #include <stdbool.h>
 
 #define MC_ITER_HTTP_METHODS(CB, ...) \
-    CB(GET, ##__VA_ARGS__) \
-    CB(HEAD, ##__VA_ARGS__) \
-    CB(POST, ##__VA_ARGS__) \
-    CB(PUT, ##__VA_ARGS__) \
-    CB(DELETE, ##__VA_ARGS__) \
-    CB(CONNECT, ##__VA_ARGS__) \
-    CB(OPTIONS, ##__VA_ARGS__) \
-    CB(TRACE, ##__VA_ARGS__) \
-    CB(PATCH, ##__VA_ARGS__) \
+    CB(GET __VA_OPT__(,) __VA_ARGS__) \
+    CB(HEAD __VA_OPT__(,) __VA_ARGS__) \
+    CB(POST __VA_OPT__(,) __VA_ARGS__) \
+    CB(PUT __VA_OPT__(,) __VA_ARGS__) \
+    CB(DELETE __VA_OPT__(,) __VA_ARGS__) \
+    CB(CONNECT __VA_OPT__(,) __VA_ARGS__) \
+    CB(OPTIONS __VA_OPT__(,) __VA_ARGS__) \
+    CB(TRACE __VA_OPT__(,) __VA_ARGS__) \
+    CB(PATCH __VA_OPT__(,) __VA_ARGS__) \
 
 typedef unsigned MC_HttpMethod;
 enum MC_HttpMethod{

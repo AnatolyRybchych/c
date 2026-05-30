@@ -5,11 +5,11 @@
 #include <mc/net/address.h>
 
 #define MC_ITER_ENDPOINT_TYPE(CB, ...) \
-    CB(ETHERNET, ##__VA_ARGS__) \
-    CB(IPV4, ##__VA_ARGS__) \
-    CB(IPV6, ##__VA_ARGS__) \
-    CB(TCP, ##__VA_ARGS__) \
-    CB(UDP, ##__VA_ARGS__) \
+    CB(ETHERNET __VA_OPT__(,) __VA_ARGS__) \
+    CB(IPV4 __VA_OPT__(,) __VA_ARGS__) \
+    CB(IPV6 __VA_OPT__(,) __VA_ARGS__) \
+    CB(TCP __VA_OPT__(,) __VA_ARGS__) \
+    CB(UDP __VA_OPT__(,) __VA_ARGS__) \
 
 typedef unsigned MC_EndpointType;
 enum MC_EndpointType{

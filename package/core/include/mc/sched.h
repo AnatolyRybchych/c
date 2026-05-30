@@ -10,9 +10,9 @@
 #include <stdarg.h>
 
 #define MC_ITER_TASK_STATUS(CB, ...) \
-    CB(DONE, ##__VA_ARGS__) \
-    CB(SUSPEND, ##__VA_ARGS__) \
-    CB(CONTINUE, ##__VA_ARGS__) \
+    CB(DONE __VA_OPT__(,) __VA_ARGS__) \
+    CB(SUSPEND __VA_OPT__(,) __VA_ARGS__) \
+    CB(CONTINUE __VA_OPT__(,) __VA_ARGS__) \
 
 typedef struct MC_Sched MC_Sched;
 typedef struct MC_Task MC_Task;

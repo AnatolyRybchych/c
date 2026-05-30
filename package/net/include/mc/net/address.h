@@ -10,9 +10,9 @@
 #include <stdint.h>
 
 #define MC_ITER_ADDRESS_TYPE(CB, ...) \
-    CB(ETHERNET, ##__VA_ARGS__) \
-    CB(IPV4, ##__VA_ARGS__) \
-    CB(IPV6, ##__VA_ARGS__) \
+    CB(ETHERNET __VA_OPT__(,) __VA_ARGS__) \
+    CB(IPV4 __VA_OPT__(,) __VA_ARGS__) \
+    CB(IPV6 __VA_OPT__(,) __VA_ARGS__) \
 
 typedef unsigned MC_AddressType;
 enum MC_AddressType{
