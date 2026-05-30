@@ -74,6 +74,8 @@ MC_HMapBucket *mc_hmap_get_or_new(MC_HMap *hmap, MC_Str key) {
         if(rearrange(hmap, hmap->items_count * 2) != MCE_OK) {
             return NULL;
         }
+
+        bucket_location = get_bucket_location(hmap, key);
     }
 
     MC_HMapBucket *new_bucket;

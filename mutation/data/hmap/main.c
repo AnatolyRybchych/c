@@ -32,7 +32,7 @@ int main(){
 
     for(int i = 0; i < 1000; i++) {
         char key[128];
-        char *value = malloc(sizeof(128));
+        char *value = malloc(sizeof(char[128]));
         sprintf(key, "key%d", i);
         sprintf(value, "value%d", i);
 
