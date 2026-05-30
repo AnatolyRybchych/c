@@ -17,25 +17,16 @@ CARGS   := $(INCLUDE) -ggdb -Wall -Wextra -Werror -pedantic
 LINK     := os net core
 LDARGS   := -L$(STAGE)/lib $(addprefix -l,$(LINK))
 
-DEMO_BIN := bin/demo
-DEMO_LDARGS := $(LDARGS) -lX11 -lm
-
 MUTATION_TEST_SRC := $(shell find mutation -type f -name main.c | sed s!/main.c!!g)
 
-all: libs demo mutation
+all: libs demos mutation
 
 # build each package and stage it into $(STAGE); deps are already staged
 libs:
 	$(foreach p,$(PKGS),$(MAKE) -C $(PKG_DIR)/$(p) install PREFIX= DESTDIR=$(STAGE) &&) true
 
-demo: libs $(DEMO_BIN)
-
-$(DEMO_BIN): demo/main.c libs
-	@mkdir -p $(dir $@)
-	$(CC) $(CARGS) -o $@ $< $(DEMO_LDARGS)
-
-run: demo
-	$(DEMO_BIN)
+demos: libs
+	$(MAKE) -C demo PREFIX= DESTDIR=$(STAGE)
 
 mutation: libs
 	$(foreach test,$(MUTATION_TEST_SRC), \
@@ -49,6 +40,7 @@ install:
 
 clean:
 	$(foreach p,$(PKGS),$(MAKE) -C $(PKG_DIR)/$(p) clean &&) true
-	rm -rf build bin
+	$(MAKE) -C demo clean
+	rm -rf build
 
-.PHONY: all libs demo run mutation install clean
+.PHONY: all libs demos mutation install clean
