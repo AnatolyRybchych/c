@@ -13,6 +13,7 @@
     MC_EVENT(WINDOW_MOVED,) \
     MC_EVENT(WINDOW_REDRAW_REQUESTED,) \
     MC_EVENT(WINDOW_CLOSE_REQUESTED,) \
+    MC_EVENT(WINDOW_STATE_CHANGED,) \
     MC_EVENT(FOCUS_GAINED,) \
     MC_EVENT(FOCUS_LOST,) \
     MC_EVENT(MOUSE_MOVED,) \
@@ -24,6 +25,8 @@
     MC_EVENT(MOUSE_WHEEL,) \
     MC_EVENT(KEY_DOWN,                  USE_ALL) \
     MC_EVENT(KEY_UP,                    USE_ALL) \
+    MC_EVENT(TEXT_INPUT,                USE_ALL) \
+    MC_EVENT(PASTE_TEXT,                USE_ALL) \
 
 typedef unsigned MC_WMEventType;
 enum MC_WMEventType{
@@ -65,6 +68,11 @@ struct MC_WMEvent{
         struct MC_WME_RedrawRequest{
             MC_WMWindow *window;
         } redraw_requested;
+
+        struct MC_WME_WindowStateChanged{
+            MC_WMWindow *window;
+            MC_WMWindowState state;
+        } window_state_changed;
 
         struct MC_WME_WindowCloseRequest{
             MC_WMWindow *window;
@@ -123,6 +131,16 @@ struct MC_WMEvent{
             struct MC_WMWindow *window;
             MC_Key key;
         } key_up;
+
+        struct MC_WME_TextInput{
+            struct MC_WMWindow *window;
+            char utf8[MC_WM_TEXT_INPUT_CAP];
+        } text_input;
+
+        struct MC_WME_PasteText{
+            struct MC_WMWindow *window;
+            MC_Str text;
+        } paste_text;
     } as;
 };
 

@@ -4,12 +4,19 @@
 #include <mc/os/file.h>
 
 #include <X11/keysym.h>
+#include <X11/Xatom.h>
+#include <X11/Xutil.h>
+
+#include <mc/data/alloc.h>
 
 #define LOG(FMT, ...) mc_fmt(wm->log, "[WM][XLIB] " FMT "\n", ##__VA_ARGS__)
+
+static MC_Stream *xlib_error_log;
 
 struct MC_TargetWM{
     MC_Stream *log;
     Display *dpy;
+    MC_Alloc *arena;
 
     Atom wm_protocols;
     Atom wm_delete_window;
@@ -17,6 +24,11 @@ struct MC_TargetWM{
     Atom net_wm_state_fullscreen;
     Atom net_wm_state_maximized_horz;
     Atom net_wm_state_maximized_vert;
+    Atom net_wm_state_hidden;
+
+    Atom clipboard;
+    Atom utf8_string;
+    Atom selection_property;
 };
 
 struct MC_TargetWMWindow{
@@ -27,7 +39,7 @@ struct MC_TargetWMEvent{
     XEvent event;
 };
 
-static MC_Error init(struct MC_TargetWM *wm, MC_Stream *log);
+static MC_Error init(struct MC_TargetWM *wm, MC_Stream *log, MC_Alloc *arena);
 static void destroy(struct MC_TargetWM *wm);
 static MC_Error init_window(struct MC_TargetWM *wm, struct MC_TargetWMWindow *window);
 static void destroy_window(struct MC_TargetWM *wm, struct MC_TargetWMWindow *window);
@@ -35,6 +47,7 @@ static MC_Error create_window_graphic(struct MC_TargetWM *wm, struct MC_TargetWM
 static MC_Error set_window_title(struct MC_TargetWM *wm, struct MC_TargetWMWindow *window, MC_Str title);
 static MC_Error set_window_size(struct MC_TargetWM *wm, struct MC_TargetWMWindow *window, MC_Size2U size);
 static MC_Error set_window_state(struct MC_TargetWM *wm, struct MC_TargetWMWindow *window, MC_WMWindowState state);
+static MC_WMWindowState read_window_state(struct MC_TargetWM *wm, Window win);
 static bool poll_event(struct MC_TargetWM *wm, struct MC_TargetWMEvent *event);
 static unsigned translate_event(struct MC_TargetWM *wm, const struct MC_TargetWMEvent *event, MC_TargetIndication indications[MC_WM_MAX_INDICATIONS_PER_EVENT]);
 
@@ -74,8 +87,25 @@ Window mc_wm_xlib_window_get_xid(MC_TargetWMWindow *window){
     return window->window_id;
 }
 
-static MC_Error init(struct MC_TargetWM *wm, MC_Stream *log){
+static int handle_x_error(Display *dpy, XErrorEvent *err){
+    char text[256];
+    XGetErrorText(dpy, err->error_code, text, sizeof(text));
+
+    if(xlib_error_log){
+        mc_fmt(xlib_error_log, "[WM][XLIB] X error: %s (request %u.%u, resource 0x%lx)\n",
+            text, (unsigned)err->request_code, (unsigned)err->minor_code,
+            (unsigned long)err->resourceid);
+    }
+
+    return 0;
+}
+
+static MC_Error init(struct MC_TargetWM *wm, MC_Stream *log, MC_Alloc *arena){
     wm->log = log;
+    wm->arena = arena;
+
+    xlib_error_log = log;
+    XSetErrorHandler(handle_x_error);
 
     wm->dpy = XOpenDisplay(NULL);
     if(wm->dpy == NULL){
@@ -89,6 +119,11 @@ static MC_Error init(struct MC_TargetWM *wm, MC_Stream *log){
     wm->net_wm_state_fullscreen     = XInternAtom(wm->dpy, "_NET_WM_STATE_FULLSCREEN", False);
     wm->net_wm_state_maximized_horz = XInternAtom(wm->dpy, "_NET_WM_STATE_MAXIMIZED_HORZ", False);
     wm->net_wm_state_maximized_vert = XInternAtom(wm->dpy, "_NET_WM_STATE_MAXIMIZED_VERT", False);
+    wm->net_wm_state_hidden         = XInternAtom(wm->dpy, "_NET_WM_STATE_HIDDEN", False);
+
+    wm->clipboard           = XInternAtom(wm->dpy, "CLIPBOARD", False);
+    wm->utf8_string         = XInternAtom(wm->dpy, "UTF8_STRING", False);
+    wm->selection_property  = XInternAtom(wm->dpy, "MC_SELECTION", False);
 
     return MCE_OK;
 }
@@ -184,11 +219,63 @@ static MC_Error set_window_state(struct MC_TargetWM *wm, struct MC_TargetWMWindo
         net_wm_state(wm, win, NET_WM_STATE_ADD, wm->net_wm_state_fullscreen, 0);
         break;
     default:
+        LOG("set_window_state: unsupported state %u", (unsigned)state);
         return MCE_INVALID_INPUT;
     }
 
     XFlush(wm->dpy);
     return MCE_OK;
+}
+
+static MC_WMWindowState read_window_state(struct MC_TargetWM *wm, Window win){
+    Atom type;
+    int format;
+    unsigned long nitems;
+    unsigned long remaining;
+    unsigned char *bytes = NULL;
+
+    if(XGetWindowProperty(wm->dpy, win, wm->net_wm_state, 0, 32, False,
+        XA_ATOM, &type, &format, &nitems, &remaining, &bytes) != Success || bytes == NULL){
+        LOG("read_window_state: could not read _NET_WM_STATE");
+        return MC_WM_WINDOW_STATE_NORMAL;
+    }
+
+    Atom *atoms = (Atom*)bytes;
+    bool fullscreen = false;
+    bool hidden = false;
+    bool maximized_horz = false;
+    bool maximized_vert = false;
+
+    for(unsigned long i = 0; i < nitems; i++){
+        if(atoms[i] == wm->net_wm_state_fullscreen){
+            fullscreen = true;
+        }
+        else if(atoms[i] == wm->net_wm_state_hidden){
+            hidden = true;
+        }
+        else if(atoms[i] == wm->net_wm_state_maximized_horz){
+            maximized_horz = true;
+        }
+        else if(atoms[i] == wm->net_wm_state_maximized_vert){
+            maximized_vert = true;
+        }
+    }
+
+    XFree(bytes);
+
+    if(fullscreen){
+        return MC_WM_WINDOW_STATE_FULLSCREEN;
+    }
+
+    if(hidden){
+        return MC_WM_WINDOW_STATE_MINIMIZED;
+    }
+
+    if(maximized_horz && maximized_vert){
+        return MC_WM_WINDOW_STATE_MAXIMIZED;
+    }
+
+    return MC_WM_WINDOW_STATE_NORMAL;
 }
 
 static bool poll_event(struct MC_TargetWM *wm, struct MC_TargetWMEvent *event){
@@ -238,6 +325,11 @@ static unsigned translate_event(struct MC_TargetWM *wm, const struct MC_TargetWM
             }
         };
 
+        if(e->xbutton.button == Button2){
+            XConvertSelection(wm->dpy, XA_PRIMARY, wm->utf8_string,
+                wm->selection_property, e->xbutton.window, e->xbutton.time);
+        }
+
         return 1;
     case ButtonRelease:
         indications[0] = (MC_TargetIndication){
@@ -285,6 +377,20 @@ static unsigned translate_event(struct MC_TargetWM *wm, const struct MC_TargetWM
         };
 
         return 1;
+    case PropertyNotify:
+        if(e->xproperty.atom == wm->net_wm_state){
+            indications[0] = (MC_TargetIndication){
+                .type = MC_WMIND_WINDOW_STATE_CHANGED,
+                .as.window_state_changed = {
+                    .window = get_window(wm, e->xany.window),
+                    .state = read_window_state(wm, e->xproperty.window),
+                }
+            };
+
+            return 1;
+        }
+
+        return 0;
     case ClientMessage:
         if((Atom)e->xclient.message_type == wm->wm_protocols
             && (Atom)e->xclient.data.l[0] == wm->wm_delete_window){
@@ -327,15 +433,96 @@ static unsigned translate_event(struct MC_TargetWM *wm, const struct MC_TargetWM
         };
 
         return 1;
-    case KeyPress:
+    case SelectionNotify: {
+        Atom property = e->xselection.property;
+        if(property == None){
+            LOG("paste: selection conversion failed (no owner or unsupported target)");
+            return 0;
+        }
+
+        Window requestor = e->xselection.requestor;
+
+        Atom type;
+        int format;
+        unsigned long nitems;
+        unsigned long remaining;
+        unsigned char *bytes = NULL;
+
+        int status = XGetWindowProperty(wm->dpy, requestor, property, 0, ~0L, True,
+            AnyPropertyType, &type, &format, &nitems, &remaining, &bytes);
+
+        if(status != Success || bytes == NULL){
+            LOG("paste: could not read selection property (status %d)", status);
+            if(bytes){
+                XFree(bytes);
+            }
+
+            return 0;
+        }
+
+        if(format != 8 || (type != wm->utf8_string && type != XA_STRING)){
+            LOG("paste: selection is not text (format %d, type %lu)", format, (unsigned long)type);
+            XFree(bytes);
+            return 0;
+        }
+
+        char *text;
+        if(mc_alloc(wm->arena, nitems + 1, (void**)&text) != MCE_OK){
+            LOG("paste: failed to allocate %lu bytes for pasted text", (unsigned long)nitems + 1);
+            XFree(bytes);
+            return 0;
+        }
+
+        memcpy(text, bytes, nitems);
+        text[nitems] = '\0';
+        XFree(bytes);
+
         indications[0] = (MC_TargetIndication){
+            .type = MC_WMIND_PASTE_TEXT,
+            .as.paste_text = {
+                .window = get_window(wm, requestor),
+                .text = {.beg = text, .end = text + nitems},
+            }
+        };
+
+        return 1;
+    }
+    case KeyPress: {
+        unsigned n = 0;
+
+        indications[n++] = (MC_TargetIndication){
             .type = MC_WMIND_KEY_DOWN,
             .as.key_down = {
                 .key = get_key(&e->xkey),
             }
         };
 
-        return 1;
+        char buf[MC_WM_TEXT_INPUT_CAP];
+        KeySym sym = NoSymbol;
+        XKeyEvent ke = e->xkey;
+        int len = XLookupString(&ke, buf, sizeof(buf) - 1, &sym, NULL);
+
+        if(len > 0 && (unsigned char)buf[0] >= 0x20 && (unsigned char)buf[0] != 0x7F){
+            indications[n] = (MC_TargetIndication){
+                .type = MC_WMIND_TEXT_INPUT,
+                .as.text_input = {
+                    .window = get_window(wm, e->xany.window),
+                }
+            };
+
+            memcpy(indications[n].as.text_input.utf8, buf, (size_t)len);
+            indications[n].as.text_input.utf8[len] = '\0';
+            n++;
+        }
+
+        if((sym == XK_v && (e->xkey.state & ControlMask))
+            || (sym == XK_Insert && (e->xkey.state & ShiftMask))){
+            XConvertSelection(wm->dpy, wm->clipboard, wm->utf8_string,
+                wm->selection_property, e->xkey.window, e->xkey.time);
+        }
+
+        return n;
+    }
     case KeyRelease:
         indications[0] = (MC_TargetIndication){
             .type = MC_WMIND_KEY_UP,

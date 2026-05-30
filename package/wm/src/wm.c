@@ -4,6 +4,7 @@
 
 #include <mc/data/string.h>
 #include <mc/data/vector.h>
+#include <mc/data/arena.h>
 
 #include <mc/os/file.h>
 #include <mc/util/assert.h>
@@ -30,6 +31,7 @@ struct MC_WMWindow{
         MC_Vec2i mouse_pos;
         bool mouse_over;
         MC_String *title;
+        MC_WMWindowState state;
     } cached;
     MC_Stream *title_stream;
     struct MC_Graphics *g;
@@ -46,6 +48,8 @@ struct MC_WM{
     MC_TargetIndication indications[INDICATIONS_BUFFER_SIZE];
 
     Windows *windows;
+
+    MC_Arena *arena;
 
     alignas(void*) uint8_t data[];
 };
@@ -79,8 +83,16 @@ MC_Error mc_wm_init(MC_WM **ret_wm, const MC_WMVtab *vtab){
     wm->target = (struct MC_TargetWM*)wm->data;
     wm->log = MC_STDERR;
 
-    MC_Error init_status = vtab->init(wm->target, wm->log);
+    MC_Error arena_status = mc_arena_init(&wm->arena, NULL);
+    if(arena_status != MCE_OK){
+        mc_free(NULL, wm->target_event);
+        mc_free(NULL, wm);
+        return arena_status;
+    }
+
+    MC_Error init_status = vtab->init(wm->target, wm->log, mc_arena_allocator(wm->arena));
     if(init_status != MCE_OK){
+        mc_arena_destroy(wm->arena);
         mc_free(NULL, wm->target_event);
         mc_free(NULL, wm);
         return init_status;
@@ -103,6 +115,8 @@ void mc_wm_destroy(MC_WM *wm){
     }
 
     MC_VECTOR_FREE(wm->windows);
+
+    mc_arena_destroy(wm->arena);
 
     mc_free(NULL, wm);
 }
@@ -479,12 +493,20 @@ MC_Rect2IU mc_wm_window_cached_get_rect(MC_WMWindow *window){
     return window->cached.rect;
 }
 
+MC_WMWindowState mc_wm_window_cached_get_state(MC_WMWindow *window){
+    return window->cached.state;
+}
+
 bool mc_wm_window_cached_is_mouse_over(MC_WMWindow *window){
     return window->cached.mouse_over;
 }
 
 MC_Error mc_wm_poll_event(MC_WM *wm, MC_WMEvent *event){
     MC_WMVtab *v = &wm->vtab;
+
+    if(wm->pending_indications == 0){
+        mc_arena_reset(wm->arena);
+    }
 
     if(wm->pending_indications < INDICATIONS_BUFFER_SIZE - MC_WM_MAX_INDICATIONS_PER_EVENT){
         if(v->poll_event && v->poll_event(wm->target, wm->target_event)){
@@ -538,6 +560,7 @@ static void dump_vtable(MC_WM *wm){
     DUMP_IF_NOT_IMPLEMENTED(get_window_position);
     DUMP_IF_NOT_IMPLEMENTED(get_window_size);
     DUMP_IF_NOT_IMPLEMENTED(get_window_rect);
+
 
     DUMP_IF_NOT_IMPLEMENTED(poll_event);
     DUMP_IF_NOT_IMPLEMENTED(translate_event);
@@ -648,6 +671,17 @@ static MC_WMEvent translate_indication(MC_WM *wm){
                 .window = window,
             }
         };
+    case MC_WMIND_WINDOW_STATE_CHANGED:
+        window = window_from_target(wm, ind.as.window_state_changed.window);
+        window->cached.state = ind.as.window_state_changed.state;
+
+        return (MC_WMEvent){
+            .type = MC_WME_WINDOW_STATE_CHANGED,
+            .as.window_state_changed = {
+                .window = window,
+                .state = ind.as.window_state_changed.state,
+            }
+        };
     case MC_WMIND_FOCUS_GAINED:
         window = window_from_target(wm, ind.as.focus_gained.window);
 
@@ -735,6 +769,31 @@ static MC_WMEvent translate_indication(MC_WM *wm){
             .as.key_up = {
                 .window = NULL,
                 .key = ind.as.key_up.key,
+            }
+        };
+    case MC_WMIND_TEXT_INPUT:
+        window = window_from_target(wm, ind.as.text_input.window);
+
+        {
+            MC_WMEvent event = {
+                .type = MC_WME_TEXT_INPUT,
+                .as.text_input = {
+                    .window = window,
+                }
+            };
+
+            memcpy(event.as.text_input.utf8, ind.as.text_input.utf8, MC_WM_TEXT_INPUT_CAP);
+            event.as.text_input.utf8[MC_WM_TEXT_INPUT_CAP - 1] = '\0';
+            return event;
+        }
+    case MC_WMIND_PASTE_TEXT:
+        window = window_from_target(wm, ind.as.paste_text.window);
+
+        return (MC_WMEvent){
+            .type = MC_WME_PASTE_TEXT,
+            .as.paste_text = {
+                .window = window,
+                .text = ind.as.paste_text.text,
             }
         };
     default:

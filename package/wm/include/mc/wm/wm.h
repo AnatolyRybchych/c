@@ -19,6 +19,8 @@ typedef struct MC_WMEvent MC_WMEvent;
 typedef struct MC_TargetWM MC_TargetWM;
 typedef struct MC_TargetWMWindow MC_TargetWMWindow;
 
+#define MC_WM_TEXT_INPUT_CAP 32
+
 typedef unsigned MC_WMWindowState;
 enum MC_WMWindowState{
     MC_WM_WINDOW_STATE_NORMAL,
@@ -55,6 +57,7 @@ MC_Str mc_wm_window_cached_get_title(MC_WMWindow *window);
 MC_Vec2i mc_wm_window_cached_get_position(MC_WMWindow *window);
 MC_Size2U mc_wm_window_cached_get_size(MC_WMWindow *window);
 MC_Rect2IU mc_wm_window_cached_get_rect(MC_WMWindow *window);
+MC_WMWindowState mc_wm_window_cached_get_state(MC_WMWindow *window);
 bool mc_wm_window_cached_is_mouse_over(MC_WMWindow *window);
 
 MC_Error mc_wm_poll_event(MC_WM *wm, MC_WMEvent *event);

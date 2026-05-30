@@ -5,6 +5,8 @@
 #include <mc/wm/mouse_button.h>
 #include <mc/wm/key.h>
 
+#include <mc/data/alloc.h>
+
 #define MC_WM_MAX_INDICATIONS_PER_EVENT 16
 
 #define MC_ITER_INDICATIONS() \
@@ -15,6 +17,7 @@
     MC_WMIDN(WINDOW_SHOW,               USE_ALL) \
     MC_WMIDN(WINDOW_REDRAW_REQUESTED,   USE_LAST) \
     MC_WMIDN(WINDOW_CLOSE_REQUESTED,    USE_LAST) \
+    MC_WMIDN(WINDOW_STATE_CHANGED,      USE_LAST) \
     MC_WMIDN(FOCUS_GAINED,              USE_LAST) \
     MC_WMIDN(FOCUS_LOST,                USE_LAST) \
     MC_WMIDN(MOUSE_MOVED,               USE_ALL) \
@@ -25,6 +28,8 @@
     MC_WMIDN(MOUSE_WHEEL,               USE_ALL) \
     MC_WMIDN(KEY_DOWN,                  USE_ALL) \
     MC_WMIDN(KEY_UP,                    USE_ALL) \
+    MC_WMIDN(TEXT_INPUT,                USE_ALL) \
+    MC_WMIDN(PASTE_TEXT,                USE_ALL) \
 
 typedef unsigned MC_WMIndicationType;
 enum MC_WMIndicationType{
@@ -86,6 +91,11 @@ struct MC_TargetIndication{
             struct MC_TargetWMWindow *window;
         } redraw_requested;
 
+        struct MC_WMIND_WindowStateChanged{
+            struct MC_TargetWMWindow *window;
+            MC_WMWindowState state;
+        } window_state_changed;
+
         struct MC_WMIND_WindowCloseRequested{
             struct MC_TargetWMWindow *window;
         } window_close_requested;
@@ -134,6 +144,16 @@ struct MC_TargetIndication{
         struct MC_WMIND_KeyUp{
             MC_Key key;
         } key_up;
+
+        struct MC_WMIND_TextInput{
+            struct MC_TargetWMWindow *window;
+            char utf8[MC_WM_TEXT_INPUT_CAP];
+        } text_input;
+
+        struct MC_WMIND_PasteText{
+            struct MC_TargetWMWindow *window;
+            MC_Str text;
+        } paste_text;
     } as;
 };
 
@@ -144,7 +164,7 @@ struct MC_WMVtab{
     size_t window_size;
     size_t event_size;
 
-    MC_Error (*init)(struct MC_TargetWM *wm, MC_Stream *log);
+    MC_Error (*init)(struct MC_TargetWM *wm, MC_Stream *log, MC_Alloc *arena);
     void (*destroy)(struct MC_TargetWM *wm);
 
     MC_Error (*init_window)(struct MC_TargetWM *wm, struct MC_TargetWMWindow *window);
