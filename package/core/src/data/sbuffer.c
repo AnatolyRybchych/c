@@ -3,6 +3,7 @@
 
 #include <memory.h>
 #include <stdint.h>
+#include <stdio.h>
 
 MC_SBuffer mc_sbuffer(size_t capacity, void *buffer) {
     return (MC_SBuffer) {
@@ -20,7 +21,7 @@ size_t mc_sbuffer_avail_size(MC_SBuffer *buffer) {
 }
 
 MC_Error mc_sbuffer_write(MC_SBuffer *buffer, size_t size, const void *data) {
-    mc_fmt(MC_STDERR, "write:\n------------\n%.*s\n------------\n", size, data);
+    fprintf(stderr, "write:\n------------\n%.*s\n------------\n", (int)size, (const char*)data);
     size_t avail_size = mc_sbuffer_avail_size(buffer);
     MC_Error status = MCE_OK;
     if(size > avail_size) {
@@ -65,13 +66,13 @@ MC_Error mc_sbuffer_peek(MC_SBuffer *buffer, size_t size, void *data) {
         memcpy(data, (uint8_t*)buffer->buffer + buffer->data_offset, size);
     }
 
-    mc_fmt(MC_STDERR, "peek:\n------------\n%.*s\n------------\n", size, data);
+    fprintf(stderr, "peek:\n------------\n%.*s\n------------\n", (int)size, (const char*)data);
 
     return status;
 }
 
 void mc_sbuffer_flush(MC_SBuffer *buffer, size_t size) {
-    mc_fmt(MC_STDERR, "flush: %zu\n", size);
+    fprintf(stderr, "flush: %zu\n", size);
     if(size >= buffer->data_size) {
         buffer->data_size = 0;
         buffer->data_offset = 0;

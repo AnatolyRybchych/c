@@ -2,9 +2,9 @@
 #define MC_ASSERT_H
 
 #include <mc/error.h>
-#include <mc/os/file.h>
 
 #include <assert.h>
+#include <stdio.h>
 #include <stdlib.h>
 
 #define MC_ASSERT_BUG(...) assert(__VA_ARGS__)
@@ -14,7 +14,7 @@
 
 static inline MC_Error __mc_require(MC_Error ret, const char *expr, const char *file, int line, const char *func){
     if(ret != MCE_AGAIN && ret != MCE_OK){
-        mc_fmt(MC_STDERR, "%s:%i %s() %s -> %s\n", file, line, func, expr, mc_strerror(ret));
+        fprintf(stderr, "%s:%i %s() %s -> %s\n", file, line, func, expr, mc_strerror(ret));
         exit(1);
     }
 

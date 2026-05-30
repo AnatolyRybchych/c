@@ -5,6 +5,8 @@
 #include <mc/data/mstream.h>
 #include <mc/util/error.h>
 
+#include <stdio.h>
+
 typedef unsigned ReaderState;
 enum ReaderState {
     READERF_INCOMPLETE      = 1 << 7,
@@ -309,7 +311,7 @@ static MC_Error read_body(MC_HttpReader *reader, MC_HttpMessage *msg, MC_Stream 
 
         reader->body_size = body_size;
         reader->body_remaining = body_size;
-        mc_fmt(MC_STDOUT, "len: %.*s; %zu\n", mc_str_len(content_length), content_length.beg, body_size);
+        fprintf(stdout, "len: %.*s; %zu\n", (int)mc_str_len(content_length), content_length.beg, body_size);
         reader->state = READER_BODY_SIZED;
     }
     else{

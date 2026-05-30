@@ -10,8 +10,8 @@ sys.path.insert(0, parent_dir)
 import basics
 
 DIR=os.path.dirname(sys.argv[0])
-HEADER_FILE = f'{basics.INCLUDE_DIR}/geometry/lina.h'
-SRC_FILE = f'{basics.SRC_DIR}/geometry/lina.c'
+HEADER_FILE = f'{basics.WORKDIR}/package/geometry/include/mc/geometry/lina.h'
+SRC_FILE = f'{basics.WORKDIR}/package/geometry/src/lina.c'
 
 default_sizes = [2, 3, 4]
 default_ops = ['', 'add', 'sub', 'mul', 'div', 'lerp', 'min', 'max', 'clamp', 'sqrmag', 'mag', 'sqrdst', 'dst', 'equ']

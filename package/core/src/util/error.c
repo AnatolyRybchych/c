@@ -1,6 +1,7 @@
 #include <mc/util/error.h>
 
 #include <errno.h>
+#include <stdio.h>
 #include <string.h>
 
 MC_Error mc_error_from_errno(int err_no){
@@ -15,7 +16,7 @@ MC_Error mc_error_from_errno(int err_no){
     case EACCES: return MCE_NOT_PERMITTED;
     case EADDRINUSE: return MCE_ADDRESS_IN_USE;
     default:
-        mc_fmt(MC_STDERR, "mc_error_from_errno(%i: %s) -> MCE_UNKNOWN\n", errno, strerror(errno));
+        fprintf(stderr, "mc_error_from_errno(%i: %s) -> MCE_UNKNOWN\n", errno, strerror(errno));
         return MCE_UNKNOWN;
     }
 }

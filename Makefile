@@ -1,110 +1,54 @@
-CC				:= gcc
-INCLUDE			:= -Iinclude
-CARGS			:= $(INCLUDE) -ggdb -Wall -Wextra -Werror -pedantic
-LIBMC			:= mc
-LIB_DIR			:= lib
-LIBMC_STATIC	:= $(LIB_DIR)/lib$(LIBMC).a
-LIBMC_OBJ_DIR	:= build/libmc/obj
-LIBMC_SRC_DIR	:= src
+PKG_DIR := package
+# topological order: each package's deps are built+staged before it
+PKGS    := core geometry net os graphics wm xlib_wm
 
-MUTATION_SRC_DIR		:= mutation
-MUTATION_TEST_SRC		:= $(shell find $(MUTATION_SRC_DIR) -type f -name main.c | sed s!/main.c!!g)
+CC      ?= gcc
+PREFIX  ?= /usr/local
+DESTDIR ?=
 
-objects			+= dlib.o
-objects			+= error.o
-objects			+= sched.o
-objects			+= time.o
-objects			+= util/error.o
-objects			+= net/address.o
-objects			+= net/endpoint.o
-objects			+= net/proto/http/message.o
-objects			+= net/proto/http/reader.o
-objects			+= net/proto/http/writer.o
-objects			+= data/string.o
-objects			+= data/json.o
-objects			+= data/vector.o
-objects			+= data/hmap.o
-objects			+= data/pqueue.o
-objects			+= data/list.o
-objects			+= data/struct.o
-objects			+= data/alloc.o
-objects			+= data/alloc/sarena.o
-objects			+= data/alloc/falloc.o
-objects			+= data/arena.o
-objects			+= data/sbuffer.o
-objects			+= data/img/bmp.o
-objects			+= data/bit.o
-objects			+= data/str.o
-objects			+= data/stream.o
-objects			+= data/mstream.o
-objects			+= data/encoding/url.o
-objects			+= geometry/lina.o
-objects			+= geometry/point.o
-objects			+= geometry/bezier.o
+# staging prefix: packages install their headers/libs here so later packages,
+# the demo and the tests compile/link against build/include and build/lib
+STAGE   := $(CURDIR)/build
 
-objects			+= os/fd.o
-objects			+= os/file.o
-objects			+= os/socket.o
+INCLUDE := -I$(STAGE)/include
+CARGS   := $(INCLUDE) -ggdb -Wall -Wextra -Werror -pedantic
 
-objects			+= os/process.o
+# libraries the demo and tests link against (most-dependent first)
+LINK     := os net core
+LDARGS   := -L$(STAGE)/lib $(addprefix -l,$(LINK))
 
-objects			+= wm/wm.o
-objects			+= wm/event.o
-objects			+= wm/target.o
-objects			+= wm/mouse_button.o
-objects			+= wm/key.o
+DEMO_BIN := bin/demo
+DEMO_LDARGS := $(LDARGS) -lX11 -lm
 
-objects			+= graphics/graphics.o
-objects			+= graphics/di.o
+MUTATION_TEST_SRC := $(shell find mutation -type f -name main.c | sed s!/main.c!!g)
 
-objects			+= xlib_wm/wm.o
-objects			+= xlib_wm/graphics.o
+all: libs demo mutation
 
-DEMO_BIN		:= bin/demo
-DEMO_OBJ_DIR	:= build/demo/obj
-DEMO_SRC_DIR	:= demo
-DEMO_CARGS		:= -ggdb -Wall -Wextra -Werror -pedantic -Iinclude
-DEMO_LDARGS		:= -L$(LIB_DIR) -l$(LIBMC) -lX11 -lm
+# build each package and stage it into $(STAGE); deps are already staged
+libs:
+	$(foreach p,$(PKGS),$(MAKE) -C $(PKG_DIR)/$(p) install PREFIX= DESTDIR=$(STAGE) &&) true
 
-demo_objects	+= main.o
+demo: libs $(DEMO_BIN)
 
-all: libmc demo mutation
-
-$(LIBMC_STATIC): $(addprefix $(LIBMC_OBJ_DIR)/, $(objects))
+$(DEMO_BIN): demo/main.c libs
 	@mkdir -p $(dir $@)
-	ar rcs ./$@ $^
-
-$(LIBMC_OBJ_DIR)/%.o: $(LIBMC_SRC_DIR)/%.c
-	@mkdir -p $(dir $@)
-	$(CC) -c $(CARGS) -o $@ $^
-
-libmc: $(LIBMC_STATIC)
-
-# ::: DEMO :::
-
-$(DEMO_BIN): $(addprefix $(DEMO_OBJ_DIR)/, $(demo_objects))
-	@mkdir -p $(dir $(DEMO_BIN))
-	$(CC) $(DEMO_CARGS) -o $@ $^ $(DEMO_LDARGS)
-
-$(DEMO_OBJ_DIR)/%.o: $(DEMO_SRC_DIR)/%.c
-	@mkdir -p $(dir $@)
-	$(CC) -c $(DEMO_CARGS) -o $@ $^
-
-demo: libmc $(DEMO_BIN)
+	$(CC) $(CARGS) -o $@ $< $(DEMO_LDARGS)
 
 run: demo
 	$(DEMO_BIN)
 
-gdb: demo
-	if which gf2 >/dev/null; then gf2 $(DEMO_BIN); else gdb $(DEMO_BIN); fi
-
-mutation: libmc
+mutation: libs
 	$(foreach test,$(MUTATION_TEST_SRC), \
-		$(CC) $(CARGS) -o $(test)/run $(test)/main.c -L$(LIB_DIR) -l$(LIBMC) && \
+		$(CC) $(CARGS) -o $(test)/run $(test)/main.c $(LDARGS) && \
 		$(test)/run > $(test)/stdout 2> $(test)/stderr; \
 		rm -f $(test)/run;)
 
-clean:
-	rm -rf build bin lib
+# install every package into $(DESTDIR)$(PREFIX), deps first
+install:
+	$(foreach p,$(PKGS),$(MAKE) -C $(PKG_DIR)/$(p) install PREFIX=$(PREFIX) DESTDIR=$(DESTDIR) &&) true
 
-.PHONY: demo libmc run mutation
+clean:
+	$(foreach p,$(PKGS),$(MAKE) -C $(PKG_DIR)/$(p) clean &&) true
+	rm -rf build bin
+
+.PHONY: all libs demo run mutation install clean

@@ -1,5 +1,8 @@
 .vscode/*
-bin/*
-lib/*
-build/*
+build/
+**/build/
+**/bin/
+*.a
 *.bmp
+compile_commands.json
+*pyc

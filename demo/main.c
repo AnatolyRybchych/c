@@ -6,6 +6,7 @@
 
 #include <mc/net/endpoint.h>
 #include <mc/os/socket.h>
+#include <mc/os/file.h>
 
 #include <mc/net/proto/http/reader.h>
 #include <mc/net/proto/http/writer.h>
