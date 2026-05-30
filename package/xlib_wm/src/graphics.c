@@ -203,7 +203,7 @@ static MC_Error get_size(MC_TargetGraphics *g, MC_Size2U *size){
 }
 
 static uint32_t get_color(MC_Color color){
-    return ((uint32_t)(color.b * 255) << 0)
-         | ((uint32_t)(color.g * 255) << 8)
-         | ((uint32_t)(color.r * 255) << 16);
+    return ((uint32_t)color.b << 0)
+         | ((uint32_t)color.g << 8)
+         | ((uint32_t)color.r << 16);
 }
