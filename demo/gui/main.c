@@ -58,7 +58,7 @@ int main(void){
 
     MC_WMWindow *window;
     MC_REQUIRE(mc_wm_window_init(wm, &window));
-    MC_REQUIRE(mc_wm_window_set_title(window, MC_STRC("mc gui demo - Q/Esc quit, F fullscreen, M max, N min, R restore")));
+    MC_REQUIRE(mc_wm_window_set_title(window, MC_STRC("mc gui demo - type text, Ctrl+V paste; F/M/N/R state; Q/Esc quit")));
     MC_REQUIRE(mc_wm_window_set_size(window, (MC_Size2U){.width = 640, .height = 480}));
 
     MC_Graphics *g;
@@ -78,6 +78,18 @@ int main(void){
                 break;
             case MC_WME_FOCUS_LOST:
                 mc_fmt(MC_STDERR, "focus lost\n");
+                break;
+            case MC_WME_WINDOW_STATE_CHANGED:
+                mc_fmt(MC_STDERR, "state changed: %u (cached %u)\n",
+                    (unsigned)event.as.window_state_changed.state,
+                    (unsigned)mc_wm_window_cached_get_state(window));
+                break;
+            case MC_WME_TEXT_INPUT:
+                mc_fmt(MC_STDERR, "text: %s\n", event.as.text_input.utf8);
+                break;
+            case MC_WME_PASTE_TEXT:
+                mc_fmt(MC_STDERR, "paste: %.*s\n",
+                    (int)mc_str_len(event.as.paste_text.text), event.as.paste_text.text.beg);
                 break;
             case MC_WME_KEY_DOWN:
                 switch(event.as.key_down.key){
