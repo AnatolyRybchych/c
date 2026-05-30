@@ -1,5 +1,6 @@
 #include <mc/util/assert.h>
 #include <mc/time.h>
+#include <mc/os/file.h>
 
 #include <mc/wm/wm.h>
 #include <mc/wm/event.h>
@@ -57,7 +58,7 @@ int main(void){
 
     MC_WMWindow *window;
     MC_REQUIRE(mc_wm_window_init(wm, &window));
-    MC_REQUIRE(mc_wm_window_set_title(window, MC_STRC("mc gui demo - press Q or Esc to quit")));
+    MC_REQUIRE(mc_wm_window_set_title(window, MC_STRC("mc gui demo - Q/Esc quit, F fullscreen, M max, N min, R restore")));
     MC_REQUIRE(mc_wm_window_set_size(window, (MC_Size2U){.width = 640, .height = 480}));
 
     MC_Graphics *g;
@@ -69,9 +70,24 @@ int main(void){
         MC_WMEvent event;
         while(mc_wm_poll_event(wm, &event) == MCE_OK){
             switch(event.type){
+            case MC_WME_WINDOW_CLOSE_REQUESTED:
+                running = false;
+                break;
+            case MC_WME_FOCUS_GAINED:
+                mc_fmt(MC_STDERR, "focus gained\n");
+                break;
+            case MC_WME_FOCUS_LOST:
+                mc_fmt(MC_STDERR, "focus lost\n");
+                break;
             case MC_WME_KEY_DOWN:
-                if(event.as.key_down.key == MC_KEY_ESCAPE || event.as.key_down.key == MC_KEY_Q){
-                    running = false;
+                switch(event.as.key_down.key){
+                case MC_KEY_ESCAPE:
+                case MC_KEY_Q: running = false;                                          break;
+                case MC_KEY_F: mc_wm_window_set_state(window, MC_WM_WINDOW_STATE_FULLSCREEN); break;
+                case MC_KEY_M: mc_wm_window_set_state(window, MC_WM_WINDOW_STATE_MAXIMIZED);  break;
+                case MC_KEY_N: mc_wm_window_set_state(window, MC_WM_WINDOW_STATE_MINIMIZED);  break;
+                case MC_KEY_R: mc_wm_window_set_state(window, MC_WM_WINDOW_STATE_NORMAL);     break;
+                default: break;
                 }
                 break;
             default:
