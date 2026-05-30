@@ -14,6 +14,9 @@
     MC_WMIDN(WINDOW_HIDE,               USE_ALL) \
     MC_WMIDN(WINDOW_SHOW,               USE_ALL) \
     MC_WMIDN(WINDOW_REDRAW_REQUESTED,   USE_LAST) \
+    MC_WMIDN(WINDOW_CLOSE_REQUESTED,    USE_LAST) \
+    MC_WMIDN(FOCUS_GAINED,              USE_LAST) \
+    MC_WMIDN(FOCUS_LOST,                USE_LAST) \
     MC_WMIDN(MOUSE_MOVED,               USE_ALL) \
     MC_WMIDN(MOUSE_DOWN,                USE_ALL) \
     MC_WMIDN(MOUSE_UP,                  USE_ALL) \
@@ -83,6 +86,18 @@ struct MC_TargetIndication{
             struct MC_TargetWMWindow *window;
         } redraw_requested;
 
+        struct MC_WMIND_WindowCloseRequested{
+            struct MC_TargetWMWindow *window;
+        } window_close_requested;
+
+        struct MC_WMIND_FocusGained{
+            struct MC_TargetWMWindow *window;
+        } focus_gained;
+
+        struct MC_WMIND_FocusLost{
+            struct MC_TargetWMWindow *window;
+        } focus_lost;
+
         struct MC_WMIND_MouseMoved{
             struct MC_TargetWMWindow *window;
             MC_Vec2i position;
@@ -141,6 +156,7 @@ struct MC_WMVtab{
     MC_Error (*set_window_position)(struct MC_TargetWM *wm, struct MC_TargetWMWindow *window, MC_Vec2i position);
     MC_Error (*set_window_size)(struct MC_TargetWM *wm, struct MC_TargetWMWindow *window, MC_Size2U size);
     MC_Error (*set_window_rect)(struct MC_TargetWM *wm, struct MC_TargetWMWindow *window, MC_Rect2IU rect);
+    MC_Error (*set_window_state)(struct MC_TargetWM *wm, struct MC_TargetWMWindow *window, MC_WMWindowState state);
 
     MC_Error (*get_window_title)(struct MC_TargetWM *wm, struct MC_TargetWMWindow *window, MC_Stream *title);
     MC_Error (*get_window_position)(struct MC_TargetWM *wm, struct MC_TargetWMWindow *window, MC_Vec2i *position);

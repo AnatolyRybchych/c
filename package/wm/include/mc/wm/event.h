@@ -12,6 +12,9 @@
     MC_EVENT(WINDOW_RESIZED,) \
     MC_EVENT(WINDOW_MOVED,) \
     MC_EVENT(WINDOW_REDRAW_REQUESTED,) \
+    MC_EVENT(WINDOW_CLOSE_REQUESTED,) \
+    MC_EVENT(FOCUS_GAINED,) \
+    MC_EVENT(FOCUS_LOST,) \
     MC_EVENT(MOUSE_MOVED,) \
     MC_EVENT(MOUSE_DOWN,) \
     MC_EVENT(MOUSE_UP,) \
@@ -62,6 +65,18 @@ struct MC_WMEvent{
         struct MC_WME_RedrawRequest{
             MC_WMWindow *window;
         } redraw_requested;
+
+        struct MC_WME_WindowCloseRequest{
+            MC_WMWindow *window;
+        } window_close_requested;
+
+        struct MC_WME_FocusGained{
+            MC_WMWindow *window;
+        } focus_gained;
+
+        struct MC_WME_FocusLost{
+            MC_WMWindow *window;
+        } focus_lost;
 
         struct MC_WME_MouseMoved{
             struct MC_WMWindow *window;

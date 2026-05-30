@@ -296,6 +296,17 @@ MC_Error mc_wm_window_set_rect(MC_WMWindow *window, MC_Rect2IU rect){
 }
 
 
+MC_Error mc_wm_window_set_state(MC_WMWindow *window, MC_WMWindowState state){
+    MC_WM *wm = window->wm;
+    MC_WMVtab *v = &wm->vtab;
+
+    if(v->set_window_state){
+        return v->set_window_state(wm->target, window->target, state);
+    }
+
+    return MCE_NOT_SUPPORTED;
+}
+
 MC_Error mc_wm_window_get_title(MC_WMWindow *window, MC_Str *title){
     MC_WM *wm = window->wm;
     MC_WMVtab *v = &wm->vtab;
@@ -522,6 +533,7 @@ static void dump_vtable(MC_WM *wm){
     DUMP_IF_NOT_IMPLEMENTED(set_window_position);
     DUMP_IF_NOT_IMPLEMENTED(set_window_size);
     DUMP_IF_NOT_IMPLEMENTED(set_window_rect);
+    DUMP_IF_NOT_IMPLEMENTED(set_window_state);
     DUMP_IF_NOT_IMPLEMENTED(get_window_title);
     DUMP_IF_NOT_IMPLEMENTED(get_window_position);
     DUMP_IF_NOT_IMPLEMENTED(get_window_size);
@@ -624,6 +636,33 @@ static MC_WMEvent translate_indication(MC_WM *wm){
         return (MC_WMEvent){
             .type = MC_WME_WINDOW_REDRAW_REQUESTED,
             .as.redraw_requested = {
+                .window = window,
+            }
+        };
+    case MC_WMIND_WINDOW_CLOSE_REQUESTED:
+        window = window_from_target(wm, ind.as.window_close_requested.window);
+
+        return (MC_WMEvent){
+            .type = MC_WME_WINDOW_CLOSE_REQUESTED,
+            .as.window_close_requested = {
+                .window = window,
+            }
+        };
+    case MC_WMIND_FOCUS_GAINED:
+        window = window_from_target(wm, ind.as.focus_gained.window);
+
+        return (MC_WMEvent){
+            .type = MC_WME_FOCUS_GAINED,
+            .as.focus_gained = {
+                .window = window,
+            }
+        };
+    case MC_WMIND_FOCUS_LOST:
+        window = window_from_target(wm, ind.as.focus_lost.window);
+
+        return (MC_WMEvent){
+            .type = MC_WME_FOCUS_LOST,
+            .as.focus_lost = {
                 .window = window,
             }
         };

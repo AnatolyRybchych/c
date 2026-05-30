@@ -19,6 +19,14 @@ typedef struct MC_WMEvent MC_WMEvent;
 typedef struct MC_TargetWM MC_TargetWM;
 typedef struct MC_TargetWMWindow MC_TargetWMWindow;
 
+typedef unsigned MC_WMWindowState;
+enum MC_WMWindowState{
+    MC_WM_WINDOW_STATE_NORMAL,
+    MC_WM_WINDOW_STATE_MINIMIZED,
+    MC_WM_WINDOW_STATE_MAXIMIZED,
+    MC_WM_WINDOW_STATE_FULLSCREEN,
+};
+
 struct MC_Graphics;
 
 MC_Error mc_wm_init(MC_WM **wm, const MC_WMVtab *vtab);
@@ -33,6 +41,8 @@ MC_Error mc_wm_window_set_title(MC_WMWindow *window, MC_Str title);
 MC_Error mc_wm_window_set_position(MC_WMWindow *window, MC_Vec2i position);
 MC_Error mc_wm_window_set_size(MC_WMWindow *window, MC_Size2U size);
 MC_Error mc_wm_window_set_rect(MC_WMWindow *window, MC_Rect2IU rect);
+
+MC_Error mc_wm_window_set_state(MC_WMWindow *window, MC_WMWindowState state);
 
 MC_Error mc_wm_window_get_title(MC_WMWindow *window, MC_Str *title);
 MC_Error mc_wm_window_get_position(MC_WMWindow *window, MC_Vec2i *position);

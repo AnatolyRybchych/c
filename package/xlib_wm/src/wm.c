@@ -10,6 +10,13 @@
 struct MC_TargetWM{
     MC_Stream *log;
     Display *dpy;
+
+    Atom wm_protocols;
+    Atom wm_delete_window;
+    Atom net_wm_state;
+    Atom net_wm_state_fullscreen;
+    Atom net_wm_state_maximized_horz;
+    Atom net_wm_state_maximized_vert;
 };
 
 struct MC_TargetWMWindow{
@@ -27,6 +34,7 @@ static void destroy_window(struct MC_TargetWM *wm, struct MC_TargetWMWindow *win
 static MC_Error create_window_graphic(struct MC_TargetWM *wm, struct MC_TargetWMWindow *window, struct MC_Graphics **g);
 static MC_Error set_window_title(struct MC_TargetWM *wm, struct MC_TargetWMWindow *window, MC_Str title);
 static MC_Error set_window_size(struct MC_TargetWM *wm, struct MC_TargetWMWindow *window, MC_Size2U size);
+static MC_Error set_window_state(struct MC_TargetWM *wm, struct MC_TargetWMWindow *window, MC_WMWindowState state);
 static bool poll_event(struct MC_TargetWM *wm, struct MC_TargetWMEvent *event);
 static unsigned translate_event(struct MC_TargetWM *wm, const struct MC_TargetWMEvent *event, MC_TargetIndication indications[MC_WM_MAX_INDICATIONS_PER_EVENT]);
 
@@ -50,6 +58,7 @@ static MC_WMVtab vtab = {
 
     .set_window_title = set_window_title,
     .set_window_size = set_window_size,
+    .set_window_state = set_window_state,
 
     .poll_event = poll_event,
     .translate_event = translate_event,
@@ -74,6 +83,13 @@ static MC_Error init(struct MC_TargetWM *wm, MC_Stream *log){
         return MCE_NOT_SUPPORTED;
     }
 
+    wm->wm_protocols                = XInternAtom(wm->dpy, "WM_PROTOCOLS", False);
+    wm->wm_delete_window            = XInternAtom(wm->dpy, "WM_DELETE_WINDOW", False);
+    wm->net_wm_state                = XInternAtom(wm->dpy, "_NET_WM_STATE", False);
+    wm->net_wm_state_fullscreen     = XInternAtom(wm->dpy, "_NET_WM_STATE_FULLSCREEN", False);
+    wm->net_wm_state_maximized_horz = XInternAtom(wm->dpy, "_NET_WM_STATE_MAXIMIZED_HORZ", False);
+    wm->net_wm_state_maximized_vert = XInternAtom(wm->dpy, "_NET_WM_STATE_MAXIMIZED_VERT", False);
+
     return MCE_OK;
 }
 
@@ -96,7 +112,8 @@ static MC_Error init_window(struct MC_TargetWM *wm, struct MC_TargetWMWindow *wi
         | LeaveWindowMask | PointerMotionMask | ButtonMotionMask | KeymapStateMask | ExposureMask
         | VisibilityChangeMask | StructureNotifyMask | SubstructureNotifyMask | FocusChangeMask
         | PropertyChangeMask);
-    
+
+    XSetWMProtocols(wm->dpy, window->window_id, &wm->wm_delete_window, 1);
 
     XMapWindow(wm->dpy, window->window_id);
 
@@ -123,6 +140,54 @@ static MC_Error set_window_title(struct MC_TargetWM *wm, struct MC_TargetWMWindo
 
 static MC_Error set_window_size(struct MC_TargetWM *wm, struct MC_TargetWMWindow *window, MC_Size2U size){
     XResizeWindow(wm->dpy, window->window_id, size.width, size.height);
+    return MCE_OK;
+}
+
+static void net_wm_state(struct MC_TargetWM *wm, Window win, long action, Atom first, Atom second){
+    XEvent ev = {0};
+    ev.xclient.type = ClientMessage;
+    ev.xclient.window = win;
+    ev.xclient.message_type = wm->net_wm_state;
+    ev.xclient.format = 32;
+    ev.xclient.data.l[0] = action;
+    ev.xclient.data.l[1] = first;
+    ev.xclient.data.l[2] = second;
+    ev.xclient.data.l[3] = 1;
+
+    Window root = RootWindow(wm->dpy, DefaultScreen(wm->dpy));
+    XSendEvent(wm->dpy, root, False, SubstructureRedirectMask | SubstructureNotifyMask, &ev);
+}
+
+static MC_Error set_window_state(struct MC_TargetWM *wm, struct MC_TargetWMWindow *window, MC_WMWindowState state){
+    enum { NET_WM_STATE_REMOVE, NET_WM_STATE_ADD };
+
+    Window win = window->window_id;
+
+    switch(state){
+    case MC_WM_WINDOW_STATE_NORMAL:
+        XMapWindow(wm->dpy, win);
+        net_wm_state(wm, win, NET_WM_STATE_REMOVE, wm->net_wm_state_fullscreen, 0);
+        net_wm_state(wm, win, NET_WM_STATE_REMOVE,
+            wm->net_wm_state_maximized_horz, wm->net_wm_state_maximized_vert);
+        break;
+    case MC_WM_WINDOW_STATE_MINIMIZED:
+        XIconifyWindow(wm->dpy, win, DefaultScreen(wm->dpy));
+        break;
+    case MC_WM_WINDOW_STATE_MAXIMIZED:
+        XMapWindow(wm->dpy, win);
+        net_wm_state(wm, win, NET_WM_STATE_REMOVE, wm->net_wm_state_fullscreen, 0);
+        net_wm_state(wm, win, NET_WM_STATE_ADD,
+            wm->net_wm_state_maximized_horz, wm->net_wm_state_maximized_vert);
+        break;
+    case MC_WM_WINDOW_STATE_FULLSCREEN:
+        XMapWindow(wm->dpy, win);
+        net_wm_state(wm, win, NET_WM_STATE_ADD, wm->net_wm_state_fullscreen, 0);
+        break;
+    default:
+        return MCE_INVALID_INPUT;
+    }
+
+    XFlush(wm->dpy);
     return MCE_OK;
 }
 
@@ -215,6 +280,48 @@ static unsigned translate_event(struct MC_TargetWM *wm, const struct MC_TargetWM
         indications[0] = (MC_TargetIndication){
             .type = MC_WMIND_WINDOW_REDRAW_REQUESTED,
             .as.redraw_requested = {
+                .window = get_window(wm, e->xany.window),
+            }
+        };
+
+        return 1;
+    case ClientMessage:
+        if((Atom)e->xclient.message_type == wm->wm_protocols
+            && (Atom)e->xclient.data.l[0] == wm->wm_delete_window){
+            indications[0] = (MC_TargetIndication){
+                .type = MC_WMIND_WINDOW_CLOSE_REQUESTED,
+                .as.window_close_requested = {
+                    .window = get_window(wm, e->xany.window),
+                }
+            };
+
+            return 1;
+        }
+
+        return 0;
+    case FocusIn:
+        if(e->xfocus.mode == NotifyGrab || e->xfocus.mode == NotifyUngrab
+            || e->xfocus.detail == NotifyPointer){
+            return 0;
+        }
+
+        indications[0] = (MC_TargetIndication){
+            .type = MC_WMIND_FOCUS_GAINED,
+            .as.focus_gained = {
+                .window = get_window(wm, e->xany.window),
+            }
+        };
+
+        return 1;
+    case FocusOut:
+        if(e->xfocus.mode == NotifyGrab || e->xfocus.mode == NotifyUngrab
+            || e->xfocus.detail == NotifyPointer){
+            return 0;
+        }
+
+        indications[0] = (MC_TargetIndication){
+            .type = MC_WMIND_FOCUS_LOST,
+            .as.focus_lost = {
                 .window = get_window(wm, e->xany.window),
             }
         };
