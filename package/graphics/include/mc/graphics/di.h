@@ -13,6 +13,13 @@
 typedef struct MC_DiBuffer MC_DiBuffer;
 typedef struct MC_DiShape MC_DiShape;
 typedef struct MC_Di MC_Di;
+typedef struct MC_DiContour MC_DiContour;
+
+struct MC_DiContour{
+    MC_Vec2f beg;
+    size_t n;
+    const MC_SemiBezier4f *segments;
+};
 
 MC_Error mc_di_init(MC_Di **di);
 void mc_di_destroy(MC_Di *di);
@@ -38,6 +45,9 @@ void mc_di_shape_delete(MC_Di *di, MC_DiShape *shape);
 MC_Error mc_di_shape_circle(MC_Di *di, MC_DiShape *shape, MC_Vec2f pos, float radius);
 MC_Error mc_di_shape_line(MC_Di *di, MC_DiShape *shape, MC_Vec2f p1, MC_Vec2f p2, float thikness);
 MC_Error mc_di_shape_curve(MC_Di *di, MC_DiShape *shape, MC_Vec2f beg, size_t n, const MC_SemiBezier4f curve[n], float thikness);
+MC_Error mc_di_shape_contour(MC_Di *di, MC_DiShape *shape, MC_Vec2f beg, size_t n, const MC_SemiBezier4f contour[n], float thikness);
+MC_Error mc_di_shape_region(MC_Di *di, MC_DiShape *shape, MC_Vec2f beg, size_t n, const MC_SemiBezier4f contour[n]);
+MC_Error mc_di_shape_region_contours(MC_Di *di, MC_DiShape *shape, size_t ncontours, const MC_DiContour contours[ncontours]);
 
 
 #endif // MC_DI_H

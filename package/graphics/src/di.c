@@ -11,10 +11,13 @@
 #include <malloc.h>
 #include <memory.h>
 #include <stdalign.h>
+#include <math.h>
+#include <float.h>
 
 typedef struct DstHeatmapStep DstHeatmapStep;
 typedef struct CntHeatmapStep CntHeatmapStep;
 typedef struct RectBFS RectBFS;
+typedef struct Polyline Polyline;
 typedef unsigned BfsStep;
 
 struct MC_DiBuffer{
@@ -48,6 +51,16 @@ struct RectBFS{
     BfsStep (*next)(MC_Vec2i cur, void *step, void *ctx);
 };
 
+struct Polyline{
+    MC_Vec2f *pts;
+    size_t count;
+    size_t cap;
+};
+
+typedef struct{
+    MC_Vec2f a, b;
+} Seg;
+
 enum BfsStep{
     BFS_ACTION_NEXT,
     BFS_ACTION_CONTINUE,
@@ -75,6 +88,17 @@ static float shape_get_linear(const MC_DiShape *shape, MC_Vec2f pos);
 static MC_Error shape_circle(MC_Di *di, MC_DiShape *shape, MC_Vec2f pos, float radius);
 static MC_Error shape_line(MC_Di *di, MC_DiShape *shape, MC_Vec2f p1, MC_Vec2f p2, float thikness);
 static MC_Error shape_curve(MC_Di *di, MC_DiShape *shape, MC_Vec2f beg, size_t n, const MC_SemiBezier4f curve[n], float thikness);
+static MC_Error shape_contour(MC_Di *di, MC_DiShape *shape, MC_Vec2f beg, size_t n, const MC_SemiBezier4f curve[n], float thikness);
+static MC_Error shape_region(MC_Di *di, MC_DiShape *shape, MC_Vec2f beg, size_t n, const MC_SemiBezier4f curve[n]);
+static MC_Error shape_region_contours(MC_Di *di, MC_DiShape *shape, size_t ncontours, const MC_DiContour contours[ncontours]);
+
+static MC_Error flatten(MC_Arena *arena, MC_Vec2f beg, size_t n, const MC_SemiBezier4f curve[n], MC_Vec2f max, Polyline *out);
+static void polyline_close(Polyline *pl);
+static MC_Error stroke_polyline(MC_Di *di, MC_DiShape *shape, const Polyline *pl, float thikness);
+static MC_Error fill_region(MC_Di *di, MC_DiShape *shape, const Polyline *loops, size_t nloops);
+static MC_Error polylines_distances(MC_Di *di, MC_Size2U size, const Polyline *loops, size_t nloops, MC_DiShape **field);
+static void polylines_sign_inside(MC_DiShape *field, const Polyline *loops, size_t nloops, float *crossings);
+static void shape_max(MC_DiShape *dst, const MC_DiShape *src);
 
 static MC_Error bfs_rect(MC_Arena *arena, MC_Rect2IU rect, RectBFS *bfs,
     BfsStep (*next)(MC_Vec2i cur, void *step, void *ctx), void *ctx, size_t step_data_size);
@@ -291,6 +315,24 @@ MC_Error mc_di_shape_curve(MC_Di *di, MC_DiShape *shape, MC_Vec2f beg, size_t n,
     return status;
 }
 
+MC_Error mc_di_shape_contour(MC_Di *di, MC_DiShape *shape, MC_Vec2f beg, size_t n, const MC_SemiBezier4f curve[n], float thikness){
+    MC_Error status = shape_contour(di, shape, beg, n, curve, thikness);
+    mc_arena_reset(di->arena);
+    return status;
+}
+
+MC_Error mc_di_shape_region(MC_Di *di, MC_DiShape *shape, MC_Vec2f beg, size_t n, const MC_SemiBezier4f contour[n]){
+    MC_Error status = shape_region(di, shape, beg, n, contour);
+    mc_arena_reset(di->arena);
+    return status;
+}
+
+MC_Error mc_di_shape_region_contours(MC_Di *di, MC_DiShape *shape, size_t ncontours, const MC_DiContour contours[ncontours]){
+    MC_Error status = shape_region_contours(di, shape, ncontours, contours);
+    mc_arena_reset(di->arena);
+    return status;
+}
+
 struct ShapeCircleCtx{
     MC_Vec2f pos;
     float radius;
@@ -412,14 +454,58 @@ static BfsStep shape_curve_step(MC_Vec2i cur, void *_step, void *_ctx){
     return BFS_ACTION_NEXT;
 }
 
-static MC_Error shape_curve(MC_Di *di, MC_DiShape *shape, MC_Vec2f beg, size_t n, const MC_SemiBezier4f curve[n], float thikness){
+static MC_Error flatten(MC_Arena *arena, MC_Vec2f beg, size_t n, const MC_SemiBezier4f curve[n], MC_Vec2f max, Polyline *out){
+    const float inc = 0.001f;
+    size_t per = (size_t)(1.0f / inc) + 2;
+    size_t cap = (n + 1) * per;
+
+    MC_Vec2f *pts;
+    MC_RETURN_ERROR(mc_arena_alloc(arena, sizeof(MC_Vec2f) * cap, (void**)&pts));
+
+    size_t count = 0;
+    MC_Vec2f cur = mc_vec2f_mul(beg, max);
+    for(const MC_SemiBezier4f *b = curve; b != &curve[n]; b++){
+        MC_Bezier4f bez = {
+            .p1 = cur,
+            .c1 = mc_vec2f_mul(b->c1, max),
+            .c2 = mc_vec2f_mul(b->c2, max),
+            .p2 = mc_vec2f_mul(b->p2, max),
+        };
+
+        for(float t = 0; t <= 1.0f; t += inc){
+            pts[count++] = mc_vec2f_clamp(mc_bezier4(bez, t), mc_vec2f(0, 0), max);
+        }
+
+        cur = bez.p2;
+    }
+
+    *out = (Polyline){.pts = pts, .count = count, .cap = cap};
+    return MCE_OK;
+}
+
+static void polyline_close(Polyline *pl){
+    const float inc = 0.001f;
+
+    if(pl->count == 0){
+        return;
+    }
+
+    MC_Vec2f last = pl->pts[pl->count - 1];
+    MC_Vec2f first = pl->pts[0];
+    if(mc_vec2f_dst(last, first) < 0.5f){
+        return;
+    }
+
+    for(float t = inc; t <= 1.0f && pl->count < pl->cap; t += inc){
+        pl->pts[pl->count++] = mc_vec2f_lerp(last, first, t);
+    }
+}
+
+static MC_Error stroke_polyline(MC_Di *di, MC_DiShape *shape, const Polyline *pl, float thikness){
     MC_Rect2IU bounds = {
         .width = shape->size.width,
         .height = shape->size.height
     };
-
-    MC_Vec2f shape_max_pos = mc_vec2f(shape->size.width - 1, shape->size.height - 1);
-    beg = mc_vec2f_mul(beg, shape_max_pos);
 
     struct ShapeCurveCtx ctx = {
         .thikness = shape->size.width * thikness,
@@ -429,32 +515,189 @@ static MC_Error shape_curve(MC_Di *di, MC_DiShape *shape, MC_Vec2f beg, size_t n
     RectBFS bfs;
     MC_RETURN_ERROR(bfs_rect(di->arena, bounds, &bfs, shape_curve_step, &ctx, sizeof(struct ShapeCurveStep)));
 
-    MC_Vec2i prev = mc_vec2i(beg.x + 0.5, beg.y + 0.5);
-    for(const MC_SemiBezier4f *b = curve; b != &curve[n]; b++){
-        for(float progress = 0, inc = 0.001; progress <= 1; progress += inc){
-            MC_Vec2f on_curve = mc_bezier4((MC_Bezier4f){
-                .p1 = beg,
-                .c1 =  mc_vec2f_mul(b->c1, shape_max_pos),
-                .c2 =  mc_vec2f_mul(b->c2, shape_max_pos),
-                .p2 =  mc_vec2f_mul(b->p2, shape_max_pos)
-            }, progress);
-
-            on_curve = mc_vec2f_clamp(on_curve, mc_vec2f(0, 0), shape_max_pos);
-
-            MC_Vec2i p = mc_vec2i(on_curve.x + 0.5, on_curve.y + 0.5);
-            if(mc_vec2i_equ(prev, p)){
-                continue;
-            }
-
-            MC_RETURN_ERROR(bfs_step(&bfs, p, &(struct ShapeCurveStep){
-                .nearest = on_curve
-            }));
+    MC_Vec2i prev = mc_vec2i(-1, -1);
+    for(size_t i = 0; i < pl->count; i++){
+        MC_Vec2i p = mc_vec2i(pl->pts[i].x + 0.5f, pl->pts[i].y + 0.5f);
+        if(mc_vec2i_equ(prev, p)){
+            continue;
         }
 
-        beg = b->p2;
+        prev = p;
+        MC_RETURN_ERROR(bfs_step(&bfs, p, &(struct ShapeCurveStep){
+            .nearest = pl->pts[i]
+        }));
     }
 
     return bfs_run(&bfs);
+}
+
+static MC_Error polylines_distances(MC_Di *di, MC_Size2U size, const Polyline *loops, size_t nloops, MC_DiShape **field){
+    MC_DiShape *f;
+    MC_RETURN_ERROR(mc_arena_alloc(di->arena, sizeof(MC_DiShape) + sizeof(float[size.height][size.width]), (void**)&f));
+    f->size = size;
+
+    size_t total = 0;
+    for(size_t l = 0; l < nloops; l++){
+        total += loops[l].count;
+    }
+
+    Seg *seg;
+    MC_RETURN_ERROR(mc_arena_alloc(di->arena, sizeof(Seg) * total, (void**)&seg));
+
+    size_t n = 0;
+    for(size_t l = 0; l < nloops; l++){
+        const Polyline *pl = &loops[l];
+
+        size_t beg = n;
+        for(size_t i = 0; i < pl->count; i++){
+            if(n == beg || mc_vec2f_dst(pl->pts[i], seg[n - 1].a) >= 0.7f){
+                seg[n++].a = pl->pts[i];
+            }
+        }
+
+        for(size_t i = beg; i < n; i++){
+            seg[i].b = seg[i + 1 == n ? beg : i + 1].a;
+        }
+    }
+
+    float (*pixels)[size.height][size.width] = (void*)f->pixels;
+    for(unsigned y = 0; y < size.height; y++){
+        for(unsigned x = 0; x < size.width; x++){
+            MC_Vec2f pt = mc_vec2f(x, y);
+
+            float best = FLT_MAX;
+            for(size_t j = 0; j < n; j++){
+                float d = mc_vec2f_dst(pt, mc_closest_point_to_segment(seg[j].a, seg[j].b, pt));
+                if(d < best){
+                    best = d;
+                }
+            }
+
+            (*pixels)[y][x] = -best;
+        }
+    }
+
+    *field = f;
+    return MCE_OK;
+}
+
+static void polylines_sign_inside(MC_DiShape *field, const Polyline *loops, size_t nloops, float *crossings){
+    float (*pixels)[field->size.height][field->size.width] = (void*)field->pixels;
+
+    for(unsigned y = 0; y < field->size.height; y++){
+        float scan = y;
+
+        size_t m = 0;
+        for(size_t l = 0; l < nloops; l++){
+            const Polyline *pl = &loops[l];
+            for(size_t i = 0; i < pl->count; i++){
+                MC_Vec2f a = pl->pts[i];
+                MC_Vec2f b = pl->pts[(i + 1) % pl->count];
+
+                if((a.y <= scan) != (b.y <= scan)){
+                    crossings[m++] = a.x + (scan - a.y) / (b.y - a.y) * (b.x - a.x);
+                }
+            }
+        }
+
+        for(size_t i = 1; i < m; i++){
+            float v = crossings[i];
+            size_t j = i;
+            while(j > 0 && crossings[j - 1] > v){
+                crossings[j] = crossings[j - 1];
+                j--;
+            }
+            crossings[j] = v;
+        }
+
+        for(size_t k = 0; k + 1 < m; k += 2){
+            int x0 = (int)ceilf(crossings[k]);
+            int x1 = (int)floorf(crossings[k + 1]);
+
+            x0 = x0 < 0 ? 0 : x0;
+            x1 = x1 >= (int)field->size.width ? (int)field->size.width - 1 : x1;
+
+            for(int x = x0; x <= x1; x++){
+                (*pixels)[y][x] = -(*pixels)[y][x];
+            }
+        }
+    }
+}
+
+static void shape_max(MC_DiShape *dst, const MC_DiShape *src){
+    float (*d)[dst->size.height][dst->size.width] = (void*)dst->pixels;
+    float (*s)[src->size.height][src->size.width] = (void*)src->pixels;
+
+    for(unsigned y = 0; y < dst->size.height; y++){
+        for(unsigned x = 0; x < dst->size.width; x++){
+            if((*s)[y][x] > (*d)[y][x]){
+                (*d)[y][x] = (*s)[y][x];
+            }
+        }
+    }
+}
+
+static MC_Error fill_region(MC_Di *di, MC_DiShape *shape, const Polyline *loops, size_t nloops){
+    size_t total = 0;
+    for(size_t l = 0; l < nloops; l++){
+        total += loops[l].count;
+    }
+    if(total < 3){
+        return MCE_OK;
+    }
+
+    float *crossings;
+    MC_RETURN_ERROR(mc_arena_alloc(di->arena, sizeof(float) * total, (void**)&crossings));
+
+    MC_DiShape *field;
+    MC_RETURN_ERROR(polylines_distances(di, shape->size, loops, nloops, &field));
+    polylines_sign_inside(field, loops, nloops, crossings);
+    shape_max(shape, field);
+
+    return MCE_OK;
+}
+
+static MC_Error shape_curve(MC_Di *di, MC_DiShape *shape, MC_Vec2f beg, size_t n, const MC_SemiBezier4f curve[n], float thikness){
+    MC_Vec2f max = mc_vec2f(shape->size.width - 1, shape->size.height - 1);
+
+    Polyline pl;
+    MC_RETURN_ERROR(flatten(di->arena, beg, n, curve, max, &pl));
+
+    return stroke_polyline(di, shape, &pl, thikness);
+}
+
+static MC_Error shape_contour(MC_Di *di, MC_DiShape *shape, MC_Vec2f beg, size_t n, const MC_SemiBezier4f curve[n], float thikness){
+    MC_Vec2f max = mc_vec2f(shape->size.width - 1, shape->size.height - 1);
+
+    Polyline pl;
+    MC_RETURN_ERROR(flatten(di->arena, beg, n, curve, max, &pl));
+    polyline_close(&pl);
+
+    return stroke_polyline(di, shape, &pl, thikness);
+}
+
+static MC_Error shape_region(MC_Di *di, MC_DiShape *shape, MC_Vec2f beg, size_t n, const MC_SemiBezier4f curve[n]){
+    MC_Vec2f max = mc_vec2f(shape->size.width - 1, shape->size.height - 1);
+
+    Polyline pl;
+    MC_RETURN_ERROR(flatten(di->arena, beg, n, curve, max, &pl));
+    polyline_close(&pl);
+
+    return fill_region(di, shape, &pl, 1);
+}
+
+static MC_Error shape_region_contours(MC_Di *di, MC_DiShape *shape, size_t ncontours, const MC_DiContour contours[ncontours]){
+    MC_Vec2f max = mc_vec2f(shape->size.width - 1, shape->size.height - 1);
+
+    Polyline *loops;
+    MC_RETURN_ERROR(mc_arena_alloc(di->arena, sizeof(Polyline) * ncontours, (void**)&loops));
+
+    for(size_t i = 0; i < ncontours; i++){
+        MC_RETURN_ERROR(flatten(di->arena, contours[i].beg, contours[i].n, contours[i].segments, max, &loops[i]));
+        polyline_close(&loops[i]);
+    }
+
+    return fill_region(di, shape, loops, ncontours);
 }
 
 static MC_Error bfs_rect(MC_Arena *arena, MC_Rect2IU rect, RectBFS *bfs,
