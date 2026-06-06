@@ -13,7 +13,9 @@ SRC_DIR := src
 OBJ_DIR := build/obj
 LIB     := lib$(NAME).a
 
-sources := $(shell find $(SRC_DIR) -name '*.c')
+include ../../rules.mk
+
+sources := $(filter-out $(addprefix $(SRC_DIR)/,$(EXCLUDE)),$(call rwildcard,$(SRC_DIR),*.c))
 objects := $(patsubst $(SRC_DIR)/%.c,$(OBJ_DIR)/%.o,$(sources))
 deps    := $(objects:.o=.d)
 
@@ -23,7 +25,7 @@ $(LIB): $(objects)
 	$(AR) rcs $@ $^
 
 $(OBJ_DIR)/%.o: $(SRC_DIR)/%.c
-	@mkdir -p $(dir $@)
+	@$(call mkdir_p,$(@D))
 	$(CC) -c $(CFLAGS) $(INCLUDE) -o $@ $<
 
 install: $(LIB)
@@ -32,7 +34,7 @@ install: $(LIB)
 	cp -rp include/mc/. $(DESTDIR)$(PREFIX)/include/mc/
 
 clean:
-	rm -rf $(OBJ_DIR) $(LIB)
+	$(RM) $(OBJ_DIR) $(LIB)
 
 -include $(deps)
 
