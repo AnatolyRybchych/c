@@ -734,7 +734,7 @@ static MC_Error dump_kv_array(struct KvArray *arr, MC_Stream *out, MC_Str ident,
 
 static MC_Error dump_string(const MC_String *string, MC_Stream *out){
     if(string == NULL){
-        return mc_fmt(out, __STRING(""));
+        return mc_fmt(out, "\"\"");
     }
 
     char buf[256];

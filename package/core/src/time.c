@@ -97,6 +97,7 @@ MC_Error mc_timesum(const MC_Time *time1, const MC_Time *time2, MC_Time *result)
 }
 
 MC_Error mc_sleep(const MC_Time *time){
+#ifdef __linux__
     struct timespec delay = {
         .tv_sec = time->sec,
         .tv_nsec = time->nsec
@@ -107,4 +108,8 @@ MC_Error mc_sleep(const MC_Time *time){
     }
 
     return MCE_OK;
+#else
+    (void)time;
+    return MCE_NOT_IMPLEMENTED;
+#endif
 }

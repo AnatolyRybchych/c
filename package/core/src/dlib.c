@@ -2,7 +2,9 @@
 #include <mc/data/string.h>
 #include <mc/util/error.h>
 
+#ifdef __linux__
 #include <dlfcn.h>
+#endif
 #include <malloc.h>
 #include <string.h>
 #include <stdlib.h>
@@ -19,6 +21,7 @@ struct MC_DLib{
 };
 
 MC_Error mc_dlib_open(MC_DLib **lib, MC_Str path){
+#ifdef __linux__
     MC_DLib *new;
     MC_RETURN_ERROR(mc_alloc(NULL, sizeof(MC_DLib) + sizeof(char[MC_STR_LEN(path) + 1]), (void**)&new));
 
@@ -34,6 +37,11 @@ MC_Error mc_dlib_open(MC_DLib **lib, MC_Str path){
     *lib = new;
 
     return MCE_OK;
+#else
+    (void)lib;
+    (void)path;
+    return MCE_NOT_IMPLEMENTED;
+#endif
 }
 
 void mc_dlib_close(MC_DLib *lib){

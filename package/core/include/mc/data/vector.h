@@ -7,6 +7,7 @@
 #include <malloc.h>
 #include <stdint.h>
 #include <memory.h>
+#include <string.h>
 
 #define MC_DEFINE_VECTOR(NAME, TYPE) typedef struct NAME { \
     TYPE *end; \

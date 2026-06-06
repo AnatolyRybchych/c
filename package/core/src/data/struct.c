@@ -9,6 +9,7 @@
 #include <float.h>
 #include <ctype.h>
 #include <memory.h>
+#include <string.h>
 
 #define U8(PTR) ((uint8_t*)(PTR))
 

@@ -1,7 +1,6 @@
 #include <mc/data/str.h>
 #include <mc/util/assert.h>
 #include <mc/util/memory.h>
-#include <threads.h>
 
 #include <string.h>
 
@@ -73,7 +72,7 @@ static MatchStatus matchv_from_beg(MC_Str str, MC_Str fmt, MC_Str *whole, va_lis
 
 static bool get_well_known_atom(char esc, Atom *atom) {
     #define DEFINE_ATOM_CACHE(NAME, ...) \
-        static thread_local Atom _atom_##NAME, *atom_##NAME;
+        static _Thread_local Atom _atom_##NAME, *atom_##NAME;
     ITER_WELL_KNOW_ATOMS(DEFINE_ATOM_CACHE)
 
     switch (esc){
