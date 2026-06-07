@@ -1,29 +1,37 @@
 PKG_DIR := package
-PKGS ?= core geometry net os graphics wm xlib_wm
 
 PREFIX  ?= /usr/local
 DESTDIR ?=
 
 STAGE   := $(CURDIR)/build
 
-all: libs demos mutation
+include rules.mk
+
+PKGS := core geometry net os graphics wm $(call wm_backend)
+
+all: libs
+	$(foreach s,$(call subprojects), \
+		$(MAKE) -C $s DESTDIR=$(STAGE) PREFIX= &&) cd .
 
 libs:
-	$(foreach p,$(PKGS),$(MAKE) -C $(PKG_DIR)/$(p) install PREFIX= DESTDIR=$(STAGE) &&) true
+	$(foreach p,$(PKGS), \
+		$(MAKE) -C $(PKG_DIR)/$(p) install DESTDIR=$(STAGE) PREFIX= &&) cd .
 
 demos: libs
-	$(MAKE) -C demo PREFIX= DESTDIR=$(STAGE)
+	$(MAKE) -C demo DESTDIR=$(STAGE) PREFIX=
 
 mutation: libs
-	$(MAKE) -C mutation PREFIX= DESTDIR=$(STAGE)
+	$(MAKE) -C mutation DESTDIR=$(STAGE) PREFIX=
 
 install:
-	$(foreach p,$(PKGS),$(MAKE) -C $(PKG_DIR)/$(p) install PREFIX=$(PREFIX) DESTDIR=$(DESTDIR) &&) true
+	$(foreach p,$(PKGS), \
+		$(MAKE) -C $(PKG_DIR)/$(p) install DESTDIR=$(DESTDIR) PREFIX=$(PREFIX) &&) cd .
 
 clean:
-	$(foreach p,$(PKGS),$(MAKE) -C $(PKG_DIR)/$(p) clean &&) true
-	$(MAKE) -C demo clean
-	$(MAKE) -C mutation clean
-	rm -rf build
+	$(foreach p,$(PKGS), \
+		$(MAKE) -C $(PKG_DIR)/$(p) clean &&) cd .
+	$(foreach s,$(call subprojects), \
+		$(MAKE) -C $s clean &&) cd .
+	-$(call rm_rf,build)
 
 .PHONY: all libs demos mutation install clean

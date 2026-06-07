@@ -6,7 +6,14 @@
 #include <mc/wm/wm.h>
 #include <mc/wm/event.h>
 #include <mc/wm/key.h>
+
+#ifdef _WIN32
+#include <mc/win32_wm/wm.h>
+#define DEMO_WM_VTAB mc_win32_wm_vtab
+#else
 #include <mc/xlib_wm/wm.h>
+#define DEMO_WM_VTAB mc_xlib_wm_vtab
+#endif
 
 #include <mc/graphics/graphics.h>
 #include <mc/graphics/di.h>
@@ -160,7 +167,7 @@ static void draw(MC_Graphics *g, MC_DiBuffer *buffers[CELLS]){
 
 int main(void){
     MC_WM *wm;
-    MC_REQUIRE(mc_wm_init(&wm, mc_xlib_wm_vtab));
+    MC_REQUIRE(mc_wm_init(&wm, DEMO_WM_VTAB));
 
     MC_WMWindow *window;
     MC_REQUIRE(mc_wm_window_init(wm, &window));

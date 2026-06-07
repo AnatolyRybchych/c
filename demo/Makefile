@@ -1,32 +1,30 @@
 PREFIX  ?= /usr/local
 DESTDIR ?=
-CC      ?= gcc
-CFLAGS  ?= -ggdb -Wall -Wextra -Werror -pedantic -MMD -MP
-
-# headers and libraries come from the (staging or real) install prefix
-INCLUDE := -I$(DESTDIR)$(PREFIX)/include
-LIBS    := -L$(DESTDIR)$(PREFIX)/lib \
-           -Wl,--start-group -lcore -lgeometry -lnet -los -lgraphics -lwm -lxlib_wm -Wl,--end-group \
-           -lX11 -lm
+CFLAGS  ?= -ggdb -Wall -Wextra -MMD -MP
 
 BIN_DIR := bin
 
-# a demo project is any subdirectory holding a main.c; its name is the binary name
-projects := $(patsubst ./%/main.c,%,$(shell find . -mindepth 2 -maxdepth 2 -name main.c))
-binaries := $(addprefix $(BIN_DIR)/,$(projects))
-deps     := $(addsuffix .d,$(binaries))
+include ../rules.mk
 
-# relink whenever a staged library changes
+INCLUDE := -I$(DESTDIR)$(PREFIX)/include
+LIBS    := -L$(DESTDIR)$(PREFIX)/lib \
+           -Wl,--start-group -lcore -lgeometry -lnet -los -lgraphics -lwm -l$(call wm_backend) -Wl,--end-group \
+           $(call wm_libs)
+
 libfiles := $(wildcard $(DESTDIR)$(PREFIX)/lib/*.a)
+
+projects := $(filter-out $(call demo_skip),$(patsubst ./%/main.c,%,$(call rwildcard,.,*main.c)))
+binaries := $(foreach p,$(projects),$(BIN_DIR)/$(call executable,$p))
+deps     := $(addsuffix .d,$(binaries))
 
 all: $(binaries)
 
-$(BIN_DIR)/%: %/main.c $(libfiles)
-	@mkdir -p $(dir $@)
+$(BIN_DIR)/$(call executable,%): %/main.c $(libfiles)
+	@$(call mkdir_p,$(BIN_DIR))
 	$(CC) $(CFLAGS) $(INCLUDE) -MF $@.d -o $@ $(wildcard $*/*.c) $(LIBS)
 
 clean:
-	rm -rf $(BIN_DIR)
+	-$(call rm_rf,$(BIN_DIR))
 
 -include $(deps)
 

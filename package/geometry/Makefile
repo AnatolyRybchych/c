@@ -29,12 +29,13 @@ $(OBJ_DIR)/%.o: $(SRC_DIR)/%.c
 	$(CC) -c $(CFLAGS) $(INCLUDE) -o $@ $<
 
 install: $(LIB)
-	mkdir -p $(DESTDIR)$(PREFIX)/lib $(DESTDIR)$(PREFIX)/include/mc
-	cp -p $(LIB) $(DESTDIR)$(PREFIX)/lib/
-	cp -rp include/mc/. $(DESTDIR)$(PREFIX)/include/mc/
+	$(call mkdir_p,$(DESTDIR)$(PREFIX)/lib)
+	$(call mkdir_p,$(DESTDIR)$(PREFIX)/include/mc)
+	$(call cp_file,$(LIB),$(DESTDIR)$(PREFIX)/lib)
+	$(call cp_dir,include/mc,$(DESTDIR)$(PREFIX)/include/mc)
 
 clean:
-	$(RM) $(OBJ_DIR) $(LIB)
+	-$(call rm_rf,$(OBJ_DIR) $(LIB))
 
 -include $(deps)
 
