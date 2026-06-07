@@ -3,17 +3,18 @@
 #include <mc/data/string.h>
 #include <mc/util/error.h>
 
-#ifdef __linux__
+#if defined(__linux__) || defined(_WIN32)
 #include "_fd.h"
 #endif
 
 #include <errno.h>
 #include <malloc.h>
+#include <fcntl.h>
 
 typedef struct FileCtx FileCtx;
 
 struct FileCtx{
-#ifdef __linux__
+#if defined(__linux__) || defined(_WIN32)
     FdCtx fd_ctx;
 #endif
     MC_String *path;
@@ -66,7 +67,9 @@ static int open_flags(MC_OpenMode mode){
 
     if(mode & MC_OPEN_CREATE) flags |= O_CREAT;
     if(mode & MC_OPEN_NEW) flags |= O_EXCL;
+#ifdef O_NONBLOCK
     if(mode & MC_OPEN_ASYNC) flags |= O_NONBLOCK;
+#endif
     if(mode & MC_OPEN_CLEAR) flags |= O_TRUNC;
     if(mode & MC_OPEN_EXISTING) flags &= ~O_CREAT;
 

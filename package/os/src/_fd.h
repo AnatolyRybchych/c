@@ -6,7 +6,9 @@
 #include <mc/data/string.h>
 
 
+#ifdef __linux__
 #include <sys/file.h>
+#endif
 #include <unistd.h>
 #include <limits.h>
 

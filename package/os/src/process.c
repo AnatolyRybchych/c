@@ -24,11 +24,14 @@ struct MC_Process{
     pid_t pid;
     bool finished;
     int exit_code;
+#else
+    char unused;
 #endif
 };
 
+#ifdef __linux__
 static void *die_if_null(void *ptr);
-static void *die_if_null(void *ptr);
+#endif
 
 MC_Error mc_process_run(MC_Process **ret_process, const MC_ProcessJob *job){
     MC_RETURN_INVALID(job->type >= __PROCESS_TYPES_CNT);
@@ -68,6 +71,7 @@ MC_Error mc_process_run(MC_Process **ret_process, const MC_ProcessJob *job){
     *environ = NULL;
     exit(execvp(argv[0], argv));
 #else
+    (void)ret_process;
     return MCE_NOT_SUPPORTED;
 #endif
 }
@@ -103,15 +107,21 @@ MC_Error mc_process_fork(MC_Process **process, int (*cb)(void *ctx), void *ctx){
 }
 
 MC_Error mc_process_wait(MC_Process *process){
+#ifdef __linux__
     if(process->finished){
         return MCE_OK;
     }
 
     waitpid(process->pid, &process->exit_code, 0);
     return MCE_OK;
+#else
+    (void)process;
+    return MCE_NOT_SUPPORTED;
+#endif
 }
 
 MC_Error mc_process_kill(MC_Process *process){
+#ifdef __linux__
     if(process->finished){
         return MCE_OK;
     }
@@ -123,9 +133,14 @@ MC_Error mc_process_kill(MC_Process *process){
     process->finished = true;
     waitpid(process->pid, &process->exit_code, 0);
     return MCE_OK;
+#else
+    (void)process;
+    return MCE_NOT_SUPPORTED;
+#endif
 }
 
 MC_Error mc_process_terminate(MC_Process *process){
+#ifdef __linux__
     if(process->finished){
         return MCE_OK;
     }
@@ -133,8 +148,13 @@ MC_Error mc_process_terminate(MC_Process *process){
     return kill(process->pid, SIGTERM)
         ? mc_error_from_errno(errno)
         : MCE_OK;
+#else
+    (void)process;
+    return MCE_NOT_SUPPORTED;
+#endif
 }
 
+#ifdef __linux__
 static void *die_if_null(void *ptr){
     if(ptr == NULL){
         exit(1);
@@ -142,3 +162,4 @@ static void *die_if_null(void *ptr){
 
     return ptr;
 }
+#endif

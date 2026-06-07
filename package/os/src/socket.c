@@ -1,3 +1,5 @@
+#ifdef __linux__
+
 #include <mc/os/socket.h>
 
 #include <errno.h>
@@ -388,5 +390,9 @@ static MC_Error finish_async_connect(SocketCtx *ctx){
 
     return MCE_OK;
 }
+
+#else
+typedef int mc_os_socket_placeholder;
+#endif
 
 
