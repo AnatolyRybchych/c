@@ -134,7 +134,7 @@ MC_Error mc_wm_window_init(MC_WM *wm, MC_WMWindow **ret_window){
     }
 
     MC_WMWindow *window;
-    MC_RETURN_ERROR(mc_alloc(NULL, sizeof(MC_WMWindow) + sizeof(v->window_size), (void**)&window));
+    MC_RETURN_ERROR(mc_alloc(NULL, sizeof(MC_WMWindow) + v->window_size, (void**)&window));
 
     memset(window, 0, sizeof(MC_WMWindow) + v->window_size);
     window->wm = wm;
