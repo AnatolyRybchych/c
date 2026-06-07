@@ -44,6 +44,8 @@ struct MC_WM{
     struct MC_TargetWM *target;
     struct MC_TargetWMEvent *target_event;
 
+    MC_WMEvents events;
+
     unsigned pending_indications;
     MC_TargetIndication indications[INDICATIONS_BUFFER_SIZE];
 
@@ -57,7 +59,14 @@ struct MC_WM{
 static void dump_vtable(MC_WM *wm);
 static void handle_duplicate_indications(MC_WM *wm);
 static MC_WMEvent translate_indication(MC_WM *wm);
+static void discard_indication(MC_WM *wm);
 static MC_WMWindow *window_from_target(MC_WM *wm, struct MC_TargetWMWindow *target);
+
+static const MC_WMEvents indication_category[MC_WMIND_COUNT] = {
+    #define MC_WMIDN(NAME, DUP_ACTION, CATEGORY) [MC_WMIND_##NAME] = MC_WM_EVENTS_##CATEGORY,
+    MC_ITER_INDICATIONS()
+    #undef MC_WMIDN
+};
 
 MC_Error mc_wm_init(MC_WM **ret_wm, const MC_WMVtab *vtab){
     if(!vtab || !vtab->init){
@@ -82,6 +91,7 @@ MC_Error mc_wm_init(MC_WM **ret_wm, const MC_WMVtab *vtab){
     memcpy(&wm->vtab, vtab, sizeof(MC_WMVtab));
     wm->target = (struct MC_TargetWM*)wm->data;
     wm->log = MC_STDERR;
+    wm->events = MC_WM_EVENTS_CORE | MC_WM_EVENTS_WINDOW_CORE;
 
     MC_Error arena_status = mc_arena_init(&wm->arena, NULL);
     if(arena_status != MCE_OK){
@@ -123,6 +133,20 @@ void mc_wm_destroy(MC_WM *wm){
 
 struct MC_TargetWM *mc_wm_get_target(MC_WM *wm){
     return wm->target;
+}
+
+MC_Error mc_wm_request_events(MC_WM *wm, MC_WMEvents events){
+    wm->events |= events;
+
+    if(wm->vtab.request_events){
+        return wm->vtab.request_events(wm->target, events);
+    }
+
+    return MCE_OK;
+}
+
+MC_WMEvents mc_wm_get_requested_events(MC_WM *wm){
+    return wm->events;
 }
 
 MC_Error mc_wm_window_init(MC_WM *wm, MC_WMWindow **ret_window){
@@ -504,37 +528,44 @@ bool mc_wm_window_cached_is_mouse_over(MC_WMWindow *window){
 MC_Error mc_wm_poll_event(MC_WM *wm, MC_WMEvent *event){
     MC_WMVtab *v = &wm->vtab;
 
-    if(wm->pending_indications == 0){
-        mc_arena_reset(wm->arena);
-    }
+    for(;;){
+        while(wm->pending_indications){
+            if(indication_category[wm->indications[0].type] & wm->events){
+                *event = translate_indication(wm);
+                return MCE_OK;
+            }
 
-    if(wm->pending_indications < INDICATIONS_BUFFER_SIZE - MC_WM_MAX_INDICATIONS_PER_EVENT){
-        if(v->poll_event && v->poll_event(wm->target, wm->target_event)){
+            discard_indication(wm);
+        }
+
+        mc_arena_reset(wm->arena);
+
+        if(!(v->poll_event && v->poll_event(wm->target, wm->target_event))){
+            return MCE_AGAIN;
+        }
+
+        if(v->translate_event){
+            unsigned new_indications = v->translate_event(
+                wm->target, wm->target_event,
+                wm->indications + wm->pending_indications);
+
+            MC_ASSERT_FAULT(new_indications <= MC_WM_MAX_INDICATIONS_PER_EVENT);
+
+            wm->pending_indications += new_indications;
+        }
+
+        if(wm->pending_indications){
+            handle_duplicate_indications(wm);
+        }
+
+        if(wm->events & MC_WM_EVENTS_RAW){
             *event = (MC_WMEvent){
                 .type = MC_WME_RAW,
                 .as.raw = wm->target_event
             };
 
-            if(v->translate_event){
-                unsigned new_indications = v->translate_event(
-                    wm->target, wm->target_event,
-                    wm->indications + wm->pending_indications);
-
-                MC_ASSERT_FAULT(new_indications <= MC_WM_MAX_INDICATIONS_PER_EVENT);
-
-                wm->pending_indications += new_indications;
-            }
-
             return MCE_OK;
         }
-    }
-
-    if(wm->pending_indications){
-        *event = translate_indication(wm);
-        return MCE_OK;
-    }
-    else{
-        return MCE_AGAIN;
     }
 }
 
@@ -570,7 +601,7 @@ static void dump_vtable(MC_WM *wm){
 
 static void handle_duplicate_indications(MC_WM *wm){
     static const MC_TargetIndicationDuplicateAction dup_action[MC_WMIND_COUNT] = {
-        #define MC_WMIDN(NAME, DUP_ACTION) [MC_WMIND_##NAME] = MC_WM_INDDUP_##DUP_ACTION,
+        #define MC_WMIDN(NAME, DUP_ACTION, ...) [MC_WMIND_##NAME] = MC_WM_INDDUP_##DUP_ACTION,
         MC_ITER_INDICATIONS()
         #undef MC_WMIDN
     };
@@ -615,9 +646,11 @@ static void handle_duplicate_indications(MC_WM *wm){
     MC_ASSERT_FAULT(wm->pending_indications);
 }
 
-static MC_WMEvent translate_indication(MC_WM *wm){
-    handle_duplicate_indications(wm);
+static void discard_indication(MC_WM *wm){
+    memmove(wm->indications, wm->indications + 1, sizeof(MC_TargetIndication[--wm->pending_indications]));
+}
 
+static MC_WMEvent translate_indication(MC_WM *wm){
     MC_TargetIndication ind = *wm->indications;
     memmove(wm->indications, wm->indications + 1, sizeof(MC_TargetIndication[--wm->pending_indications]));
     

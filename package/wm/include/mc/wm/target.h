@@ -10,26 +10,26 @@
 #define MC_WM_MAX_INDICATIONS_PER_EVENT 16
 
 #define MC_ITER_INDICATIONS() \
-    MC_WMIDN(WINDOW_READY,              UNIQUE_PER_WINDOW) \
-    MC_WMIDN(WINDOW_RESIZED,            USE_LAST) \
-    MC_WMIDN(WINDOW_MOVED,              USE_LAST) \
-    MC_WMIDN(WINDOW_HIDE,               USE_ALL) \
-    MC_WMIDN(WINDOW_SHOW,               USE_ALL) \
-    MC_WMIDN(WINDOW_REDRAW_REQUESTED,   USE_LAST) \
-    MC_WMIDN(WINDOW_CLOSE_REQUESTED,    USE_LAST) \
-    MC_WMIDN(WINDOW_STATE_CHANGED,      USE_LAST) \
-    MC_WMIDN(FOCUS_GAINED,              USE_LAST) \
-    MC_WMIDN(FOCUS_LOST,                USE_LAST) \
-    MC_WMIDN(MOUSE_MOVED,               USE_ALL) \
-    MC_WMIDN(MOUSE_DOWN,                USE_ALL) \
-    MC_WMIDN(MOUSE_UP,                  USE_ALL) \
-    MC_WMIDN(MOUSE_ENTER,               USE_ALL) \
-    MC_WMIDN(MOUSE_LEAVE,               USE_ALL) \
-    MC_WMIDN(MOUSE_WHEEL,               USE_ALL) \
-    MC_WMIDN(KEY_DOWN,                  USE_ALL) \
-    MC_WMIDN(KEY_UP,                    USE_ALL) \
-    MC_WMIDN(TEXT_INPUT,                USE_ALL) \
-    MC_WMIDN(PASTE_TEXT,                USE_ALL) \
+    MC_WMIDN(WINDOW_READY,            UNIQUE_PER_WINDOW, WINDOW_CORE) \
+    MC_WMIDN(WINDOW_RESIZED,          USE_LAST,          WINDOW_CORE) \
+    MC_WMIDN(WINDOW_MOVED,            USE_LAST,          WINDOW_CORE) \
+    MC_WMIDN(WINDOW_HIDE,             USE_ALL,           WINDOW_CORE) \
+    MC_WMIDN(WINDOW_SHOW,             USE_ALL,           WINDOW_CORE) \
+    MC_WMIDN(WINDOW_REDRAW_REQUESTED, USE_LAST,          WINDOW_CORE) \
+    MC_WMIDN(WINDOW_CLOSE_REQUESTED,  USE_LAST,          WINDOW_CORE) \
+    MC_WMIDN(WINDOW_STATE_CHANGED,    USE_LAST,          WINDOW_CORE) \
+    MC_WMIDN(FOCUS_GAINED,            USE_LAST,          WINDOW_CORE) \
+    MC_WMIDN(FOCUS_LOST,              USE_LAST,          WINDOW_CORE) \
+    MC_WMIDN(MOUSE_MOVED,             USE_ALL,           WINDOW_CORE) \
+    MC_WMIDN(MOUSE_DOWN,              USE_ALL,           WINDOW_CORE) \
+    MC_WMIDN(MOUSE_UP,                USE_ALL,           WINDOW_CORE) \
+    MC_WMIDN(MOUSE_ENTER,             USE_ALL,           WINDOW_CORE) \
+    MC_WMIDN(MOUSE_LEAVE,             USE_ALL,           WINDOW_CORE) \
+    MC_WMIDN(MOUSE_WHEEL,             USE_ALL,           WINDOW_CORE) \
+    MC_WMIDN(KEY_DOWN,                USE_ALL,           WINDOW_CORE) \
+    MC_WMIDN(KEY_UP,                  USE_ALL,           WINDOW_CORE) \
+    MC_WMIDN(TEXT_INPUT,              USE_ALL,           WINDOW_CORE) \
+    MC_WMIDN(PASTE_TEXT,              USE_ALL,           WINDOW_CORE) \
 
 typedef unsigned MC_WMIndicationType;
 enum MC_WMIndicationType{
@@ -185,6 +185,8 @@ struct MC_WMVtab{
 
     bool (*poll_event)(struct MC_TargetWM *wm, struct MC_TargetWMEvent *event);
     unsigned (*translate_event)(struct MC_TargetWM *wm, const struct MC_TargetWMEvent *event, MC_TargetIndication indications[MC_WM_MAX_INDICATIONS_PER_EVENT]);
+
+    MC_Error (*request_events)(struct MC_TargetWM *wm, MC_WMEvents events);
 };
 
 #endif // MC_WM_TARGET_H

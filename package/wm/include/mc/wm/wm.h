@@ -29,11 +29,26 @@ enum MC_WMWindowState{
     MC_WM_WINDOW_STATE_FULLSCREEN,
 };
 
+typedef unsigned MC_WMEvents;
+enum MC_WMEvents{
+    MC_WM_EVENTS_NONE            = 0,
+
+    MC_WM_EVENTS_RAW             = 1 << 0,
+
+    MC_WM_EVENTS_CORE            = 1 << 1,
+    MC_WM_EVENTS_WINDOW_CORE     = 1 << 2,
+    MC_WM_EVENTS_GLOBAL_KEYBOARD = 1 << 3,
+    MC_WM_EVENTS_GLOBAL_MOUSE    = 1 << 4,
+};
+
 struct MC_Graphics;
 
 MC_Error mc_wm_init(MC_WM **wm, const MC_WMVtab *vtab);
 void mc_wm_destroy(MC_WM *wm);
 struct MC_TargetWM *mc_wm_get_target(MC_WM *wm);
+
+MC_Error mc_wm_request_events(MC_WM *wm, MC_WMEvents events);
+MC_WMEvents mc_wm_get_requested_events(MC_WM *wm);
 
 MC_Error mc_wm_window_init(MC_WM *wm, MC_WMWindow **window);
 void mc_wm_window_destroy(MC_WMWindow *window);
