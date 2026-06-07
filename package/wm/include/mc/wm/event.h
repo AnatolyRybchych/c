@@ -27,6 +27,12 @@
     MC_EVENT(KEY_UP,                    USE_ALL) \
     MC_EVENT(TEXT_INPUT,                USE_ALL) \
     MC_EVENT(PASTE_TEXT,                USE_ALL) \
+    MC_EVENT(GLOBAL_KEY_DOWN,           USE_ALL) \
+    MC_EVENT(GLOBAL_KEY_UP,             USE_ALL) \
+    MC_EVENT(GLOBAL_MOUSE_MOVED,        USE_ALL) \
+    MC_EVENT(GLOBAL_MOUSE_DOWN,         USE_ALL) \
+    MC_EVENT(GLOBAL_MOUSE_UP,           USE_ALL) \
+    MC_EVENT(GLOBAL_MOUSE_WHEEL,        USE_ALL) \
 
 typedef unsigned MC_WMEventType;
 enum MC_WMEventType{
@@ -141,6 +147,34 @@ struct MC_WMEvent{
             struct MC_WMWindow *window;
             MC_Str text;
         } paste_text;
+
+        struct MC_WME_GlobalKeyDown{
+            MC_Key key;
+        } global_key_down;
+
+        struct MC_WME_GlobalKeyUp{
+            MC_Key key;
+        } global_key_up;
+
+        struct MC_WME_GlobalMouseMoved{
+            MC_Vec2i position;
+        } global_mouse_moved;
+
+        struct MC_WME_GlobalMouseDown{
+            MC_Vec2i position;
+            MC_MouseButton button;
+        } global_mouse_down;
+
+        struct MC_WME_GlobalMouseUp{
+            MC_Vec2i position;
+            MC_MouseButton button;
+        } global_mouse_up;
+
+        struct MC_WME_GlobalMouseWheel{
+            MC_Vec2i position;
+            int up;
+            int right;
+        } global_mouse_wheel;
     } as;
 };
 

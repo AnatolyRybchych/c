@@ -30,6 +30,12 @@
     MC_WMIDN(KEY_UP,                  USE_ALL,           WINDOW_CORE) \
     MC_WMIDN(TEXT_INPUT,              USE_ALL,           WINDOW_CORE) \
     MC_WMIDN(PASTE_TEXT,              USE_ALL,           WINDOW_CORE) \
+    MC_WMIDN(GLOBAL_KEY_DOWN,         USE_ALL,           GLOBAL_KEYBOARD) \
+    MC_WMIDN(GLOBAL_KEY_UP,           USE_ALL,           GLOBAL_KEYBOARD) \
+    MC_WMIDN(GLOBAL_MOUSE_MOVED,      USE_ALL,           GLOBAL_MOUSE) \
+    MC_WMIDN(GLOBAL_MOUSE_DOWN,       USE_ALL,           GLOBAL_MOUSE) \
+    MC_WMIDN(GLOBAL_MOUSE_UP,         USE_ALL,           GLOBAL_MOUSE) \
+    MC_WMIDN(GLOBAL_MOUSE_WHEEL,      USE_ALL,           GLOBAL_MOUSE) \
 
 typedef unsigned MC_WMIndicationType;
 enum MC_WMIndicationType{
@@ -154,6 +160,34 @@ struct MC_TargetIndication{
             struct MC_TargetWMWindow *window;
             MC_Str text;
         } paste_text;
+
+        struct MC_WMIND_GlobalKeyDown{
+            MC_Key key;
+        } global_key_down;
+
+        struct MC_WMIND_GlobalKeyUp{
+            MC_Key key;
+        } global_key_up;
+
+        struct MC_WMIND_GlobalMouseMoved{
+            MC_Vec2i position;
+        } global_mouse_moved;
+
+        struct MC_WMIND_GlobalMouseDown{
+            MC_Vec2i position;
+            MC_MouseButton button;
+        } global_mouse_down;
+
+        struct MC_WMIND_GlobalMouseUp{
+            MC_Vec2i position;
+            MC_MouseButton button;
+        } global_mouse_up;
+
+        struct MC_WMIND_GlobalMouseWheel{
+            MC_Vec2i position;
+            int up;
+            int right;
+        } global_mouse_wheel;
     } as;
 };
 

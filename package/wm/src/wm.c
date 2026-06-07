@@ -116,12 +116,12 @@ MC_Error mc_wm_init(MC_WM **ret_wm, const MC_WMVtab *vtab){
 }
 
 void mc_wm_destroy(MC_WM *wm){
-    if(wm->vtab.destroy){
-        wm->vtab.destroy(wm->target);
-    }
-
     while(!MC_VECTOR_EMPTY(wm->windows)){
         mc_wm_window_destroy(wm->windows->beg[0]);
+    }
+
+    if(wm->vtab.destroy){
+        wm->vtab.destroy(wm->target);
     }
 
     MC_VECTOR_FREE(wm->windows);
@@ -828,6 +828,46 @@ static MC_WMEvent translate_indication(MC_WM *wm){
                 .window = window,
                 .text = ind.as.paste_text.text,
             }
+        };
+    case MC_WMIND_GLOBAL_KEY_DOWN:
+        return (MC_WMEvent){
+            .type = MC_WME_GLOBAL_KEY_DOWN,
+            .as.global_key_down = {.key = ind.as.global_key_down.key},
+        };
+    case MC_WMIND_GLOBAL_KEY_UP:
+        return (MC_WMEvent){
+            .type = MC_WME_GLOBAL_KEY_UP,
+            .as.global_key_up = {.key = ind.as.global_key_up.key},
+        };
+    case MC_WMIND_GLOBAL_MOUSE_MOVED:
+        return (MC_WMEvent){
+            .type = MC_WME_GLOBAL_MOUSE_MOVED,
+            .as.global_mouse_moved = {.position = ind.as.global_mouse_moved.position},
+        };
+    case MC_WMIND_GLOBAL_MOUSE_DOWN:
+        return (MC_WMEvent){
+            .type = MC_WME_GLOBAL_MOUSE_DOWN,
+            .as.global_mouse_down = {
+                .position = ind.as.global_mouse_down.position,
+                .button = ind.as.global_mouse_down.button,
+            },
+        };
+    case MC_WMIND_GLOBAL_MOUSE_UP:
+        return (MC_WMEvent){
+            .type = MC_WME_GLOBAL_MOUSE_UP,
+            .as.global_mouse_up = {
+                .position = ind.as.global_mouse_up.position,
+                .button = ind.as.global_mouse_up.button,
+            },
+        };
+    case MC_WMIND_GLOBAL_MOUSE_WHEEL:
+        return (MC_WMEvent){
+            .type = MC_WME_GLOBAL_MOUSE_WHEEL,
+            .as.global_mouse_wheel = {
+                .position = ind.as.global_mouse_wheel.position,
+                .up = ind.as.global_mouse_wheel.up,
+                .right = ind.as.global_mouse_wheel.right,
+            },
         };
     default:
         MC_ASSERT_FAULT("NOT IMPLEMENTED YET" && 0);
