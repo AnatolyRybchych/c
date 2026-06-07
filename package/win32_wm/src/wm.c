@@ -21,8 +21,6 @@ struct rawevent{
     UINT message;
     WPARAM wparam;
     LPARAM lparam;
-    bool ctrl;
-    bool shift;
 };
 
 struct MC_TargetWM{
@@ -30,6 +28,9 @@ struct MC_TargetWM{
     MC_Alloc *arena;
     HINSTANCE instance;
     ATOM window_class;
+
+    HHOOK keyboard_hook;
+    HHOOK mouse_hook;
 
     struct rawevent queue[EVENT_QUEUE_CAP];
     unsigned queue_head;
@@ -49,6 +50,9 @@ struct MC_TargetWMEvent{
     struct rawevent raw;
 };
 
+static struct MC_TargetWM *window_class_owner;
+static struct MC_TargetWM *global_hook_wm;
+
 static MC_Error init(struct MC_TargetWM *wm, MC_Stream *log, MC_Alloc *arena);
 static void destroy(struct MC_TargetWM *wm);
 static MC_Error init_window(struct MC_TargetWM *wm, struct MC_TargetWMWindow *window);
@@ -67,6 +71,13 @@ static MC_MouseButton get_mouse_button(UINT message, WPARAM wparam);
 static MC_Key get_key(WPARAM vk);
 static struct MC_TargetWMWindow *window_of(HWND hwnd);
 static MC_Error read_clipboard(struct MC_TargetWM *wm, HWND hwnd, MC_Str *out);
+static MC_Error request_events(struct MC_TargetWM *wm, MC_WMEvents events);
+static unsigned translate_global_event(const struct rawevent *e, MC_TargetIndication indications[MC_WM_MAX_INDICATIONS_PER_EVENT]);
+static void enqueue_global(struct MC_TargetWM *wm, UINT message, WPARAM wparam, POINT point);
+static LRESULT CALLBACK keyboard_hook_proc(int code, WPARAM wparam, LPARAM lparam);
+static LRESULT CALLBACK mouse_hook_proc(int code, WPARAM wparam, LPARAM lparam);
+static LPARAM pack_point(POINT point);
+static MC_Vec2i unpack_point(LPARAM lparam);
 
 static MC_WMVtab vtab = {
     .name = "WIN32",
@@ -87,6 +98,8 @@ static MC_WMVtab vtab = {
 
     .poll_event = poll_event,
     .translate_event = translate_event,
+
+    .request_events = request_events,
 };
 
 const MC_WMVtab *mc_win32_wm_vtab = &vtab;
@@ -102,6 +115,11 @@ static MC_Error init(struct MC_TargetWM *wm, MC_Stream *log, MC_Alloc *arena){
     wm->queue_head = 0;
     wm->queue_count = 0;
 
+    if(window_class_owner != NULL){
+        LOG("window class is already registered by another window manager");
+        return MCE_BUSY;
+    }
+
     WNDCLASSEX wc = {0};
     wc.cbSize = sizeof(wc);
     wc.style = CS_OWNDC | CS_HREDRAW | CS_VREDRAW;
@@ -111,16 +129,35 @@ static MC_Error init(struct MC_TargetWM *wm, MC_Stream *log, MC_Alloc *arena){
     wc.lpszClassName = WINDOW_CLASS_NAME;
 
     wm->window_class = RegisterClassEx(&wc);
-    if(wm->window_class == 0 && GetLastError() != ERROR_CLASS_ALREADY_EXISTS){
+    if(wm->window_class == 0){
         LOG("RegisterClassEx failed (%lu)", (unsigned long)GetLastError());
         return MCE_NOT_SUPPORTED;
     }
+
+    window_class_owner = wm;
 
     return MCE_OK;
 }
 
 static void destroy(struct MC_TargetWM *wm){
-    UnregisterClass(WINDOW_CLASS_NAME, wm->instance);
+    if(wm->keyboard_hook){
+        UnhookWindowsHookEx(wm->keyboard_hook);
+        wm->keyboard_hook = NULL;
+    }
+
+    if(wm->mouse_hook){
+        UnhookWindowsHookEx(wm->mouse_hook);
+        wm->mouse_hook = NULL;
+    }
+
+    if(global_hook_wm == wm){
+        global_hook_wm = NULL;
+    }
+
+    if(window_class_owner == wm){
+        UnregisterClass(WINDOW_CLASS_NAME, wm->instance);
+        window_class_owner = NULL;
+    }
 }
 
 static MC_Error init_window(struct MC_TargetWM *wm, struct MC_TargetWMWindow *window){
@@ -262,6 +299,11 @@ static bool poll_event(struct MC_TargetWM *wm, struct MC_TargetWMEvent *event){
 
 static unsigned translate_event(struct MC_TargetWM *wm, const struct MC_TargetWMEvent *event, MC_TargetIndication indications[MC_WM_MAX_INDICATIONS_PER_EVENT]){
     const struct rawevent *e = &event->raw;
+
+    if(e->hwnd == NULL){
+        return translate_global_event(e, indications);
+    }
+
     struct MC_TargetWMWindow *window = window_of(e->hwnd);
 
     switch(e->message){
@@ -399,7 +441,9 @@ static unsigned translate_event(struct MC_TargetWM *wm, const struct MC_TargetWM
             .as.key_down = {.key = get_key(e->wparam)},
         };
 
-        bool paste = (e->ctrl && e->wparam == 'V') || (e->shift && e->wparam == VK_INSERT);
+        bool ctrl = (GetKeyState(VK_CONTROL) & 0x8000) != 0;
+        bool shift = (GetKeyState(VK_SHIFT) & 0x8000) != 0;
+        bool paste = (ctrl && e->wparam == 'V') || (shift && e->wparam == VK_INSERT);
         if(paste){
             MC_Str text;
             if(read_clipboard(wm, e->hwnd, &text) == MCE_OK){
@@ -512,8 +556,6 @@ static void enqueue(struct MC_TargetWM *wm, HWND hwnd, UINT message, WPARAM wpar
         .message = message,
         .wparam = wparam,
         .lparam = lparam,
-        .ctrl = (GetKeyState(VK_CONTROL) & 0x8000) != 0,
-        .shift = (GetKeyState(VK_SHIFT) & 0x8000) != 0,
     };
 
     wm->queue_count++;
@@ -590,4 +632,139 @@ static MC_Error read_clipboard(struct MC_TargetWM *wm, HWND hwnd, MC_Str *out){
     GlobalUnlock(handle);
     CloseClipboard();
     return status;
+}
+
+static MC_Error request_events(struct MC_TargetWM *wm, MC_WMEvents events){
+    if(!(events & (MC_WM_EVENTS_GLOBAL_KEYBOARD | MC_WM_EVENTS_GLOBAL_MOUSE))){
+        return MCE_OK;
+    }
+
+    if(global_hook_wm != NULL && global_hook_wm != wm){
+        LOG("global input is already claimed by another window manager");
+        return MCE_BUSY;
+    }
+
+    global_hook_wm = wm;
+
+    if((events & MC_WM_EVENTS_GLOBAL_KEYBOARD) && wm->keyboard_hook == NULL){
+        wm->keyboard_hook = SetWindowsHookEx(WH_KEYBOARD_LL, keyboard_hook_proc, wm->instance, 0);
+        if(wm->keyboard_hook == NULL){
+            LOG("SetWindowsHookEx(WH_KEYBOARD_LL) failed (%lu)", (unsigned long)GetLastError());
+            return MCE_NOT_SUPPORTED;
+        }
+    }
+
+    if((events & MC_WM_EVENTS_GLOBAL_MOUSE) && wm->mouse_hook == NULL){
+        wm->mouse_hook = SetWindowsHookEx(WH_MOUSE_LL, mouse_hook_proc, wm->instance, 0);
+        if(wm->mouse_hook == NULL){
+            LOG("SetWindowsHookEx(WH_MOUSE_LL) failed (%lu)", (unsigned long)GetLastError());
+            return MCE_NOT_SUPPORTED;
+        }
+    }
+
+    return MCE_OK;
+}
+
+static unsigned translate_global_event(const struct rawevent *e, MC_TargetIndication indications[MC_WM_MAX_INDICATIONS_PER_EVENT]){
+    MC_Vec2i position = unpack_point(e->lparam);
+
+    switch(e->message){
+    case WM_KEYDOWN:
+    case WM_SYSKEYDOWN:
+        indications[0] = (MC_TargetIndication){
+            .type = MC_WMIND_GLOBAL_KEY_DOWN,
+            .as.global_key_down = {.key = get_key(e->wparam)},
+        };
+        return 1;
+    case WM_KEYUP:
+    case WM_SYSKEYUP:
+        indications[0] = (MC_TargetIndication){
+            .type = MC_WMIND_GLOBAL_KEY_UP,
+            .as.global_key_up = {.key = get_key(e->wparam)},
+        };
+        return 1;
+    case WM_MOUSEMOVE:
+        indications[0] = (MC_TargetIndication){
+            .type = MC_WMIND_GLOBAL_MOUSE_MOVED,
+            .as.global_mouse_moved = {.position = position},
+        };
+        return 1;
+    case WM_LBUTTONDOWN:
+    case WM_RBUTTONDOWN:
+    case WM_MBUTTONDOWN:
+    case WM_XBUTTONDOWN:
+        indications[0] = (MC_TargetIndication){
+            .type = MC_WMIND_GLOBAL_MOUSE_DOWN,
+            .as.global_mouse_down = {.position = position, .button = get_mouse_button(e->message, e->wparam)},
+        };
+        return 1;
+    case WM_LBUTTONUP:
+    case WM_RBUTTONUP:
+    case WM_MBUTTONUP:
+    case WM_XBUTTONUP:
+        indications[0] = (MC_TargetIndication){
+            .type = MC_WMIND_GLOBAL_MOUSE_UP,
+            .as.global_mouse_up = {.position = position, .button = get_mouse_button(e->message, e->wparam)},
+        };
+        return 1;
+    case WM_MOUSEWHEEL:
+        indications[0] = (MC_TargetIndication){
+            .type = MC_WMIND_GLOBAL_MOUSE_WHEEL,
+            .as.global_mouse_wheel = {.position = position, .up = GET_WHEEL_DELTA_WPARAM(e->wparam) / WHEEL_DELTA, .right = 0},
+        };
+        return 1;
+    case WM_MOUSEHWHEEL:
+        indications[0] = (MC_TargetIndication){
+            .type = MC_WMIND_GLOBAL_MOUSE_WHEEL,
+            .as.global_mouse_wheel = {.position = position, .up = 0, .right = GET_WHEEL_DELTA_WPARAM(e->wparam) / WHEEL_DELTA},
+        };
+        return 1;
+    default:
+        return 0;
+    }
+}
+
+static void enqueue_global(struct MC_TargetWM *wm, UINT message, WPARAM wparam, POINT point){
+    if(wm->queue_count >= EVENT_QUEUE_CAP){
+        return;
+    }
+
+    unsigned slot = (wm->queue_head + wm->queue_count) % EVENT_QUEUE_CAP;
+    wm->queue[slot] = (struct rawevent){
+        .hwnd = NULL,
+        .message = message,
+        .wparam = wparam,
+        .lparam = pack_point(point),
+    };
+
+    wm->queue_count++;
+}
+
+static LPARAM pack_point(POINT point){
+    return ((LPARAM)(DWORD)point.x) | ((LPARAM)(DWORD)point.y << 32);
+}
+
+static MC_Vec2i unpack_point(LPARAM lparam){
+    return (MC_Vec2i){
+        .x = (int)(LONG)(DWORD)lparam,
+        .y = (int)(LONG)(DWORD)(lparam >> 32),
+    };
+}
+
+static LRESULT CALLBACK keyboard_hook_proc(int code, WPARAM wparam, LPARAM lparam){
+    if(code == HC_ACTION && global_hook_wm){
+        KBDLLHOOKSTRUCT *kb = (KBDLLHOOKSTRUCT*)lparam;
+        enqueue_global(global_hook_wm, (UINT)wparam, kb->vkCode, (POINT){0, 0});
+    }
+
+    return CallNextHookEx(NULL, code, wparam, lparam);
+}
+
+static LRESULT CALLBACK mouse_hook_proc(int code, WPARAM wparam, LPARAM lparam){
+    if(code == HC_ACTION && global_hook_wm){
+        MSLLHOOKSTRUCT *ms = (MSLLHOOKSTRUCT*)lparam;
+        enqueue_global(global_hook_wm, (UINT)wparam, ms->mouseData, ms->pt);
+    }
+
+    return CallNextHookEx(NULL, code, wparam, lparam);
 }
