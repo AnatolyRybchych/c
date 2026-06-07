@@ -7,4 +7,4 @@
 
 MC_Error mc_win32_graphics_init(MC_Graphics **g, HWND hwnd);
 
-#endif // MC_WIN32WM_GRAPHICS_H
+#endif

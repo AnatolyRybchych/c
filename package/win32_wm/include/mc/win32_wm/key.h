@@ -113,4 +113,4 @@
     MC_VKEY('Y',            Y) \
     MC_VKEY('Z',            Z) \
 
-#endif // MC_WIN32WM_KEY_H
+#endif

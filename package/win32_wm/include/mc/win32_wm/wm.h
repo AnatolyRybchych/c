@@ -9,4 +9,10 @@ extern const MC_WMVtab *mc_win32_wm_vtab;
 
 HWND mc_wm_win32_window_get_hwnd(MC_TargetWMWindow *window);
 
-#endif // MC_WIN32WM_H
+void mc_wm_win32_set_keyboard_suppress(MC_TargetWM *wm,
+    bool (*suppress)(MC_TargetWM *wm, int vk, bool down));
+
+void mc_wm_win32_set_mouse_suppress(MC_TargetWM *wm,
+    bool (*suppress)(MC_TargetWM *wm, UINT message, int x, int y));
+
+#endif

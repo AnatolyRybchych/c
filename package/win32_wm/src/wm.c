@@ -31,6 +31,8 @@ struct MC_TargetWM{
 
     HHOOK keyboard_hook;
     HHOOK mouse_hook;
+    bool (*keyboard_suppress)(MC_TargetWM *wm, int vk, bool down);
+    bool (*mouse_suppress)(MC_TargetWM *wm, UINT message, int x, int y);
 
     struct rawevent queue[EVENT_QUEUE_CAP];
     unsigned queue_head;
@@ -106,6 +108,16 @@ const MC_WMVtab *mc_win32_wm_vtab = &vtab;
 
 HWND mc_wm_win32_window_get_hwnd(MC_TargetWMWindow *window){
     return window->hwnd;
+}
+
+void mc_wm_win32_set_keyboard_suppress(MC_TargetWM *wm,
+    bool (*suppress)(MC_TargetWM *wm, int vk, bool down)){
+    wm->keyboard_suppress = suppress;
+}
+
+void mc_wm_win32_set_mouse_suppress(MC_TargetWM *wm,
+    bool (*suppress)(MC_TargetWM *wm, UINT message, int x, int y)){
+    wm->mouse_suppress = suppress;
 }
 
 static MC_Error init(struct MC_TargetWM *wm, MC_Stream *log, MC_Alloc *arena){
@@ -755,6 +767,13 @@ static LRESULT CALLBACK keyboard_hook_proc(int code, WPARAM wparam, LPARAM lpara
     if(code == HC_ACTION && global_hook_wm){
         KBDLLHOOKSTRUCT *kb = (KBDLLHOOKSTRUCT*)lparam;
         enqueue_global(global_hook_wm, (UINT)wparam, kb->vkCode, (POINT){0, 0});
+
+        if(global_hook_wm->keyboard_suppress){
+            bool down = wparam == WM_KEYDOWN || wparam == WM_SYSKEYDOWN;
+            if(global_hook_wm->keyboard_suppress(global_hook_wm, (int)kb->vkCode, down)){
+                return 1;
+            }
+        }
     }
 
     return CallNextHookEx(NULL, code, wparam, lparam);
@@ -764,6 +783,12 @@ static LRESULT CALLBACK mouse_hook_proc(int code, WPARAM wparam, LPARAM lparam){
     if(code == HC_ACTION && global_hook_wm){
         MSLLHOOKSTRUCT *ms = (MSLLHOOKSTRUCT*)lparam;
         enqueue_global(global_hook_wm, (UINT)wparam, ms->mouseData, ms->pt);
+
+        if(global_hook_wm->mouse_suppress){
+            if(global_hook_wm->mouse_suppress(global_hook_wm, (UINT)wparam, ms->pt.x, ms->pt.y)){
+                return 1;
+            }
+        }
     }
 
     return CallNextHookEx(NULL, code, wparam, lparam);
