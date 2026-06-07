@@ -4,6 +4,8 @@
 #ifdef __linux__
 #include <time.h>
 #include <sys/sysinfo.h>
+#elif defined(_WIN32)
+#include <windows.h>
 #endif
 
 MC_Error mc_gettime(MC_GetTime gettime, MC_Time *time){
@@ -107,6 +109,9 @@ MC_Error mc_sleep(const MC_Time *time){
         return MCE_NOT_SUPPORTED;
     }
 
+    return MCE_OK;
+#elif defined(_WIN32)
+    Sleep((DWORD)(time->sec * MC_MSEC_IN_SEC + time->nsec / (MC_NSEC_IN_SEC / MC_MSEC_IN_SEC)));
     return MCE_OK;
 #else
     (void)time;

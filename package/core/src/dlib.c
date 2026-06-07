@@ -68,6 +68,9 @@ void *mc_dlib_get(MC_DLib *lib, MC_Str symbol){
 
     res = dlsym(lib->dl, sym->data);
     mc_free(NULL, sym);
+#else
+    (void)lib;
+    (void)symbol;
 #endif
 
     return res;
