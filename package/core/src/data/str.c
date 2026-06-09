@@ -57,6 +57,7 @@ extern inline MC_Str mc_str_trim(MC_Str str);
 extern inline MC_Str mc_str_toull(MC_Str str, uint64_t *val);
 extern inline MC_Str mc_str_hex_toull(MC_Str str, uint64_t *val);
 extern inline bool mc_str_equ(MC_Str str, MC_Str other);
+extern inline bool mc_str_ci_equ(MC_Str str, MC_Str other);
 extern inline MC_Str mc_str_substr(MC_Str str, MC_Str substr);
 extern inline MC_Str mc_str_pop_front(MC_Str *str, size_t cnt);
 extern inline MC_Str mc_str_pop_back(MC_Str *str, size_t cnt);

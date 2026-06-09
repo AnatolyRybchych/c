@@ -183,6 +183,20 @@ inline bool mc_str_equ(MC_Str str, MC_Str other) {
         && mc_str_starts_with(str, other);
 }
 
+inline bool mc_str_ci_equ(MC_Str str, MC_Str other) {
+    if(mc_str_len(str) != mc_str_len(other)){
+        return false;
+    }
+
+    for(const char *a = str.beg, *b = other.beg; a != str.end; a++, b++){
+        if(toupper((unsigned char)*a) != toupper((unsigned char)*b)){
+            return false;
+        }
+    }
+
+    return true;
+}
+
 inline MC_Str mc_str_substr(MC_Str str, MC_Str substr) {
     for(const char *c = str.beg; c != str.end; c++) {
         if(mc_str_starts_with(MC_STR(c, str.end), substr)) {
