@@ -1,6 +1,8 @@
 #ifndef MC_WM_KEY_H
 #define MC_WM_KEY_H
 
+#include <mc/data/str.h>
+
 #define MC_ITER_KEYS() \
     MC_KEY(BACKSPACE,) \
     MC_KEY(TAB,) \
@@ -215,5 +217,7 @@ inline const char *mc_key_str(MC_Key key){
     default: return mc_key_str(MC_KEY_UNKNOWN);
     }
 }
+
+MC_Key mc_key_from_str(MC_Str str);
 
 #endif // MC_WM_KEY_H
