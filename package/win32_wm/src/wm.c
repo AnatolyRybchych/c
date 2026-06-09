@@ -31,7 +31,7 @@ struct MC_TargetWM{
 
     HHOOK keyboard_hook;
     HHOOK mouse_hook;
-    bool (*keyboard_suppress)(MC_TargetWM *wm, int vk, bool down);
+    bool (*keyboard_suppress)(MC_TargetWM *wm, MC_Key key, bool down);
     bool (*mouse_suppress)(MC_TargetWM *wm, UINT message, int x, int y);
 
     struct rawevent queue[EVENT_QUEUE_CAP];
@@ -111,7 +111,7 @@ HWND mc_wm_win32_window_get_hwnd(MC_TargetWMWindow *window){
 }
 
 void mc_wm_win32_set_keyboard_suppress(MC_TargetWM *wm,
-    bool (*suppress)(MC_TargetWM *wm, int vk, bool down)){
+    bool (*suppress)(MC_TargetWM *wm, MC_Key key, bool down)){
     wm->keyboard_suppress = suppress;
 }
 
@@ -770,7 +770,7 @@ static LRESULT CALLBACK keyboard_hook_proc(int code, WPARAM wparam, LPARAM lpara
 
         if(global_hook_wm->keyboard_suppress){
             bool down = wparam == WM_KEYDOWN || wparam == WM_SYSKEYDOWN;
-            if(global_hook_wm->keyboard_suppress(global_hook_wm, (int)kb->vkCode, down)){
+            if(global_hook_wm->keyboard_suppress(global_hook_wm, get_key(kb->vkCode), down)){
                 return 1;
             }
         }
