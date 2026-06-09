@@ -206,6 +206,7 @@ enum MC_Key{
     #define MC_KEY(NAME, ...) MC_KEY_##NAME,
     MC_ITER_KEYS()
     #undef MC_KEY
+    MC_KEY_MAX,
 };
 
 inline const char *mc_key_str(MC_Key key){
