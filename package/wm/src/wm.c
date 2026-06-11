@@ -100,6 +100,7 @@ static void window_free(MC_WMWindow *window);
 static void foreign_free(MC_ForeignWindow *foreign);
 
 static MC_Error owner_close(MC_WMWindow *window);
+static MC_Error owner_get_title(MC_WMWindow *window, char *utf8, size_t cap, size_t *len);
 static MC_Error owner_set_title(MC_WMWindow *window, MC_Str title);
 static MC_Error owner_set_position(MC_WMWindow *window, MC_Vec2i position);
 static MC_Error owner_set_size(MC_WMWindow *window, MC_Size2U size);
@@ -108,6 +109,7 @@ static MC_Error owner_set_state(MC_WMWindow *window, MC_WMWindowState state);
 static MC_Error owner_get_position(MC_WMWindow *window, MC_Vec2i *position);
 static MC_Error owner_get_size(MC_WMWindow *window, MC_Size2U *size);
 static MC_Error owner_get_rect(MC_WMWindow *window, MC_Rect2IU *rect);
+static MC_Error owner_get_state(MC_WMWindow *window, MC_WMWindowState *state);
 
 static MC_Error foreign_close(MC_ForeignWindow *foreign);
 static MC_Error foreign_set_title(MC_ForeignWindow *foreign, MC_Str title);
@@ -119,6 +121,7 @@ static MC_Error foreign_get_title(MC_ForeignWindow *foreign, char *utf8, size_t 
 static MC_Error foreign_get_position(MC_ForeignWindow *foreign, MC_Vec2i *position);
 static MC_Error foreign_get_size(MC_ForeignWindow *foreign, MC_Size2U *size);
 static MC_Error foreign_get_rect(MC_ForeignWindow *foreign, MC_Rect2IU *rect);
+static MC_Error foreign_get_state(MC_ForeignWindow *foreign, MC_WMWindowState *state);
 
 static const MC_WMEvents indication_category[MC_WMIND_COUNT] = {
     #define MC_WMIDN(NAME, DUP_ACTION, CATEGORY) [MC_WMIND_##NAME] = MC_WM_EVENTS_##CATEGORY,
@@ -520,6 +523,7 @@ MC_Error mc_wm_window_get_title(MC_WindowRef *window, char *utf8, size_t cap, si
 
     switch(window->type){
     case REFERENCE_FOREIGN: return foreign_get_title((MC_ForeignWindow*)window, utf8, cap, len);
+    case REFERENCE_INTERNAL: return owner_get_title((MC_WMWindow*)window, utf8, cap, len);
     default: return MCE_NOT_SUPPORTED;
     }
 }
@@ -550,6 +554,16 @@ MC_Error mc_wm_window_get_rect(MC_WindowRef *window, MC_Rect2IU *rect){
     switch(window->type){
     case REFERENCE_FOREIGN: return foreign_get_rect((MC_ForeignWindow*)window, rect);
     case REFERENCE_INTERNAL: return owner_get_rect((MC_WMWindow*)window, rect);
+    default: return MCE_NOT_SUPPORTED;
+    }
+}
+
+MC_Error mc_wm_window_get_state(MC_WindowRef *window, MC_WMWindowState *state){
+    RETURN_IF_REF_BUSY(window);
+
+    switch(window->type){
+    case REFERENCE_FOREIGN: return foreign_get_state((MC_ForeignWindow*)window, state);
+    case REFERENCE_INTERNAL: return owner_get_state((MC_WMWindow*)window, state);
     default: return MCE_NOT_SUPPORTED;
     }
 }
@@ -630,6 +644,17 @@ static MC_Error owner_set_title(MC_WMWindow *window, MC_Str title){
 
     if(v->set_window_title){
         return v->set_window_title(wm->target, window->target, title);
+    }
+
+    return MCE_NOT_SUPPORTED;
+}
+
+static MC_Error owner_get_title(MC_WMWindow *window, char *utf8, size_t cap, size_t *len){
+    MC_WM *wm = window->wm;
+    MC_WMVtab *v = &wm->vtab;
+
+    if(v->get_window_title){
+        return v->get_window_title(wm->target, window->target, utf8, cap, len);
     }
 
     return MCE_NOT_SUPPORTED;
@@ -871,6 +896,22 @@ static MC_Error owner_get_rect(MC_WMWindow *window, MC_Rect2IU *rect){
     return status;
 }
 
+static MC_Error owner_get_state(MC_WMWindow *window, MC_WMWindowState *state){
+    MC_WM *wm = window->wm;
+    MC_WMVtab *v = &wm->vtab;
+
+    if(v->get_window_state){
+        MC_Error status = v->get_window_state(wm->target, window->target, state);
+        if(status == MCE_OK){
+            window->cached.state = *state;
+        }
+
+        return status;
+    }
+
+    return MCE_NOT_SUPPORTED;
+}
+
 static MC_Error foreign_set_title(MC_ForeignWindow *foreign, MC_Str title){
     MC_WM *wm = foreign->wm;
 
@@ -946,6 +987,16 @@ static MC_Error foreign_get_rect(MC_ForeignWindow *foreign, MC_Rect2IU *rect){
 
     if(wm->vtab.get_foreign_window_rect){
         return wm->vtab.get_foreign_window_rect(wm->target, foreign->target, rect);
+    }
+
+    return MCE_NOT_SUPPORTED;
+}
+
+static MC_Error foreign_get_state(MC_ForeignWindow *foreign, MC_WMWindowState *state){
+    MC_WM *wm = foreign->wm;
+
+    if(wm->vtab.get_foreign_window_state){
+        return wm->vtab.get_foreign_window_state(wm->target, foreign->target, state);
     }
 
     return MCE_NOT_SUPPORTED;

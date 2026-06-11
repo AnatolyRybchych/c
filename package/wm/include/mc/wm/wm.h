@@ -89,6 +89,7 @@ MC_Error mc_wm_window_get_title(MC_WindowRef *window, char *utf8, size_t cap, si
 MC_Error mc_wm_window_get_position(MC_WindowRef *window, MC_Vec2i *position);
 MC_Error mc_wm_window_get_size(MC_WindowRef *window, MC_Size2U *size);
 MC_Error mc_wm_window_get_rect(MC_WindowRef *window, MC_Rect2IU *rect);
+MC_Error mc_wm_window_get_state(MC_WindowRef *window, MC_WMWindowState *state);
 
 MC_Error mc_wm_poll_event(MC_WM *wm, MC_WMEvent *event);
 
