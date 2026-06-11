@@ -90,6 +90,16 @@ static MC_WMWindowState check_state(lua_State *L, int idx){
     return (MC_WMWindowState)luaL_error(L, "mc.wm: unknown window state '%s'", s);
 }
 
+static const char *state_str(MC_WMWindowState state){
+    switch(state){
+    case MC_WM_WINDOW_STATE_NORMAL: return "normal";
+    case MC_WM_WINDOW_STATE_MINIMIZED: return "minimized";
+    case MC_WM_WINDOW_STATE_MAXIMIZED: return "maximized";
+    case MC_WM_WINDOW_STATE_FULLSCREEN: return "fullscreen";
+    default: return "unknown";
+    }
+}
+
 static void push_size(lua_State *L, MC_Size2U size){
     lua_createtable(L, 0, 2);
     lua_pushinteger(L, size.width);
@@ -194,6 +204,25 @@ static int win_get_rect(lua_State *L){
     require_ok(L, mc_wm_window_get_rect(ref, &rect), "get_rect");
 
     push_rect(L, rect);
+    return 1;
+}
+
+static int win_get_title(lua_State *L){
+    MC_WindowRef *ref = window_ref(L);
+    char buf[1024];
+    size_t len = 0;
+    require_ok(L, mc_wm_window_get_title(ref, buf, sizeof(buf), &len), "get_title");
+
+    lua_pushlstring(L, buf, len);
+    return 1;
+}
+
+static int win_get_state(lua_State *L){
+    MC_WindowRef *ref = window_ref(L);
+    MC_WMWindowState state;
+    require_ok(L, mc_wm_window_get_state(ref, &state), "get_state");
+
+    lua_pushstring(L, state_str(state));
     return 1;
 }
 
@@ -371,6 +400,8 @@ static const luaL_Reg window_methods[] = {
     {"get_size", win_get_size},
     {"get_position", win_get_position},
     {"get_rect", win_get_rect},
+    {"get_title", win_get_title},
+    {"get_state", win_get_state},
     {"is_alive", win_is_alive},
     {"close", win_close},
     {"destroy", win_destroy},
