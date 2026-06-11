@@ -245,6 +245,7 @@ struct MC_WMVtab{
     MC_Error (*resolve_temporary_identity)(struct MC_TargetWM *wm, uint64_t identity, MC_TargetResolvedIdentity *out);
     void (*heartbeat)(struct MC_TargetWM *wm);
     void (*destroy_foreign_window)(struct MC_TargetWM *wm, struct MC_TargetForeignWindow *window);
+    MC_Error (*close_foreign_window)(struct MC_TargetWM *wm, struct MC_TargetForeignWindow *window);
 
     MC_Error (*set_foreign_window_title)(struct MC_TargetWM *wm, struct MC_TargetForeignWindow *window, MC_Str title);
     MC_Error (*set_foreign_window_rect)(struct MC_TargetWM *wm, struct MC_TargetForeignWindow *window, MC_Rect2IU rect);

@@ -99,6 +99,7 @@ static MC_Error track_foreign(MC_WM *wm, MC_ForeignWindow *foreign);
 static void window_free(MC_WMWindow *window);
 static void foreign_free(MC_ForeignWindow *foreign);
 
+static MC_Error owner_close(MC_WMWindow *window);
 static MC_Error owner_set_title(MC_WMWindow *window, MC_Str title);
 static MC_Error owner_set_position(MC_WMWindow *window, MC_Vec2i position);
 static MC_Error owner_set_size(MC_WMWindow *window, MC_Size2U size);
@@ -108,6 +109,7 @@ static MC_Error owner_get_position(MC_WMWindow *window, MC_Vec2i *position);
 static MC_Error owner_get_size(MC_WMWindow *window, MC_Size2U *size);
 static MC_Error owner_get_rect(MC_WMWindow *window, MC_Rect2IU *rect);
 
+static MC_Error foreign_close(MC_ForeignWindow *foreign);
 static MC_Error foreign_set_title(MC_ForeignWindow *foreign, MC_Str title);
 static MC_Error foreign_set_position(MC_ForeignWindow *foreign, MC_Vec2i position);
 static MC_Error foreign_set_size(MC_ForeignWindow *foreign, MC_Size2U size);
@@ -493,6 +495,16 @@ MC_Error mc_wm_window_set_rect(MC_WindowRef *window, MC_Rect2IU rect){
     }
 }
 
+MC_Error mc_wm_window_close(MC_WindowRef *window){
+    RETURN_IF_REF_BUSY(window);
+
+    switch(window->type){
+    case REFERENCE_FOREIGN: return foreign_close((MC_ForeignWindow*)window);
+    case REFERENCE_INTERNAL: return owner_close((MC_WMWindow*)window);
+    default: return MCE_NOT_SUPPORTED;
+    }
+}
+
 MC_Error mc_wm_window_set_state(MC_WindowRef *window, MC_WMWindowState state){
     RETURN_IF_REF_BUSY(window);
 
@@ -735,6 +747,12 @@ static MC_Error owner_set_rect(MC_WMWindow *window, MC_Rect2IU rect){
     return status;
 }
 
+static MC_Error owner_close(MC_WMWindow *window){
+    mc_wm_window_destroy(window);
+
+    return MCE_OK;
+}
+
 static MC_Error owner_set_state(MC_WMWindow *window, MC_WMWindowState state){
     MC_WM *wm = window->wm;
     MC_WMVtab *v = &wm->vtab;
@@ -891,6 +909,16 @@ static MC_Error foreign_set_size(MC_ForeignWindow *foreign, MC_Size2U size){
     rect.height = size.height;
 
     return foreign_set_rect(foreign, rect);
+}
+
+static MC_Error foreign_close(MC_ForeignWindow *foreign){
+    MC_WM *wm = foreign->wm;
+
+    if(wm->vtab.close_foreign_window){
+        return wm->vtab.close_foreign_window(wm->target, foreign->target);
+    }
+
+    return MCE_NOT_SUPPORTED;
 }
 
 static MC_Error foreign_set_state(MC_ForeignWindow *foreign, MC_WMWindowState state){

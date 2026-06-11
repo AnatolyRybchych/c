@@ -77,6 +77,8 @@ void mc_wm_window_unref(MC_WindowRef *window);
 unsigned mc_wm_window_refcount(MC_WindowRef *window);
 bool mc_wm_window_is_alive(MC_WindowRef *window);
 
+MC_Error mc_wm_window_close(MC_WindowRef *window);
+
 MC_Error mc_wm_window_set_title(MC_WindowRef *window, MC_Str title);
 MC_Error mc_wm_window_set_position(MC_WindowRef *window, MC_Vec2i position);
 MC_Error mc_wm_window_set_size(MC_WindowRef *window, MC_Size2U size);
