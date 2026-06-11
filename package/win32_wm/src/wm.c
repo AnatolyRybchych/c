@@ -91,6 +91,7 @@ static MC_Error request_events(struct MC_TargetWM *wm, MC_WMEvents events);
 static MC_Error get_focused_window(struct MC_TargetWM *wm, uint64_t *identity);
 static MC_Error resolve_temporary_identity(struct MC_TargetWM *wm, uint64_t identity, MC_TargetResolvedIdentity *out);
 static void heartbeat(struct MC_TargetWM *wm);
+static MC_Error close_foreign_window(struct MC_TargetWM *wm, struct MC_TargetForeignWindow *window);
 static MC_Error set_foreign_window_title(struct MC_TargetWM *wm, struct MC_TargetForeignWindow *window, MC_Str title);
 static MC_Error set_foreign_window_rect(struct MC_TargetWM *wm, struct MC_TargetForeignWindow *window, MC_Rect2IU rect);
 static MC_Error set_foreign_window_state(struct MC_TargetWM *wm, struct MC_TargetForeignWindow *window, MC_WMWindowState state);
@@ -108,6 +109,7 @@ static MC_Error hwnd_get_title(HWND hwnd, char *utf8, size_t cap, size_t *len);
 static MC_Error hwnd_set_rect(HWND hwnd, MC_Rect2IU rect);
 static MC_Error hwnd_get_rect(HWND hwnd, MC_Rect2IU *rect);
 static MC_Error hwnd_set_state(HWND hwnd, MC_WMWindowState state);
+static MC_Error hwnd_close(HWND hwnd);
 
 static MC_WMVtab vtab = {
     .name = "WIN32",
@@ -136,6 +138,7 @@ static MC_WMVtab vtab = {
     .resolve_temporary_identity = resolve_temporary_identity,
     .heartbeat = heartbeat,
 
+    .close_foreign_window = close_foreign_window,
     .set_foreign_window_title = set_foreign_window_title,
     .set_foreign_window_rect = set_foreign_window_rect,
     .set_foreign_window_state = set_foreign_window_state,
@@ -242,6 +245,11 @@ static void destroy_window(struct MC_TargetWM *wm, struct MC_TargetWMWindow *win
     }
 }
 
+static MC_Error close_foreign_window(struct MC_TargetWM *wm, struct MC_TargetForeignWindow *window){
+    (void)wm;
+    return hwnd_close(window->hwnd);
+}
+
 static MC_Error create_window_graphic(struct MC_TargetWM *wm, struct MC_TargetWMWindow *window, struct MC_Graphics **g){
     (void)wm;
     return mc_win32_graphics_init(g, window->hwnd);
@@ -307,6 +315,11 @@ static MC_Error hwnd_set_state(HWND hwnd, MC_WMWindowState state){
     default:
         return MCE_NOT_SUPPORTED;
     }
+}
+
+static MC_Error hwnd_close(HWND hwnd){
+    PostMessage(hwnd, WM_CLOSE, 0, 0);
+    return MCE_OK;
 }
 
 static MC_Error set_window_title(struct MC_TargetWM *wm, struct MC_TargetWMWindow *window, MC_Str title){
