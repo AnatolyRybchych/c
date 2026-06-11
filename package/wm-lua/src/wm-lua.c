@@ -5,13 +5,13 @@
 
 #include <mc/wm/wm.h>
 #include <mc/wm/event.h>
+#include <mc/wm/resolver.h>
 #include <mc/data/str.h>
 
 #include <string.h>
 
 #define WM_MT     "mc.wm.WM"
 #define WINDOW_MT "mc.wm.Window"
-#define VTAB_KEY  "mc.wm.vtab"
 
 typedef struct LuaWM{
     MC_WM *wm;
@@ -334,17 +334,11 @@ static int wm_destroy(lua_State *L){
     return 0;
 }
 
-static int wm_create(lua_State *L){
-    lua_getfield(L, LUA_REGISTRYINDEX, VTAB_KEY);
-    const MC_WMVtab *vtab = lua_touserdata(L, -1);
-    lua_pop(L, 1);
-
-    if(vtab == NULL){
-        return luaL_error(L, "mc.wm: no window manager backend registered");
-    }
+static int wm_resolve(lua_State *L){
+    const char *impl = luaL_optstring(L, 1, NULL);
 
     MC_WM *wm;
-    require_ok(L, mc_wm_init(&wm, vtab), "create");
+    require_ok(L, impl ? mc_wm_resolve_as(impl, &wm) : mc_wm_resolve(&wm), "resolve");
 
     LuaWM *lwm = lua_newuserdatauv(L, sizeof(LuaWM), 0);
     lwm->wm = wm;
@@ -386,15 +380,16 @@ static void register_class(lua_State *L, const char *name, const luaL_Reg *metho
 
 int mc_wm_lua_module(lua_State *L, const MC_WMVtab *vtab){
     static const luaL_Reg module[] = {
-        {"create", wm_create},
+        {"resolve", wm_resolve},
         {NULL, NULL},
     };
 
+    if(vtab != NULL){
+        mc_wm_resolver_register(vtab);
+    }
+
     register_class(L, WM_MT, wm_methods);
     register_class(L, WINDOW_MT, window_methods);
-
-    lua_pushlightuserdata(L, (void*)vtab);
-    lua_setfield(L, LUA_REGISTRYINDEX, VTAB_KEY);
 
     luaL_newlib(L, module);
     return 1;
