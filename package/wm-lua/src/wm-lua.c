@@ -203,6 +203,13 @@ static int win_is_alive(lua_State *L){
     return 1;
 }
 
+static int win_close(lua_State *L){
+    MC_WindowRef *ref = window_ref(L);
+    require_ok(L, mc_wm_window_close(ref), "close");
+
+    return 0;
+}
+
 static int win_destroy(lua_State *L){
     LuaWindow *lw = luaL_checkudata(L, 1, WINDOW_MT);
     if(lw->window){
@@ -365,6 +372,7 @@ static const luaL_Reg window_methods[] = {
     {"get_position", win_get_position},
     {"get_rect", win_get_rect},
     {"is_alive", win_is_alive},
+    {"close", win_close},
     {"destroy", win_destroy},
     {"__gc", win_gc},
     {NULL, NULL},
