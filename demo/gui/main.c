@@ -65,8 +65,10 @@ int main(void){
 
     MC_WMWindow *window;
     MC_REQUIRE(mc_wm_window_init(wm, &window));
-    MC_REQUIRE(mc_wm_window_set_title(window, MC_STRC("mc gui demo - type text, Ctrl+V paste; F/M/N/R state; Q/Esc quit")));
-    MC_REQUIRE(mc_wm_window_set_size(window, (MC_Size2U){.width = 640, .height = 480}));
+
+    MC_WindowRef *ref = mc_wm_window_get_ref(window);
+    MC_REQUIRE(mc_wm_window_set_title(ref, MC_STRC("mc gui demo - type text, Ctrl+V paste; F/M/N/R state; Q/Esc quit")));
+    MC_REQUIRE(mc_wm_window_set_size(ref, (MC_Size2U){.width = 640, .height = 480}));
 
     MC_Graphics *g;
     MC_REQUIRE(mc_wm_window_get_graphic(window, &g));
@@ -102,10 +104,10 @@ int main(void){
                 switch(event.as.key_down.key){
                 case MC_KEY_ESCAPE:
                 case MC_KEY_Q: running = false;                                          break;
-                case MC_KEY_F: mc_wm_window_set_state(window, MC_WM_WINDOW_STATE_FULLSCREEN); break;
-                case MC_KEY_M: mc_wm_window_set_state(window, MC_WM_WINDOW_STATE_MAXIMIZED);  break;
-                case MC_KEY_N: mc_wm_window_set_state(window, MC_WM_WINDOW_STATE_MINIMIZED);  break;
-                case MC_KEY_R: mc_wm_window_set_state(window, MC_WM_WINDOW_STATE_NORMAL);     break;
+                case MC_KEY_F: mc_wm_window_set_state(ref, MC_WM_WINDOW_STATE_FULLSCREEN); break;
+                case MC_KEY_M: mc_wm_window_set_state(ref, MC_WM_WINDOW_STATE_MAXIMIZED);  break;
+                case MC_KEY_N: mc_wm_window_set_state(ref, MC_WM_WINDOW_STATE_MINIMIZED);  break;
+                case MC_KEY_R: mc_wm_window_set_state(ref, MC_WM_WINDOW_STATE_NORMAL);     break;
                 default: break;
                 }
                 break;

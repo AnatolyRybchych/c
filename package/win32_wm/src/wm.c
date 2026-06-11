@@ -5,6 +5,7 @@
 #include <mc/data/stream.h>
 #include <mc/data/alloc.h>
 #include <mc/data/str.h>
+#include <mc/data/list.h>
 #include <mc/util/minmax.h>
 
 #include <windowsx.h>
@@ -23,6 +24,16 @@ struct rawevent{
     LPARAM lparam;
 };
 
+struct MC_TargetForeignWindow{
+    HWND hwnd;
+};
+
+struct identity_node{
+    struct identity_node *next;
+    MC_TargetResolvedIdentity resolved;
+    struct MC_TargetForeignWindow foreign_window;
+};
+
 struct MC_TargetWM{
     MC_Stream *log;
     MC_Alloc *arena;
@@ -33,6 +44,8 @@ struct MC_TargetWM{
     HHOOK mouse_hook;
     bool (*keyboard_suppress)(MC_TargetWM *wm, MC_Key key, bool down);
     bool (*mouse_suppress)(MC_TargetWM *wm, UINT message, int x, int y);
+
+    struct identity_node *identities;
 
     struct rawevent queue[EVENT_QUEUE_CAP];
     unsigned queue_head;
@@ -72,8 +85,17 @@ static void set_fullscreen(struct MC_TargetWMWindow *window, bool on);
 static MC_MouseButton get_mouse_button(UINT message, WPARAM wparam);
 static MC_Key get_key(WPARAM vk);
 static struct MC_TargetWMWindow *window_of(HWND hwnd);
+static bool is_our_window(HWND hwnd);
 static MC_Error read_clipboard(struct MC_TargetWM *wm, HWND hwnd, MC_Str *out);
 static MC_Error request_events(struct MC_TargetWM *wm, MC_WMEvents events);
+static MC_Error get_focused_window(struct MC_TargetWM *wm, uint64_t *identity);
+static MC_Error resolve_temporary_identity(struct MC_TargetWM *wm, uint64_t identity, MC_TargetResolvedIdentity *out);
+static void heartbeat(struct MC_TargetWM *wm);
+static MC_Error set_foreign_window_title(struct MC_TargetWM *wm, struct MC_TargetForeignWindow *window, MC_Str title);
+static MC_Error set_foreign_window_rect(struct MC_TargetWM *wm, struct MC_TargetForeignWindow *window, MC_Rect2IU rect);
+static MC_Error set_foreign_window_state(struct MC_TargetWM *wm, struct MC_TargetForeignWindow *window, MC_WMWindowState state);
+static MC_Error get_foreign_window_title(struct MC_TargetWM *wm, struct MC_TargetForeignWindow *window, char *utf8, size_t cap, size_t *len);
+static MC_Error get_foreign_window_rect(struct MC_TargetWM *wm, struct MC_TargetForeignWindow *window, MC_Rect2IU *rect);
 static unsigned translate_global_event(const struct rawevent *e, MC_TargetIndication indications[MC_WM_MAX_INDICATIONS_PER_EVENT]);
 static void enqueue_global(struct MC_TargetWM *wm, UINT message, WPARAM wparam, POINT point);
 static LRESULT CALLBACK keyboard_hook_proc(int code, WPARAM wparam, LPARAM lparam);
@@ -81,10 +103,17 @@ static LRESULT CALLBACK mouse_hook_proc(int code, WPARAM wparam, LPARAM lparam);
 static LPARAM pack_point(POINT point);
 static MC_Vec2i unpack_point(LPARAM lparam);
 
+static MC_Error hwnd_set_title(HWND hwnd, MC_Str title);
+static MC_Error hwnd_get_title(HWND hwnd, char *utf8, size_t cap, size_t *len);
+static MC_Error hwnd_set_rect(HWND hwnd, MC_Rect2IU rect);
+static MC_Error hwnd_get_rect(HWND hwnd, MC_Rect2IU *rect);
+static MC_Error hwnd_set_state(HWND hwnd, MC_WMWindowState state);
+
 static MC_WMVtab vtab = {
     .name = "WIN32",
     .wm_size = sizeof(struct MC_TargetWM),
     .window_size = sizeof(struct MC_TargetWMWindow),
+    .foreign_window_size = sizeof(struct MC_TargetForeignWindow),
     .event_size = sizeof(struct MC_TargetWMEvent),
 
     .init = init,
@@ -102,6 +131,17 @@ static MC_WMVtab vtab = {
     .translate_event = translate_event,
 
     .request_events = request_events,
+
+    .get_focused_window = get_focused_window,
+    .resolve_temporary_identity = resolve_temporary_identity,
+    .heartbeat = heartbeat,
+
+    .set_foreign_window_title = set_foreign_window_title,
+    .set_foreign_window_rect = set_foreign_window_rect,
+    .set_foreign_window_state = set_foreign_window_state,
+
+    .get_foreign_window_title = get_foreign_window_title,
+    .get_foreign_window_rect = get_foreign_window_rect,
 };
 
 const MC_WMVtab *mc_win32_wm_vtab = &vtab;
@@ -207,9 +247,7 @@ static MC_Error create_window_graphic(struct MC_TargetWM *wm, struct MC_TargetWM
     return mc_win32_graphics_init(g, window->hwnd);
 }
 
-static MC_Error set_window_title(struct MC_TargetWM *wm, struct MC_TargetWMWindow *window, MC_Str title){
-    (void)wm;
-
+static MC_Error hwnd_set_title(HWND hwnd, MC_Str title){
     char utf8[512];
     size_t len = MIN(mc_str_len(title), sizeof(utf8) - 1);
     memcpy(utf8, title.beg, len);
@@ -219,8 +257,61 @@ static MC_Error set_window_title(struct MC_TargetWM *wm, struct MC_TargetWMWindo
     int wlen = MultiByteToWideChar(CP_UTF8, 0, utf8, (int)len, wide, (int)(sizeof(wide) / sizeof(*wide)) - 1);
     wide[wlen > 0 ? wlen : 0] = L'\0';
 
-    SetWindowTextW(window->hwnd, wide);
+    return SetWindowTextW(hwnd, wide) ? MCE_OK : MCE_UNKNOWN;
+}
+
+static MC_Error hwnd_get_title(HWND hwnd, char *utf8, size_t cap, size_t *len){
+    wchar_t wide[256];
+    int wlen = GetWindowTextW(hwnd, wide, (int)(sizeof(wide) / sizeof(*wide)));
+
+    int n = WideCharToMultiByte(CP_UTF8, 0, wide, wlen, utf8, (int)cap, NULL, NULL);
+    *len = n > 0 ? (size_t)n : 0;
+
     return MCE_OK;
+}
+
+static MC_Error hwnd_set_rect(HWND hwnd, MC_Rect2IU rect){
+    BOOL ok = SetWindowPos(hwnd, NULL, rect.x, rect.y, (int)rect.width, (int)rect.height,
+        SWP_NOZORDER | SWP_NOACTIVATE);
+
+    return ok ? MCE_OK : MCE_UNKNOWN;
+}
+
+static MC_Error hwnd_get_rect(HWND hwnd, MC_Rect2IU *rect){
+    RECT r;
+    if(!GetWindowRect(hwnd, &r)){
+        return MCE_UNKNOWN;
+    }
+
+    *rect = (MC_Rect2IU){
+        .x = r.left,
+        .y = r.top,
+        .width = (unsigned)(r.right - r.left),
+        .height = (unsigned)(r.bottom - r.top),
+    };
+
+    return MCE_OK;
+}
+
+static MC_Error hwnd_set_state(HWND hwnd, MC_WMWindowState state){
+    switch(state){
+    case MC_WM_WINDOW_STATE_NORMAL:
+        ShowWindow(hwnd, SW_SHOWNORMAL);
+        return MCE_OK;
+    case MC_WM_WINDOW_STATE_MINIMIZED:
+        ShowWindow(hwnd, SW_MINIMIZE);
+        return MCE_OK;
+    case MC_WM_WINDOW_STATE_MAXIMIZED:
+        ShowWindow(hwnd, SW_MAXIMIZE);
+        return MCE_OK;
+    default:
+        return MCE_NOT_SUPPORTED;
+    }
+}
+
+static MC_Error set_window_title(struct MC_TargetWM *wm, struct MC_TargetWMWindow *window, MC_Str title){
+    (void)wm;
+    return hwnd_set_title(window->hwnd, title);
 }
 
 static MC_Error set_window_size(struct MC_TargetWM *wm, struct MC_TargetWMWindow *window, MC_Size2U size){
@@ -270,25 +361,18 @@ static void set_fullscreen(struct MC_TargetWMWindow *window, bool on){
 static MC_Error set_window_state(struct MC_TargetWM *wm, struct MC_TargetWMWindow *window, MC_WMWindowState state){
     switch(state){
     case MC_WM_WINDOW_STATE_NORMAL:
-        set_fullscreen(window, false);
-        ShowWindow(window->hwnd, SW_SHOWNORMAL);
-        break;
-    case MC_WM_WINDOW_STATE_MINIMIZED:
-        ShowWindow(window->hwnd, SW_MINIMIZE);
-        break;
     case MC_WM_WINDOW_STATE_MAXIMIZED:
         set_fullscreen(window, false);
-        ShowWindow(window->hwnd, SW_MAXIMIZE);
-        break;
+        return hwnd_set_state(window->hwnd, state);
+    case MC_WM_WINDOW_STATE_MINIMIZED:
+        return hwnd_set_state(window->hwnd, state);
     case MC_WM_WINDOW_STATE_FULLSCREEN:
         set_fullscreen(window, true);
-        break;
+        return MCE_OK;
     default:
         LOG("set_window_state: unsupported state %u", (unsigned)state);
         return MCE_INVALID_INPUT;
     }
-
-    return MCE_OK;
 }
 
 static bool poll_event(struct MC_TargetWM *wm, struct MC_TargetWMEvent *event){
@@ -675,6 +759,83 @@ static MC_Error request_events(struct MC_TargetWM *wm, MC_WMEvents events){
     }
 
     return MCE_OK;
+}
+
+static MC_Error get_focused_window(struct MC_TargetWM *wm, uint64_t *identity){
+    HWND hwnd = GetForegroundWindow();
+    if(hwnd == NULL){
+        return MCE_NOT_FOUND;
+    }
+
+    struct identity_node *entry;
+    MC_Error status = mc_alloc(wm->arena, sizeof(*entry), (void**)&entry);
+    if(status != MCE_OK){
+        return status;
+    }
+
+    entry->next = NULL;
+    entry->resolved.id = (uint64_t)(uintptr_t)hwnd;
+
+    if(is_our_window(hwnd)){
+        entry->resolved.type = MC_TARGET_IDENTITY_WINDOW;
+        entry->resolved.as.window = window_of(hwnd);
+    }
+    else{
+        entry->resolved.type = MC_TARGET_IDENTITY_FOREIGN_WINDOW;
+        entry->foreign_window.hwnd = hwnd;
+        entry->resolved.as.foreign_window = &entry->foreign_window;
+    }
+
+    mc_list_add(&wm->identities, entry);
+
+    *identity = entry->resolved.id;
+    return MCE_OK;
+}
+
+static bool is_our_window(HWND hwnd){
+    char cls[64];
+    int n = GetClassNameA(hwnd, cls, (int)sizeof(cls));
+    return n > 0 && strcmp(cls, WINDOW_CLASS_NAME) == 0;
+}
+
+static MC_Error resolve_temporary_identity(struct MC_TargetWM *wm, uint64_t identity, MC_TargetResolvedIdentity *out){
+    MC_LIST_FOR(struct identity_node, wm->identities, entry){
+        if(entry->resolved.id == identity){
+            *out = entry->resolved;
+            return MCE_OK;
+        }
+    }
+
+    return MCE_NOT_FOUND;
+}
+
+static void heartbeat(struct MC_TargetWM *wm){
+    wm->identities = NULL;
+}
+
+static MC_Error set_foreign_window_title(struct MC_TargetWM *wm, struct MC_TargetForeignWindow *window, MC_Str title){
+    (void)wm;
+    return hwnd_set_title(window->hwnd, title);
+}
+
+static MC_Error set_foreign_window_rect(struct MC_TargetWM *wm, struct MC_TargetForeignWindow *window, MC_Rect2IU rect){
+    (void)wm;
+    return hwnd_set_rect(window->hwnd, rect);
+}
+
+static MC_Error set_foreign_window_state(struct MC_TargetWM *wm, struct MC_TargetForeignWindow *window, MC_WMWindowState state){
+    (void)wm;
+    return hwnd_set_state(window->hwnd, state);
+}
+
+static MC_Error get_foreign_window_title(struct MC_TargetWM *wm, struct MC_TargetForeignWindow *window, char *utf8, size_t cap, size_t *len){
+    (void)wm;
+    return hwnd_get_title(window->hwnd, utf8, cap, len);
+}
+
+static MC_Error get_foreign_window_rect(struct MC_TargetWM *wm, struct MC_TargetForeignWindow *window, MC_Rect2IU *rect){
+    (void)wm;
+    return hwnd_get_rect(window->hwnd, rect);
 }
 
 static unsigned translate_global_event(const struct rawevent *e, MC_TargetIndication indications[MC_WM_MAX_INDICATIONS_PER_EVENT]){

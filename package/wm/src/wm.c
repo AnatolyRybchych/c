@@ -19,13 +19,33 @@
 #define WM_LOGE(FMT, ...) if(wm->log) mc_fmt(wm->log, "[WM] " FMT "\n", ##__VA_ARGS__)
 #define WM_LOG_DEV(FMT, ...) if(wm->log) mc_fmt(wm->log, "%s() [DEV][WM][%s] " FMT "\n", __func__, wm->vtab.name, ##__VA_ARGS__)
 
+#define RETURN_IF_REF_BUSY(REF) \
+    do { \
+        if(is_ref_busy(REF)){ \
+            return MCE_BUSY; \
+        } \
+    } while(0)
+
 MC_DEFINE_VECTOR(Windows, MC_WMWindow*);
+MC_DEFINE_VECTOR(ForeignWindows, MC_ForeignWindow*);
 
 typedef struct indicationNode indicationNode;
 
+typedef enum ReferenceType{
+    REFERENCE_INTERNAL,
+    REFERENCE_FOREIGN,
+} ReferenceType;
+
+struct MC_WindowRef{
+    ReferenceType type;
+    unsigned refcount;
+};
+
 struct MC_WMWindow{
+    MC_WindowRef ref;
     MC_WM *wm;
     struct MC_TargetWMWindow *target;
+    bool is_alive;
     struct{
         MC_Rect2IU rect;
         MC_Vec2i mouse_pos;
@@ -35,6 +55,14 @@ struct MC_WMWindow{
     } cached;
     MC_Stream *title_stream;
     struct MC_Graphics *g;
+    alignas(void*) uint8_t data[];
+};
+
+struct MC_ForeignWindow{
+    MC_WindowRef ref;
+    MC_WM *wm;
+    uint64_t identity;
+    struct MC_TargetForeignWindow *target;
     alignas(void*) uint8_t data[];
 };
 
@@ -50,6 +78,7 @@ struct MC_WM{
     MC_TargetIndication indications[INDICATIONS_BUFFER_SIZE];
 
     Windows *windows;
+    ForeignWindows *foreign_windows;
 
     MC_Arena *arena;
 
@@ -61,6 +90,31 @@ static void handle_duplicate_indications(MC_WM *wm);
 static MC_WMEvent translate_indication(MC_WM *wm);
 static void discard_indication(MC_WM *wm);
 static MC_WMWindow *window_from_target(MC_WM *wm, struct MC_TargetWMWindow *target);
+static MC_ForeignWindow *find_foreign(MC_WM *wm, uint64_t identity);
+static bool is_ref_busy(MC_WindowRef *ref);
+static MC_Error alloc_foreign(MC_WM *wm, MC_ForeignWindow **out);
+static MC_Error track_foreign(MC_WM *wm, MC_ForeignWindow *foreign);
+static void window_free(MC_WMWindow *window);
+static void foreign_free(MC_ForeignWindow *foreign);
+
+static MC_Error owner_set_title(MC_WMWindow *window, MC_Str title);
+static MC_Error owner_set_position(MC_WMWindow *window, MC_Vec2i position);
+static MC_Error owner_set_size(MC_WMWindow *window, MC_Size2U size);
+static MC_Error owner_set_rect(MC_WMWindow *window, MC_Rect2IU rect);
+static MC_Error owner_set_state(MC_WMWindow *window, MC_WMWindowState state);
+static MC_Error owner_get_position(MC_WMWindow *window, MC_Vec2i *position);
+static MC_Error owner_get_size(MC_WMWindow *window, MC_Size2U *size);
+static MC_Error owner_get_rect(MC_WMWindow *window, MC_Rect2IU *rect);
+
+static MC_Error foreign_set_title(MC_ForeignWindow *foreign, MC_Str title);
+static MC_Error foreign_set_position(MC_ForeignWindow *foreign, MC_Vec2i position);
+static MC_Error foreign_set_size(MC_ForeignWindow *foreign, MC_Size2U size);
+static MC_Error foreign_set_rect(MC_ForeignWindow *foreign, MC_Rect2IU rect);
+static MC_Error foreign_set_state(MC_ForeignWindow *foreign, MC_WMWindowState state);
+static MC_Error foreign_get_title(MC_ForeignWindow *foreign, char *utf8, size_t cap, size_t *len);
+static MC_Error foreign_get_position(MC_ForeignWindow *foreign, MC_Vec2i *position);
+static MC_Error foreign_get_size(MC_ForeignWindow *foreign, MC_Size2U *size);
+static MC_Error foreign_get_rect(MC_ForeignWindow *foreign, MC_Rect2IU *rect);
 
 static const MC_WMEvents indication_category[MC_WMIND_COUNT] = {
     #define MC_WMIDN(NAME, DUP_ACTION, CATEGORY) [MC_WMIND_##NAME] = MC_WM_EVENTS_##CATEGORY,
@@ -116,8 +170,24 @@ MC_Error mc_wm_init(MC_WM **ret_wm, const MC_WMVtab *vtab){
 }
 
 void mc_wm_destroy(MC_WM *wm){
-    while(!MC_VECTOR_EMPTY(wm->windows)){
-        mc_wm_window_destroy(wm->windows->beg[0]);
+    while(MC_VECTOR_SIZE(wm->windows) > 0){
+        MC_WMWindow *window = wm->windows->beg[0];
+        if(window->is_alive && wm->vtab.destroy_window){
+            wm->vtab.destroy_window(wm->target, window->target);
+        }
+
+        MC_VECTOR_ERASE(wm->windows, 0, 1);
+        mc_free(NULL, window);
+    }
+
+    while(MC_VECTOR_SIZE(wm->foreign_windows) > 0){
+        MC_ForeignWindow *foreign = wm->foreign_windows->beg[0];
+        if(wm->vtab.destroy_foreign_window){
+            wm->vtab.destroy_foreign_window(wm->target, foreign->target);
+        }
+
+        MC_VECTOR_ERASE(wm->foreign_windows, 0, 1);
+        mc_free(NULL, foreign);
     }
 
     if(wm->vtab.destroy){
@@ -125,6 +195,7 @@ void mc_wm_destroy(MC_WM *wm){
     }
 
     MC_VECTOR_FREE(wm->windows);
+    MC_VECTOR_FREE(wm->foreign_windows);
 
     mc_arena_destroy(wm->arena);
 
@@ -161,8 +232,11 @@ MC_Error mc_wm_window_init(MC_WM *wm, MC_WMWindow **ret_window){
     MC_RETURN_ERROR(mc_alloc(NULL, sizeof(MC_WMWindow) + v->window_size, (void**)&window));
 
     memset(window, 0, sizeof(MC_WMWindow) + v->window_size);
+    window->ref.type = REFERENCE_INTERNAL;
+    window->ref.refcount = 1;
     window->wm = wm;
     window->target = (struct MC_TargetWMWindow*)window->data;
+    window->is_alive = true;
 
     Windows *new_windows = MC_VECTOR_PUSHN(wm->windows, 1, &window);
     if(new_windows == NULL){
@@ -178,7 +252,6 @@ MC_Error mc_wm_window_init(MC_WM *wm, MC_WMWindow **ret_window){
         return MCE_OUT_OF_MEMORY;
     }
 
-
     *ret_window = window;
     return MCE_OK;
 }
@@ -187,298 +260,34 @@ void mc_wm_window_destroy(MC_WMWindow *window){
     MC_WM *wm = window->wm;
     MC_WMVtab *v = &wm->vtab;
 
-    if(v->destroy_window){
-        v->destroy_window(wm->target, window->target);
-    }
+    MC_ASSERT_FAULT(window->ref.refcount > 0);
 
-    mc_free(NULL, window);
-
-    size_t idx = 0;
-    MC_WMWindow **w;
-    MC_VECTOR_EACH(wm->windows, w){
-        if(*w == window){
-            break;
+    if(window->is_alive){
+        if(v->destroy_window){
+            v->destroy_window(wm->target, window->target);
         }
 
-        idx++;
+        window->is_alive = false;
     }
 
-    MC_VECTOR_ERASE(wm->windows, idx, 1);
+    window->ref.refcount--;
+    if(window->ref.refcount == 0){
+        window_free(window);
+    }
 }
 
-struct MC_TargetWMWindow *mc_wm_window_get_target(MC_WMWindow *wm){
-    return wm->target;
+struct MC_TargetWMWindow *mc_wm_window_get_target(MC_WMWindow *window){
+    return window->target;
 }
 
-MC_Error mc_wm_window_set_title(MC_WMWindow *window, MC_Str title){
-    MC_WM *wm = window->wm;
-    MC_WMVtab *v = &wm->vtab;
-
-    if(v->set_window_title){
-        return v->set_window_title(wm->target, window->target, title);
-    }
-
-    return MCE_NOT_SUPPORTED;
-}
-
-MC_Error mc_wm_window_set_position(MC_WMWindow *window, MC_Vec2i position){
-    MC_WM *wm = window->wm;
-    MC_WMVtab *v = &wm->vtab;
-
-    MC_Error status = MCE_NOT_SUPPORTED;
-
-    if(v->set_window_position){
-        status = v->set_window_position(wm->target, window->target, position);
-        if(status == MCE_OK){
-            window->cached.rect.x = position.x;
-            window->cached.rect.y = position.y;
-            return MCE_OK;
-        }
-    }
-
-    if(v->set_window_rect){
-        status = v->set_window_rect(wm->target, window->target, (MC_Rect2IU){
-            .x = position.x,
-            .y = position.y,
-            .width = window->cached.rect.width,
-            .height = window->cached.rect.height
-        });
-
-        if(status == MCE_OK){
-            window->cached.rect.x = position.x;
-            window->cached.rect.y = position.y;
-            return MCE_OK;
-        }
-    }
-
-    return status;
-}
-
-MC_Error mc_wm_window_set_size(MC_WMWindow *window, MC_Size2U size){
-    MC_WM *wm = window->wm;
-    MC_WMVtab *v = &wm->vtab;
-
-    MC_Error status = MCE_NOT_SUPPORTED;
-
-    if(v->set_window_size){
-        status = v->set_window_size(wm->target, window->target, size);
-        if(status == MCE_OK){
-            window->cached.rect.width = size.width;
-            window->cached.rect.height = size.height;
-            return MCE_OK;
-        }
-    }
-
-    if(v->set_window_rect){
-        status = v->set_window_rect(wm->target, window->target, (MC_Rect2IU){
-            .x = window->cached.rect.x,
-            .y = window->cached.rect.y,
-            .width = size.width,
-            .height = size.height
-        });
-
-        if(status == MCE_OK){
-            window->cached.rect.width = size.width;
-            window->cached.rect.height = size.height;
-            return MCE_OK;
-        }
-    }
-
-    return status;
-}
-
-MC_Error mc_wm_window_set_rect(MC_WMWindow *window, MC_Rect2IU rect){
-    MC_WM *wm = window->wm;
-    MC_WMVtab *v = &wm->vtab;
-
-    MC_Error status = MCE_NOT_SUPPORTED;
-
-    if(v->set_window_rect){
-        status = v->set_window_rect(wm->target, window->target, rect);
-        if(status == MCE_OK){
-            window->cached.rect = rect;
-            return MCE_OK;
-        }
-    }
-
-    if(v->set_window_position && v->set_window_size){
-        MC_Error position_status = v->set_window_position(wm->target, window->target, (MC_Vec2i){
-            .x = rect.x,
-            .y = rect.y,
-        });
-
-        MC_Error size_status = v->set_window_size(wm->target, window->target, (MC_Size2U){
-            .width = rect.width,
-            .height = rect.height,
-        });
-
-        if(position_status == MCE_OK){
-            window->cached.rect.x = rect.x;
-            window->cached.rect.y = rect.y;
-        }
-
-        if(size_status == MCE_OK){
-            window->cached.rect.width = rect.width;
-            window->cached.rect.height = rect.height;
-        }
-
-        if(size_status != MCE_OK){
-            status = size_status;
-        }
-        else if(position_status != MCE_OK){
-            status = position_status;
-        }
-    }
-
-    return status;
-}
-
-
-MC_Error mc_wm_window_set_state(MC_WMWindow *window, MC_WMWindowState state){
-    MC_WM *wm = window->wm;
-    MC_WMVtab *v = &wm->vtab;
-
-    if(v->set_window_state){
-        return v->set_window_state(wm->target, window->target, state);
-    }
-
-    return MCE_NOT_SUPPORTED;
-}
-
-MC_Error mc_wm_window_get_title(MC_WMWindow *window, MC_Str *title){
-    MC_WM *wm = window->wm;
-    MC_WMVtab *v = &wm->vtab;
-
-    MC_Error status = MCE_NOT_SUPPORTED;
-
-    if(v->get_window_title){
-        status = v->get_window_title(wm->target, window->target, window->title_stream);
-        if(status == MCE_OK){
-            // window->cached.title = mc_read_to_end(window->title_stream);
-            if(window->cached.title == NULL){
-                return MCE_OUT_OF_MEMORY;
-            }
-
-            *title = mc_string_str(window->cached.title);
-        }
-
-        return status;
-    }
-
-    return status;
-}
-
-MC_Error mc_wm_window_get_position(MC_WMWindow *window, MC_Vec2i *position){
-    MC_WM *wm = window->wm;
-    MC_WMVtab *v = &wm->vtab;
-
-    MC_Error status = MCE_NOT_SUPPORTED;
-
-    if(v->get_window_position){
-        MC_Error position_status = v->get_window_position(wm->target, window->target, position);
-        if(position_status == MCE_OK){
-            window->cached.rect.x = position->x;
-            window->cached.rect.y = position->y;
-            return MCE_OK;
-        }
-
-        status = position_status;
-    }
-
-    if(v->get_window_rect){
-        MC_Rect2IU rect;
-        MC_Error rect_status = v->get_window_rect(wm->target, window->target, &rect);
-        if(rect_status == MCE_OK){
-            window->cached.rect = rect;
-            position->x = rect.x;
-            position->y = rect.y;
-            return MCE_OK;
-        }
-
-        status = rect_status;
-    }
-
-    return status;
-}
-
-MC_Error mc_wm_window_get_size(MC_WMWindow *window, MC_Size2U *size){
-    MC_WM *wm = window->wm;
-    MC_WMVtab *v = &wm->vtab;
-
-    MC_Error status = MCE_NOT_SUPPORTED;
-
-    if(v->get_window_size){
-        MC_Error size_status = v->get_window_size(wm->target, window->target, size);
-        if(size_status == MCE_OK){
-            window->cached.rect.width = size->width;
-            window->cached.rect.height = size->height;
-            return MCE_OK;
-        }
-
-        status = size_status;
-    }
-
-    if(v->get_window_rect){
-        MC_Rect2IU rect;
-        MC_Error rect_status = v->get_window_rect(wm->target, window->target, &rect);
-        if(rect_status == MCE_OK){
-            window->cached.rect = rect;
-            size->width = rect.width;
-            size->height = rect.height;
-            return MCE_OK;
-        }
-
-        status = rect_status;
-    }
-
-    return status;
-}
-
-MC_Error mc_wm_window_get_rect(MC_WMWindow *window, MC_Rect2IU *rect){
-    MC_WM *wm = window->wm;
-    MC_WMVtab *v = &wm->vtab;
-
-    MC_Error status = MCE_NOT_SUPPORTED;
-
-    if(v->get_window_rect){
-        MC_Error rect_status = v->get_window_rect(wm->target, window->target, rect);
-        if(rect_status == MCE_OK){
-            window->cached.rect = *rect;
-            return MCE_OK;
-        }
-
-        status = rect_status;
-    }
-
-    if(v->get_window_position){
-        MC_Vec2i position;
-        MC_Error position_status = v->get_window_position(wm->target, window->target, &position);
-        if(position_status == MCE_OK){
-            window->cached.rect.x = position.x;
-            window->cached.rect.y = position.y;
-        }
-
-        status = position_status;
-    }
-
-    if(v->get_window_size){
-        MC_Size2U size;
-        MC_Error size_status = v->get_window_size(wm->target, window->target, &size);
-        if(size_status == MCE_OK){
-            window->cached.rect.width = size.width;
-            window->cached.rect.height = size.height;
-        }
-
-        status = size_status;
-    }
-
-    return status;
+MC_WindowRef *mc_wm_window_get_ref(MC_WMWindow *window){
+    return &window->ref;
 }
 
 MC_Error mc_wm_window_get_graphic(MC_WMWindow *window, struct MC_Graphics **g){
     MC_WM *wm = window->wm;
     MC_WMVtab *v = &wm->vtab;
-    
+
     if(window->g){
         *g = window->g;
         return MCE_OK;
@@ -525,6 +334,589 @@ bool mc_wm_window_cached_is_mouse_over(MC_WMWindow *window){
     return window->cached.mouse_over;
 }
 
+MC_Error mc_wm_get_focused_window(MC_WM *wm, MC_WindowRef **ret_window){
+    *ret_window = NULL;
+    MC_WMVtab *v = &wm->vtab;
+
+    if(v->get_focused_window == NULL || v->resolve_temporary_identity == NULL){
+        return MCE_NOT_SUPPORTED;
+    }
+
+    uint64_t identity;
+    MC_RETURN_ERROR(v->get_focused_window(wm->target, &identity));
+
+    MC_ForeignWindow *existing = find_foreign(wm, identity);
+    if(existing){
+        existing->ref.refcount++;
+        *ret_window = &existing->ref;
+        return MCE_OK;
+    }
+
+    MC_TargetResolvedIdentity resolved;
+    MC_RETURN_ERROR(v->resolve_temporary_identity(wm->target, identity, &resolved));
+
+    if(resolved.type == MC_TARGET_IDENTITY_WINDOW){
+        MC_WMWindow *window = window_from_target(wm, resolved.as.window);
+        if(window == NULL){
+            return MCE_NOT_FOUND;
+        }
+
+        window->ref.refcount++;
+        *ret_window = &window->ref;
+        return MCE_OK;
+    }
+
+    MC_ForeignWindow *foreign;
+    MC_RETURN_ERROR(alloc_foreign(wm, &foreign));
+    foreign->identity = identity;
+    memcpy(foreign->target, resolved.as.foreign_window, v->foreign_window_size);
+
+    if(track_foreign(wm, foreign) != MCE_OK){
+        mc_free(NULL, foreign);
+        return MCE_OUT_OF_MEMORY;
+    }
+
+    foreign->ref.refcount = 1;
+    *ret_window = &foreign->ref;
+    return MCE_OK;
+}
+
+struct MC_TargetForeignWindow *mc_wm_window_get_foreign_target(MC_WindowRef *window){
+    if(window->type == REFERENCE_FOREIGN){
+        return ((MC_ForeignWindow*)window)->target;
+    }
+
+    return NULL;
+}
+
+MC_WindowRef *mc_wm_window_ref(MC_WindowRef *window){
+    window->refcount++;
+    return window;
+}
+
+void mc_wm_window_unref(MC_WindowRef *window){
+    if(window == NULL){
+        return;
+    }
+
+    if(window->refcount > 0){
+        window->refcount--;
+    }
+
+    if(window->refcount > 0){
+        return;
+    }
+
+    if(window->type == REFERENCE_INTERNAL){
+        window_free((MC_WMWindow*)window);
+    }
+    else{
+        foreign_free((MC_ForeignWindow*)window);
+    }
+}
+
+unsigned mc_wm_window_refcount(MC_WindowRef *window){
+    return window->refcount;
+}
+
+bool mc_wm_window_is_alive(MC_WindowRef *window){
+    if(window->type == REFERENCE_INTERNAL){
+        return ((MC_WMWindow*)window)->is_alive;
+    }
+
+    return true;
+}
+
+MC_Error mc_wm_window_set_title(MC_WindowRef *window, MC_Str title){
+    RETURN_IF_REF_BUSY(window);
+
+    switch(window->type){
+    case REFERENCE_FOREIGN: return foreign_set_title((MC_ForeignWindow*)window, title);
+    case REFERENCE_INTERNAL: return owner_set_title((MC_WMWindow*)window, title);
+    default: return MCE_NOT_SUPPORTED;
+    }
+}
+
+MC_Error mc_wm_window_set_position(MC_WindowRef *window, MC_Vec2i position){
+    RETURN_IF_REF_BUSY(window);
+
+    switch(window->type){
+    case REFERENCE_FOREIGN: return foreign_set_position((MC_ForeignWindow*)window, position);
+    case REFERENCE_INTERNAL: return owner_set_position((MC_WMWindow*)window, position);
+    default: return MCE_NOT_SUPPORTED;
+    }
+}
+
+MC_Error mc_wm_window_set_size(MC_WindowRef *window, MC_Size2U size){
+    RETURN_IF_REF_BUSY(window);
+
+    switch(window->type){
+    case REFERENCE_FOREIGN: return foreign_set_size((MC_ForeignWindow*)window, size);
+    case REFERENCE_INTERNAL: return owner_set_size((MC_WMWindow*)window, size);
+    default: return MCE_NOT_SUPPORTED;
+    }
+}
+
+MC_Error mc_wm_window_set_rect(MC_WindowRef *window, MC_Rect2IU rect){
+    RETURN_IF_REF_BUSY(window);
+
+    switch(window->type){
+    case REFERENCE_FOREIGN: return foreign_set_rect((MC_ForeignWindow*)window, rect);
+    case REFERENCE_INTERNAL: return owner_set_rect((MC_WMWindow*)window, rect);
+    default: return MCE_NOT_SUPPORTED;
+    }
+}
+
+MC_Error mc_wm_window_set_state(MC_WindowRef *window, MC_WMWindowState state){
+    RETURN_IF_REF_BUSY(window);
+
+    switch(window->type){
+    case REFERENCE_FOREIGN: return foreign_set_state((MC_ForeignWindow*)window, state);
+    case REFERENCE_INTERNAL: return owner_set_state((MC_WMWindow*)window, state);
+    default: return MCE_NOT_SUPPORTED;
+    }
+}
+
+MC_Error mc_wm_window_get_title(MC_WindowRef *window, char *utf8, size_t cap, size_t *len){
+    RETURN_IF_REF_BUSY(window);
+
+    switch(window->type){
+    case REFERENCE_FOREIGN: return foreign_get_title((MC_ForeignWindow*)window, utf8, cap, len);
+    default: return MCE_NOT_SUPPORTED;
+    }
+}
+
+MC_Error mc_wm_window_get_position(MC_WindowRef *window, MC_Vec2i *position){
+    RETURN_IF_REF_BUSY(window);
+
+    switch(window->type){
+    case REFERENCE_FOREIGN: return foreign_get_position((MC_ForeignWindow*)window, position);
+    case REFERENCE_INTERNAL: return owner_get_position((MC_WMWindow*)window, position);
+    default: return MCE_NOT_SUPPORTED;
+    }
+}
+
+MC_Error mc_wm_window_get_size(MC_WindowRef *window, MC_Size2U *size){
+    RETURN_IF_REF_BUSY(window);
+
+    switch(window->type){
+    case REFERENCE_FOREIGN: return foreign_get_size((MC_ForeignWindow*)window, size);
+    case REFERENCE_INTERNAL: return owner_get_size((MC_WMWindow*)window, size);
+    default: return MCE_NOT_SUPPORTED;
+    }
+}
+
+MC_Error mc_wm_window_get_rect(MC_WindowRef *window, MC_Rect2IU *rect){
+    RETURN_IF_REF_BUSY(window);
+
+    switch(window->type){
+    case REFERENCE_FOREIGN: return foreign_get_rect((MC_ForeignWindow*)window, rect);
+    case REFERENCE_INTERNAL: return owner_get_rect((MC_WMWindow*)window, rect);
+    default: return MCE_NOT_SUPPORTED;
+    }
+}
+
+static MC_Error alloc_foreign(MC_WM *wm, MC_ForeignWindow **out){
+    MC_WMVtab *v = &wm->vtab;
+
+    MC_ForeignWindow *foreign;
+    MC_RETURN_ERROR(mc_alloc(NULL, sizeof(MC_ForeignWindow) + v->foreign_window_size, (void**)&foreign));
+
+    memset(foreign, 0, sizeof(MC_ForeignWindow) + v->foreign_window_size);
+    foreign->ref.type = REFERENCE_FOREIGN;
+    foreign->ref.refcount = 0;
+    foreign->wm = wm;
+    foreign->target = (struct MC_TargetForeignWindow*)foreign->data;
+
+    *out = foreign;
+    return MCE_OK;
+}
+
+static MC_Error track_foreign(MC_WM *wm, MC_ForeignWindow *foreign){
+    ForeignWindows *new_foreign = MC_VECTOR_PUSHN(wm->foreign_windows, 1, &foreign);
+    if(new_foreign == NULL){
+        return MCE_OUT_OF_MEMORY;
+    }
+    wm->foreign_windows = new_foreign;
+
+    return MCE_OK;
+}
+
+static bool is_ref_busy(MC_WindowRef *ref){
+    return ref->type == REFERENCE_INTERNAL && !((MC_WMWindow*)ref)->is_alive;
+}
+
+static void window_free(MC_WMWindow *window){
+    MC_WM *wm = window->wm;
+
+    size_t idx = 0;
+    MC_WMWindow **w;
+    MC_VECTOR_EACH(wm->windows, w){
+        if(*w == window){
+            break;
+        }
+
+        idx++;
+    }
+
+    MC_VECTOR_ERASE(wm->windows, idx, 1);
+
+    mc_free(NULL, window);
+}
+
+static void foreign_free(MC_ForeignWindow *foreign){
+    MC_WM *wm = foreign->wm;
+
+    if(wm->vtab.destroy_foreign_window){
+        wm->vtab.destroy_foreign_window(wm->target, foreign->target);
+    }
+
+    size_t idx = 0;
+    MC_ForeignWindow **w;
+    MC_VECTOR_EACH(wm->foreign_windows, w){
+        if(*w == foreign){
+            break;
+        }
+
+        idx++;
+    }
+
+    MC_VECTOR_ERASE(wm->foreign_windows, idx, 1);
+
+    mc_free(NULL, foreign);
+}
+
+static MC_Error owner_set_title(MC_WMWindow *window, MC_Str title){
+    MC_WM *wm = window->wm;
+    MC_WMVtab *v = &wm->vtab;
+
+    if(v->set_window_title){
+        return v->set_window_title(wm->target, window->target, title);
+    }
+
+    return MCE_NOT_SUPPORTED;
+}
+
+static MC_Error owner_set_position(MC_WMWindow *window, MC_Vec2i position){
+    MC_WM *wm = window->wm;
+    MC_WMVtab *v = &wm->vtab;
+
+    MC_Error status = MCE_NOT_SUPPORTED;
+
+    if(v->set_window_position){
+        status = v->set_window_position(wm->target, window->target, position);
+        if(status == MCE_OK){
+            window->cached.rect.x = position.x;
+            window->cached.rect.y = position.y;
+            return MCE_OK;
+        }
+    }
+
+    if(v->set_window_rect){
+        status = v->set_window_rect(wm->target, window->target, (MC_Rect2IU){
+            .x = position.x,
+            .y = position.y,
+            .width = window->cached.rect.width,
+            .height = window->cached.rect.height
+        });
+
+        if(status == MCE_OK){
+            window->cached.rect.x = position.x;
+            window->cached.rect.y = position.y;
+            return MCE_OK;
+        }
+    }
+
+    return status;
+}
+
+static MC_Error owner_set_size(MC_WMWindow *window, MC_Size2U size){
+    MC_WM *wm = window->wm;
+    MC_WMVtab *v = &wm->vtab;
+
+    MC_Error status = MCE_NOT_SUPPORTED;
+
+    if(v->set_window_size){
+        status = v->set_window_size(wm->target, window->target, size);
+        if(status == MCE_OK){
+            window->cached.rect.width = size.width;
+            window->cached.rect.height = size.height;
+            return MCE_OK;
+        }
+    }
+
+    if(v->set_window_rect){
+        status = v->set_window_rect(wm->target, window->target, (MC_Rect2IU){
+            .x = window->cached.rect.x,
+            .y = window->cached.rect.y,
+            .width = size.width,
+            .height = size.height
+        });
+
+        if(status == MCE_OK){
+            window->cached.rect.width = size.width;
+            window->cached.rect.height = size.height;
+            return MCE_OK;
+        }
+    }
+
+    return status;
+}
+
+static MC_Error owner_set_rect(MC_WMWindow *window, MC_Rect2IU rect){
+    MC_WM *wm = window->wm;
+    MC_WMVtab *v = &wm->vtab;
+
+    MC_Error status = MCE_NOT_SUPPORTED;
+
+    if(v->set_window_rect){
+        status = v->set_window_rect(wm->target, window->target, rect);
+        if(status == MCE_OK){
+            window->cached.rect = rect;
+            return MCE_OK;
+        }
+    }
+
+    if(v->set_window_position && v->set_window_size){
+        MC_Error position_status = v->set_window_position(wm->target, window->target, (MC_Vec2i){
+            .x = rect.x,
+            .y = rect.y,
+        });
+
+        MC_Error size_status = v->set_window_size(wm->target, window->target, (MC_Size2U){
+            .width = rect.width,
+            .height = rect.height,
+        });
+
+        if(position_status == MCE_OK){
+            window->cached.rect.x = rect.x;
+            window->cached.rect.y = rect.y;
+        }
+
+        if(size_status == MCE_OK){
+            window->cached.rect.width = rect.width;
+            window->cached.rect.height = rect.height;
+        }
+
+        if(size_status != MCE_OK){
+            status = size_status;
+        }
+        else if(position_status != MCE_OK){
+            status = position_status;
+        }
+    }
+
+    return status;
+}
+
+static MC_Error owner_set_state(MC_WMWindow *window, MC_WMWindowState state){
+    MC_WM *wm = window->wm;
+    MC_WMVtab *v = &wm->vtab;
+
+    if(v->set_window_state){
+        return v->set_window_state(wm->target, window->target, state);
+    }
+
+    return MCE_NOT_SUPPORTED;
+}
+
+static MC_Error owner_get_position(MC_WMWindow *window, MC_Vec2i *position){
+    MC_WM *wm = window->wm;
+    MC_WMVtab *v = &wm->vtab;
+
+    MC_Error status = MCE_NOT_SUPPORTED;
+
+    if(v->get_window_position){
+        MC_Error position_status = v->get_window_position(wm->target, window->target, position);
+        if(position_status == MCE_OK){
+            window->cached.rect.x = position->x;
+            window->cached.rect.y = position->y;
+            return MCE_OK;
+        }
+
+        status = position_status;
+    }
+
+    if(v->get_window_rect){
+        MC_Rect2IU rect;
+        MC_Error rect_status = v->get_window_rect(wm->target, window->target, &rect);
+        if(rect_status == MCE_OK){
+            window->cached.rect = rect;
+            position->x = rect.x;
+            position->y = rect.y;
+            return MCE_OK;
+        }
+
+        status = rect_status;
+    }
+
+    return status;
+}
+
+static MC_Error owner_get_size(MC_WMWindow *window, MC_Size2U *size){
+    MC_WM *wm = window->wm;
+    MC_WMVtab *v = &wm->vtab;
+
+    MC_Error status = MCE_NOT_SUPPORTED;
+
+    if(v->get_window_size){
+        MC_Error size_status = v->get_window_size(wm->target, window->target, size);
+        if(size_status == MCE_OK){
+            window->cached.rect.width = size->width;
+            window->cached.rect.height = size->height;
+            return MCE_OK;
+        }
+
+        status = size_status;
+    }
+
+    if(v->get_window_rect){
+        MC_Rect2IU rect;
+        MC_Error rect_status = v->get_window_rect(wm->target, window->target, &rect);
+        if(rect_status == MCE_OK){
+            window->cached.rect = rect;
+            size->width = rect.width;
+            size->height = rect.height;
+            return MCE_OK;
+        }
+
+        status = rect_status;
+    }
+
+    return status;
+}
+
+static MC_Error owner_get_rect(MC_WMWindow *window, MC_Rect2IU *rect){
+    MC_WM *wm = window->wm;
+    MC_WMVtab *v = &wm->vtab;
+
+    MC_Error status = MCE_NOT_SUPPORTED;
+
+    if(v->get_window_rect){
+        MC_Error rect_status = v->get_window_rect(wm->target, window->target, rect);
+        if(rect_status == MCE_OK){
+            window->cached.rect = *rect;
+            return MCE_OK;
+        }
+
+        status = rect_status;
+    }
+
+    if(v->get_window_position){
+        MC_Vec2i position;
+        MC_Error position_status = v->get_window_position(wm->target, window->target, &position);
+        if(position_status == MCE_OK){
+            window->cached.rect.x = position.x;
+            window->cached.rect.y = position.y;
+        }
+
+        status = position_status;
+    }
+
+    if(v->get_window_size){
+        MC_Size2U size;
+        MC_Error size_status = v->get_window_size(wm->target, window->target, &size);
+        if(size_status == MCE_OK){
+            window->cached.rect.width = size.width;
+            window->cached.rect.height = size.height;
+        }
+
+        status = size_status;
+    }
+
+    return status;
+}
+
+static MC_Error foreign_set_title(MC_ForeignWindow *foreign, MC_Str title){
+    MC_WM *wm = foreign->wm;
+
+    if(wm->vtab.set_foreign_window_title){
+        return wm->vtab.set_foreign_window_title(wm->target, foreign->target, title);
+    }
+
+    return MCE_NOT_SUPPORTED;
+}
+
+static MC_Error foreign_set_rect(MC_ForeignWindow *foreign, MC_Rect2IU rect){
+    MC_WM *wm = foreign->wm;
+
+    if(wm->vtab.set_foreign_window_rect){
+        return wm->vtab.set_foreign_window_rect(wm->target, foreign->target, rect);
+    }
+
+    return MCE_NOT_SUPPORTED;
+}
+
+static MC_Error foreign_set_position(MC_ForeignWindow *foreign, MC_Vec2i position){
+    MC_Rect2IU rect;
+    MC_RETURN_ERROR(foreign_get_rect(foreign, &rect));
+
+    rect.x = position.x;
+    rect.y = position.y;
+
+    return foreign_set_rect(foreign, rect);
+}
+
+static MC_Error foreign_set_size(MC_ForeignWindow *foreign, MC_Size2U size){
+    MC_Rect2IU rect;
+    MC_RETURN_ERROR(foreign_get_rect(foreign, &rect));
+
+    rect.width = size.width;
+    rect.height = size.height;
+
+    return foreign_set_rect(foreign, rect);
+}
+
+static MC_Error foreign_set_state(MC_ForeignWindow *foreign, MC_WMWindowState state){
+    MC_WM *wm = foreign->wm;
+
+    if(wm->vtab.set_foreign_window_state){
+        return wm->vtab.set_foreign_window_state(wm->target, foreign->target, state);
+    }
+
+    return MCE_NOT_SUPPORTED;
+}
+
+static MC_Error foreign_get_title(MC_ForeignWindow *foreign, char *utf8, size_t cap, size_t *len){
+    MC_WM *wm = foreign->wm;
+
+    if(wm->vtab.get_foreign_window_title){
+        return wm->vtab.get_foreign_window_title(wm->target, foreign->target, utf8, cap, len);
+    }
+
+    return MCE_NOT_SUPPORTED;
+}
+
+static MC_Error foreign_get_rect(MC_ForeignWindow *foreign, MC_Rect2IU *rect){
+    MC_WM *wm = foreign->wm;
+
+    if(wm->vtab.get_foreign_window_rect){
+        return wm->vtab.get_foreign_window_rect(wm->target, foreign->target, rect);
+    }
+
+    return MCE_NOT_SUPPORTED;
+}
+
+static MC_Error foreign_get_position(MC_ForeignWindow *foreign, MC_Vec2i *position){
+    MC_Rect2IU rect;
+    MC_RETURN_ERROR(foreign_get_rect(foreign, &rect));
+
+    position->x = rect.x;
+    position->y = rect.y;
+
+    return MCE_OK;
+}
+
+static MC_Error foreign_get_size(MC_ForeignWindow *foreign, MC_Size2U *size){
+    MC_Rect2IU rect;
+    MC_RETURN_ERROR(foreign_get_rect(foreign, &rect));
+
+    size->width = rect.width;
+    size->height = rect.height;
+
+    return MCE_OK;
+}
+
 MC_Error mc_wm_poll_event(MC_WM *wm, MC_WMEvent *event){
     MC_WMVtab *v = &wm->vtab;
 
@@ -539,6 +931,10 @@ MC_Error mc_wm_poll_event(MC_WM *wm, MC_WMEvent *event){
         }
 
         mc_arena_reset(wm->arena);
+
+        if(v->heartbeat){
+            v->heartbeat(wm->target);
+        }
 
         if(!(v->poll_event && v->poll_event(wm->target, wm->target_event))){
             return MCE_AGAIN;
@@ -653,7 +1049,7 @@ static void discard_indication(MC_WM *wm){
 static MC_WMEvent translate_indication(MC_WM *wm){
     MC_TargetIndication ind = *wm->indications;
     memmove(wm->indications, wm->indications + 1, sizeof(MC_TargetIndication[--wm->pending_indications]));
-    
+
     MC_WMWindow *window;
 
     switch (ind.type){
@@ -887,7 +1283,18 @@ static MC_WMWindow *window_from_target(MC_WM *wm, struct MC_TargetWMWindow *targ
     MC_VECTOR_EACH(wm->windows, w){
         if((*w)->target == target){
             return *w;
-        } 
+        }
+    }
+
+    return NULL;
+}
+
+static MC_ForeignWindow *find_foreign(MC_WM *wm, uint64_t identity){
+    MC_ForeignWindow **w;
+    MC_VECTOR_EACH(wm->foreign_windows, w){
+        if((*w)->identity == identity){
+            return *w;
+        }
     }
 
     return NULL;

@@ -171,8 +171,10 @@ int main(void){
 
     MC_WMWindow *window;
     MC_REQUIRE(mc_wm_window_init(wm, &window));
-    MC_REQUIRE(mc_wm_window_set_title(window, MC_STRC("di glyph: contour outline | region fill - Q/Esc quit")));
-    MC_REQUIRE(mc_wm_window_set_size(window, (MC_Size2U){.width = 640, .height = 320}));
+
+    MC_WindowRef *ref = mc_wm_window_get_ref(window);
+    MC_REQUIRE(mc_wm_window_set_title(ref, MC_STRC("di glyph: contour outline | region fill - Q/Esc quit")));
+    MC_REQUIRE(mc_wm_window_set_size(ref, (MC_Size2U){.width = 640, .height = 320}));
 
     MC_Graphics *g;
     MC_REQUIRE(mc_wm_window_get_graphic(window, &g));

@@ -7,6 +7,8 @@
 
 #include <mc/data/alloc.h>
 
+#include <stdint.h>
+
 #define MC_WM_MAX_INDICATIONS_PER_EVENT 16
 
 #define MC_ITER_INDICATIONS() \
@@ -66,7 +68,23 @@ inline const char *mc_wm_target_indication_type_str(MC_WMIndicationType ind){
 
 struct MC_TargetWM;
 struct MC_TargetWMWindow;
+struct MC_TargetForeignWindow;
 struct MC_TargetWMEvent;
+
+typedef unsigned MC_TargetIdentityType;
+enum MC_TargetIdentityType{
+    MC_TARGET_IDENTITY_FOREIGN_WINDOW,
+    MC_TARGET_IDENTITY_WINDOW,
+};
+
+typedef struct MC_TargetResolvedIdentity{
+    MC_TargetIdentityType type;
+    uint64_t id;
+    union{
+        struct MC_TargetForeignWindow *foreign_window;
+        struct MC_TargetWMWindow *window;
+    } as;
+} MC_TargetResolvedIdentity;
 
 struct MC_TargetIndication{
     MC_WMIndicationType type;
@@ -196,6 +214,7 @@ struct MC_WMVtab{
 
     size_t wm_size;
     size_t window_size;
+    size_t foreign_window_size;
     size_t event_size;
 
     MC_Error (*init)(struct MC_TargetWM *wm, MC_Stream *log, MC_Alloc *arena);
@@ -221,6 +240,18 @@ struct MC_WMVtab{
     unsigned (*translate_event)(struct MC_TargetWM *wm, const struct MC_TargetWMEvent *event, MC_TargetIndication indications[MC_WM_MAX_INDICATIONS_PER_EVENT]);
 
     MC_Error (*request_events)(struct MC_TargetWM *wm, MC_WMEvents events);
+
+    MC_Error (*get_focused_window)(struct MC_TargetWM *wm, uint64_t *identity);
+    MC_Error (*resolve_temporary_identity)(struct MC_TargetWM *wm, uint64_t identity, MC_TargetResolvedIdentity *out);
+    void (*heartbeat)(struct MC_TargetWM *wm);
+    void (*destroy_foreign_window)(struct MC_TargetWM *wm, struct MC_TargetForeignWindow *window);
+
+    MC_Error (*set_foreign_window_title)(struct MC_TargetWM *wm, struct MC_TargetForeignWindow *window, MC_Str title);
+    MC_Error (*set_foreign_window_rect)(struct MC_TargetWM *wm, struct MC_TargetForeignWindow *window, MC_Rect2IU rect);
+    MC_Error (*set_foreign_window_state)(struct MC_TargetWM *wm, struct MC_TargetForeignWindow *window, MC_WMWindowState state);
+
+    MC_Error (*get_foreign_window_title)(struct MC_TargetWM *wm, struct MC_TargetForeignWindow *window, char *utf8, size_t cap, size_t *len);
+    MC_Error (*get_foreign_window_rect)(struct MC_TargetWM *wm, struct MC_TargetForeignWindow *window, MC_Rect2IU *rect);
 };
 
 #endif // MC_WM_TARGET_H
