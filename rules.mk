@@ -7,6 +7,7 @@ ifeq ($(OS),Windows_NT)
     rm_rf   = $(foreach f,$1,rmdir /s /q "$(subst /,\,$f)" 2>nul & del /f /q "$(subst /,\,$f)" 2>nul & )
     cp_file = copy /y "$(subst /,\,$1)" "$(subst /,\,$2)" >nul
     cp_dir  = xcopy /e /i /y /q "$(subst /,\,$1)" "$(subst /,\,$2)" >nul
+    touch_file = type nul > "$(subst /,\,$1)"
 
     executable  = $1.exe
     wm_backend  = win32_wm
@@ -22,6 +23,7 @@ else
     rm_rf   = rm -rf $1
     cp_file = cp -p $1 $2
     cp_dir  = cp -rp $1/. $2
+    touch_file = touch $1
 
     executable  = $1
     wm_backend  = xlib_wm

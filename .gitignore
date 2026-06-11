@@ -6,3 +6,4 @@ build/
 *.bmp
 compile_commands.json
 *pyc
+package/lua/lua/
