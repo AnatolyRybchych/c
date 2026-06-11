@@ -16,6 +16,7 @@
 
 #define WINDOW_CLASS_NAME "mc_win32_wm_window"
 #define EVENT_QUEUE_CAP 1024
+#define ENUM_WINDOWS_CAP 512
 
 struct rawevent{
     HWND hwnd;
@@ -91,6 +92,10 @@ static bool is_our_window(HWND hwnd);
 static MC_Error read_clipboard(struct MC_TargetWM *wm, HWND hwnd, MC_Str *out);
 static MC_Error request_events(struct MC_TargetWM *wm, MC_WMEvents events);
 static MC_Error get_focused_window(struct MC_TargetWM *wm, uint64_t *identity);
+static MC_Error get_hovered_window(struct MC_TargetWM *wm, uint64_t *identity);
+static MC_Error get_all_windows(struct MC_TargetWM *wm, uint64_t **identities, size_t *count);
+static MC_Error identity_for_hwnd(struct MC_TargetWM *wm, HWND hwnd, uint64_t *identity);
+static BOOL CALLBACK enum_windows_proc(HWND hwnd, LPARAM lparam);
 static MC_Error resolve_temporary_identity(struct MC_TargetWM *wm, uint64_t identity, MC_TargetResolvedIdentity *out);
 static void heartbeat(struct MC_TargetWM *wm);
 static MC_Error close_foreign_window(struct MC_TargetWM *wm, struct MC_TargetForeignWindow *window);
@@ -141,6 +146,8 @@ static MC_WMVtab vtab = {
     .request_events = request_events,
 
     .get_focused_window = get_focused_window,
+    .get_hovered_window = get_hovered_window,
+    .get_all_windows = get_all_windows,
     .resolve_temporary_identity = resolve_temporary_identity,
     .heartbeat = heartbeat,
 
@@ -810,8 +817,7 @@ static MC_Error request_events(struct MC_TargetWM *wm, MC_WMEvents events){
     return MCE_OK;
 }
 
-static MC_Error get_focused_window(struct MC_TargetWM *wm, uint64_t *identity){
-    HWND hwnd = GetForegroundWindow();
+static MC_Error identity_for_hwnd(struct MC_TargetWM *wm, HWND hwnd, uint64_t *identity){
     if(hwnd == NULL){
         return MCE_NOT_FOUND;
     }
@@ -839,6 +845,68 @@ static MC_Error get_focused_window(struct MC_TargetWM *wm, uint64_t *identity){
 
     *identity = entry->resolved.id;
     return MCE_OK;
+}
+
+static MC_Error get_focused_window(struct MC_TargetWM *wm, uint64_t *identity){
+    return identity_for_hwnd(wm, GetForegroundWindow(), identity);
+}
+
+static MC_Error get_hovered_window(struct MC_TargetWM *wm, uint64_t *identity){
+    POINT point;
+    if(!GetCursorPos(&point)){
+        return MCE_NOT_FOUND;
+    }
+
+    HWND hwnd = WindowFromPoint(point);
+    if(hwnd != NULL){
+        hwnd = GetAncestor(hwnd, GA_ROOT);
+    }
+
+    return identity_for_hwnd(wm, hwnd, identity);
+}
+
+struct enum_collect{
+    struct MC_TargetWM *wm;
+    uint64_t *ids;
+    size_t count;
+    MC_Error status;
+};
+
+static BOOL CALLBACK enum_windows_proc(HWND hwnd, LPARAM lparam){
+    struct enum_collect *collect = (struct enum_collect*)lparam;
+
+    if(!IsWindowVisible(hwnd) || GetWindowTextLengthW(hwnd) == 0){
+        return TRUE;
+    }
+
+    if(collect->count >= ENUM_WINDOWS_CAP){
+        return FALSE;
+    }
+
+    uint64_t identity;
+    MC_Error status = identity_for_hwnd(collect->wm, hwnd, &identity);
+    if(status != MCE_OK){
+        collect->status = status;
+        return FALSE;
+    }
+
+    collect->ids[collect->count++] = identity;
+    return TRUE;
+}
+
+static MC_Error get_all_windows(struct MC_TargetWM *wm, uint64_t **identities, size_t *count){
+    uint64_t *ids;
+    MC_Error status = mc_alloc(wm->arena, ENUM_WINDOWS_CAP * sizeof(*ids), (void**)&ids);
+    if(status != MCE_OK){
+        return status;
+    }
+
+    struct enum_collect collect = {.wm = wm, .ids = ids, .count = 0, .status = MCE_OK};
+    EnumWindows(enum_windows_proc, (LPARAM)&collect);
+
+    *identities = ids;
+    *count = collect.count;
+    return collect.status;
 }
 
 static bool is_our_window(HWND hwnd){
