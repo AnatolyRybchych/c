@@ -384,23 +384,25 @@ static void register_class(lua_State *L, const char *name, const luaL_Reg *metho
     lua_pop(L, 1);
 }
 
-static int luaopen_mc_wm(lua_State *L){
+int mc_wm_lua_module(lua_State *L, const MC_WMVtab *vtab){
     static const luaL_Reg module[] = {
         {"create", wm_create},
         {NULL, NULL},
     };
 
-    luaL_newlib(L, module);
-    return 1;
-}
-
-void mc_wm_lua_open(lua_State *L, const MC_WMVtab *vtab){
     register_class(L, WM_MT, wm_methods);
     register_class(L, WINDOW_MT, window_methods);
 
     lua_pushlightuserdata(L, (void*)vtab);
     lua_setfield(L, LUA_REGISTRYINDEX, VTAB_KEY);
 
-    luaL_requiref(L, "mc.wm", luaopen_mc_wm, 0);
+    luaL_newlib(L, module);
+    return 1;
+}
+
+void mc_wm_lua_open(lua_State *L, const MC_WMVtab *vtab){
+    luaL_getsubtable(L, LUA_REGISTRYINDEX, LUA_LOADED_TABLE);
+    mc_wm_lua_module(L, vtab);
+    lua_setfield(L, -2, "mc.wm");
     lua_pop(L, 1);
 }

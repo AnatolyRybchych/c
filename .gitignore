@@ -3,6 +3,8 @@ build/
 **/build/
 **/bin/
 *.a
+*.dll
+*.d
 *.bmp
 compile_commands.json
 *pyc

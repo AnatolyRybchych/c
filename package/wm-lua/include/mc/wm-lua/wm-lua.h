@@ -7,4 +7,6 @@ struct lua_State;
 
 void mc_wm_lua_open(struct lua_State *L, const MC_WMVtab *vtab);
 
+int mc_wm_lua_module(struct lua_State *L, const MC_WMVtab *vtab);
+
 #endif // MC_WM_LUA_H

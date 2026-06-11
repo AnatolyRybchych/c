@@ -10,6 +10,8 @@ ifeq ($(OS),Windows_NT)
     touch_file = type nul > "$(subst /,\,$1)"
 
     executable  = $1.exe
+    loadable    = $1.dll
+    lua_link    = -llua54
     wm_backend  = win32_wm
     wm_libs     = -lgdi32 -luser32
     demo_skip   = http-server
@@ -26,6 +28,8 @@ else
     touch_file = touch $1
 
     executable  = $1
+    loadable    = $1.so
+    lua_link    =
     wm_backend  = xlib_wm
     wm_libs     = -lX11 -lm
     demo_skip   =
