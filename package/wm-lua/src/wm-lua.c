@@ -332,6 +332,51 @@ static int wm_get_focused_window(lua_State *L){
     return 1;
 }
 
+static int wm_get_hovered_window(lua_State *L){
+    LuaWM *lwm = luaL_checkudata(L, 1, WM_MT);
+    if(lwm->wm == NULL){
+        return luaL_error(L, "mc.wm: window manager is destroyed");
+    }
+
+    MC_WindowRef *ref = NULL;
+    MC_Error e = mc_wm_get_hovered_window(lwm->wm, &ref);
+    if(e == MCE_NOT_FOUND){
+        lua_pushnil(L);
+        return 1;
+    }
+    require_ok(L, e, "get_hovered_window");
+
+    push_window(L, 1, ref, NULL);
+    return 1;
+}
+
+typedef struct CollectWindows{
+    lua_State *L;
+    int table_index;
+    lua_Integer count;
+} CollectWindows;
+
+static MC_Error collect_window(MC_WindowRef *window, void *ctx){
+    CollectWindows *collect = ctx;
+
+    push_window(collect->L, 1, window, NULL);
+    lua_rawseti(collect->L, collect->table_index, ++collect->count);
+    return MCE_OK;
+}
+
+static int wm_get_all_windows(lua_State *L){
+    LuaWM *lwm = luaL_checkudata(L, 1, WM_MT);
+    if(lwm->wm == NULL){
+        return luaL_error(L, "mc.wm: window manager is destroyed");
+    }
+
+    lua_newtable(L);
+    CollectWindows collect = {.L = L, .table_index = lua_gettop(L), .count = 0};
+    require_ok(L, mc_wm_get_all_windows(lwm->wm, collect_window, &collect), "get_all_windows");
+
+    return 1;
+}
+
 static int wm_poll_event(lua_State *L){
     LuaWM *lwm = luaL_checkudata(L, 1, WM_MT);
     if(lwm->wm == NULL){
@@ -385,6 +430,8 @@ static int wm_resolve(lua_State *L){
 static const luaL_Reg wm_methods[] = {
     {"create_window", wm_create_window},
     {"get_focused_window", wm_get_focused_window},
+    {"get_hovered_window", wm_get_hovered_window},
+    {"get_all_windows", wm_get_all_windows},
     {"poll_event", wm_poll_event},
     {"destroy", wm_destroy},
     {"__gc", wm_destroy},
