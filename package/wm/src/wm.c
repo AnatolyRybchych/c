@@ -1,6 +1,7 @@
 #include <mc/wm/wm.h>
 #include <mc/wm/target.h>
 #include <mc/wm/event.h>
+#include <mc/wm/resolver.h>
 
 #include <mc/data/string.h>
 #include <mc/data/vector.h>
@@ -67,6 +68,7 @@ struct MC_ForeignWindow{
 };
 
 struct MC_WM{
+    unsigned refcount;
     MC_WMVtab vtab;
     MC_Stream *log;
     struct MC_TargetWM *target;
@@ -162,6 +164,11 @@ MC_Error mc_wm_init(MC_WM **ret_wm, const MC_WMVtab *vtab){
         return init_status;
     }
 
+    wm->refcount = 1;
+
+    mc_wm_resolver_register(vtab);
+    mc_wm_resolver_set(wm);
+
     *ret_wm = wm;
     (void)dump_vtable;
     // dump_vtable(wm);
@@ -169,7 +176,22 @@ MC_Error mc_wm_init(MC_WM **ret_wm, const MC_WMVtab *vtab){
     return MCE_OK;
 }
 
+MC_WM *mc_wm_ref(MC_WM *wm){
+    wm->refcount++;
+
+    return wm;
+}
+
 void mc_wm_destroy(MC_WM *wm){
+    MC_ASSERT_FAULT(wm->refcount > 0);
+
+    wm->refcount--;
+    if(wm->refcount > 0){
+        return;
+    }
+
+    mc_wm_resolver_forget(wm);
+
     while(MC_VECTOR_SIZE(wm->windows) > 0){
         MC_WMWindow *window = wm->windows->beg[0];
         if(window->is_alive && wm->vtab.destroy_window){
@@ -200,6 +222,10 @@ void mc_wm_destroy(MC_WM *wm){
     mc_arena_destroy(wm->arena);
 
     mc_free(NULL, wm);
+}
+
+const char *mc_wm_impl_name(MC_WM *wm){
+    return wm->vtab.name;
 }
 
 struct MC_TargetWM *mc_wm_get_target(MC_WM *wm){

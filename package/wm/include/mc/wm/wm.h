@@ -48,7 +48,9 @@ enum MC_WMEvents{
 struct MC_Graphics;
 
 MC_Error mc_wm_init(MC_WM **wm, const MC_WMVtab *vtab);
+MC_WM *mc_wm_ref(MC_WM *wm);
 void mc_wm_destroy(MC_WM *wm);
+const char *mc_wm_impl_name(MC_WM *wm);
 struct MC_TargetWM *mc_wm_get_target(MC_WM *wm);
 
 MC_Error mc_wm_request_events(MC_WM *wm, MC_WMEvents events);
