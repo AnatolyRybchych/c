@@ -243,6 +243,8 @@ struct MC_WMVtab{
     MC_Error (*request_events)(struct MC_TargetWM *wm, MC_WMEvents events);
 
     MC_Error (*get_focused_window)(struct MC_TargetWM *wm, uint64_t *identity);
+    MC_Error (*get_hovered_window)(struct MC_TargetWM *wm, uint64_t *identity);
+    MC_Error (*get_all_windows)(struct MC_TargetWM *wm, uint64_t **identities, size_t *count);
     MC_Error (*resolve_temporary_identity)(struct MC_TargetWM *wm, uint64_t identity, MC_TargetResolvedIdentity *out);
     void (*heartbeat)(struct MC_TargetWM *wm);
     void (*destroy_foreign_window)(struct MC_TargetWM *wm, struct MC_TargetForeignWindow *window);

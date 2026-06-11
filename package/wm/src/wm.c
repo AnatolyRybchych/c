@@ -365,16 +365,8 @@ bool mc_wm_window_cached_is_mouse_over(MC_WMWindow *window){
     return window->cached.mouse_over;
 }
 
-MC_Error mc_wm_get_focused_window(MC_WM *wm, MC_WindowRef **ret_window){
-    *ret_window = NULL;
+static MC_Error window_from_identity(MC_WM *wm, uint64_t identity, MC_WindowRef **ret_window){
     MC_WMVtab *v = &wm->vtab;
-
-    if(v->get_focused_window == NULL || v->resolve_temporary_identity == NULL){
-        return MCE_NOT_SUPPORTED;
-    }
-
-    uint64_t identity;
-    MC_RETURN_ERROR(v->get_focused_window(wm->target, &identity));
 
     MC_ForeignWindow *existing = find_foreign(wm, identity);
     if(existing){
@@ -409,6 +401,61 @@ MC_Error mc_wm_get_focused_window(MC_WM *wm, MC_WindowRef **ret_window){
 
     foreign->ref.refcount = 1;
     *ret_window = &foreign->ref;
+    return MCE_OK;
+}
+
+MC_Error mc_wm_get_focused_window(MC_WM *wm, MC_WindowRef **ret_window){
+    *ret_window = NULL;
+    MC_WMVtab *v = &wm->vtab;
+
+    if(v->get_focused_window == NULL || v->resolve_temporary_identity == NULL){
+        return MCE_NOT_SUPPORTED;
+    }
+
+    uint64_t identity;
+    MC_RETURN_ERROR(v->get_focused_window(wm->target, &identity));
+
+    return window_from_identity(wm, identity, ret_window);
+}
+
+MC_Error mc_wm_get_hovered_window(MC_WM *wm, MC_WindowRef **ret_window){
+    *ret_window = NULL;
+    MC_WMVtab *v = &wm->vtab;
+
+    if(v->get_hovered_window == NULL || v->resolve_temporary_identity == NULL){
+        return MCE_NOT_SUPPORTED;
+    }
+
+    uint64_t identity;
+    MC_RETURN_ERROR(v->get_hovered_window(wm->target, &identity));
+
+    return window_from_identity(wm, identity, ret_window);
+}
+
+MC_Error mc_wm_get_all_windows(MC_WM *wm, MC_Error (*visit)(MC_WindowRef *window, void *ctx), void *ctx){
+    MC_WMVtab *v = &wm->vtab;
+
+    if(v->get_all_windows == NULL || v->resolve_temporary_identity == NULL){
+        return MCE_NOT_SUPPORTED;
+    }
+
+    if(visit == NULL){
+        return MCE_INVALID_INPUT;
+    }
+
+    uint64_t *identities;
+    size_t count;
+    MC_RETURN_ERROR(v->get_all_windows(wm->target, &identities, &count));
+
+    for(size_t i = 0; i < count; i++){
+        MC_WindowRef *window;
+        if(window_from_identity(wm, identities[i], &window) != MCE_OK){
+            continue;
+        }
+
+        MC_RETURN_ERROR(visit(window, ctx));
+    }
+
     return MCE_OK;
 }
 
