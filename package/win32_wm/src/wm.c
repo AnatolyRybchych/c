@@ -12,6 +12,11 @@
 #include <dwmapi.h>
 
 #include <string.h>
+#include <wchar.h>
+
+#ifndef DWM_CLOAKED_APP
+#define DWM_CLOAKED_APP 0x00000001
+#endif
 
 #define LOG(FMT, ...) mc_fmt(wm->log, "[WM][WIN32] " FMT "\n", ##__VA_ARGS__)
 
@@ -106,6 +111,7 @@ static MC_Error set_foreign_window_state(struct MC_TargetWM *wm, struct MC_Targe
 static MC_Error get_foreign_window_title(struct MC_TargetWM *wm, struct MC_TargetForeignWindow *window, char *utf8, size_t cap, size_t *len);
 static MC_Error get_foreign_window_rect(struct MC_TargetWM *wm, struct MC_TargetForeignWindow *window, MC_WMArea area, MC_Rect2IU *rect);
 static MC_Error get_foreign_window_state(struct MC_TargetWM *wm, struct MC_TargetForeignWindow *window, MC_WMWindowState *state);
+static MC_Error is_foreign_window_system(struct MC_TargetWM *wm, struct MC_TargetForeignWindow *window, bool *out);
 static unsigned translate_global_event(const struct rawevent *e, MC_TargetIndication indications[MC_WM_MAX_INDICATIONS_PER_EVENT]);
 static void enqueue_global(struct MC_TargetWM *wm, UINT message, WPARAM wparam, POINT point);
 static LRESULT CALLBACK keyboard_hook_proc(int code, WPARAM wparam, LPARAM lparam);
@@ -120,6 +126,7 @@ static MC_Error hwnd_get_rect(HWND hwnd, MC_WMArea area, MC_Rect2IU *rect);
 static MC_Error hwnd_set_state(HWND hwnd, MC_WMWindowState state);
 static MC_Error hwnd_get_state(HWND hwnd, MC_WMWindowState *state);
 static MC_Error hwnd_close(HWND hwnd);
+static MC_Error hwnd_is_system(HWND hwnd, bool *out);
 
 
 static MC_WMVtab vtab = {
@@ -162,6 +169,7 @@ static MC_WMVtab vtab = {
     .get_foreign_window_title = get_foreign_window_title,
     .get_foreign_window_state = get_foreign_window_state,
     .get_foreign_window_rect = get_foreign_window_rect,
+    .is_foreign_window_system = is_foreign_window_system,
 };
 
 const MC_WMVtab *mc_win32_wm_vtab = &vtab;
@@ -397,6 +405,43 @@ static MC_Error hwnd_set_state(HWND hwnd, MC_WMWindowState state){
 
 static MC_Error hwnd_close(HWND hwnd){
     PostMessage(hwnd, WM_CLOSE, 0, 0);
+    return MCE_OK;
+}
+
+static MC_Error hwnd_is_system(HWND hwnd, bool *out){
+    *out = true;
+
+    if(hwnd == NULL || !IsWindow(hwnd)){
+        return MCE_OK;
+    }
+
+    DWORD cloaked = 0;
+    if(SUCCEEDED(DwmGetWindowAttribute(hwnd, DWMWA_CLOAKED, &cloaked, sizeof(cloaked)))
+        && (cloaked & DWM_CLOAKED_APP)){
+        return MCE_OK;
+    }
+
+    if(GetWindowLongPtrW(hwnd, GWL_EXSTYLE) & WS_EX_TOOLWINDOW){
+        return MCE_OK;
+    }
+
+    static const wchar_t *const system_classes[] = {
+        L"Progman",
+        L"WorkerW",
+        L"Shell_TrayWnd",
+        L"Shell_SecondaryTrayWnd",
+        L"Windows.UI.Core.CoreWindow",
+    };
+
+    wchar_t cls[128];
+    int n = GetClassNameW(hwnd, cls, (int)(sizeof(cls) / sizeof(cls[0])));
+    for(size_t i = 0; n > 0 && i < sizeof(system_classes) / sizeof(system_classes[0]); i++){
+        if(wcscmp(cls, system_classes[i]) == 0){
+            return MCE_OK;
+        }
+    }
+
+    *out = false;
     return MCE_OK;
 }
 
@@ -1013,6 +1058,11 @@ static MC_Error get_foreign_window_title(struct MC_TargetWM *wm, struct MC_Targe
 static MC_Error get_foreign_window_state(struct MC_TargetWM *wm, struct MC_TargetForeignWindow *window, MC_WMWindowState *state){
     (void)wm;
     return hwnd_get_state(window->hwnd, state);
+}
+
+static MC_Error is_foreign_window_system(struct MC_TargetWM *wm, struct MC_TargetForeignWindow *window, bool *out){
+    (void)wm;
+    return hwnd_is_system(window->hwnd, out);
 }
 
 static MC_Error get_foreign_window_rect(struct MC_TargetWM *wm, struct MC_TargetForeignWindow *window, MC_WMArea area, MC_Rect2IU *rect){

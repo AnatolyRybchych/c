@@ -114,6 +114,7 @@ static MC_Error foreign_get_title(MC_ForeignWindow *foreign, char *utf8, size_t 
 static MC_Error foreign_get_state(MC_ForeignWindow *foreign, MC_WMWindowState *state);
 static MC_Error foreign_set_rect(MC_ForeignWindow *foreign, MC_WMArea area, MC_Rect2IU rect);
 static MC_Error foreign_get_rect(MC_ForeignWindow *foreign, MC_WMArea area, MC_Rect2IU *rect);
+static MC_Error foreign_is_system(MC_ForeignWindow *foreign, bool *out);
 
 static const MC_WMEvents indication_category[MC_WMIND_COUNT] = {
     #define MC_WMIDN(NAME, DUP_ACTION, CATEGORY) [MC_WMIND_##NAME] = MC_WM_EVENTS_##CATEGORY,
@@ -628,6 +629,18 @@ MC_Error mc_wm_window_get_state(MC_WindowRef *window, MC_WMWindowState *state){
     }
 }
 
+MC_Error mc_wm_window_is_system(MC_WindowRef *window, bool *out){
+    if(window == NULL || out == NULL){
+        return MCE_INVALID_INPUT;
+    }
+
+    switch(window->type){
+    case REFERENCE_FOREIGN: return foreign_is_system((MC_ForeignWindow*)window, out);
+    case REFERENCE_INTERNAL: *out = false; return MCE_OK;
+    default: return MCE_NOT_SUPPORTED;
+    }
+}
+
 static MC_Error alloc_foreign(MC_WM *wm, MC_ForeignWindow **out){
     MC_WMVtab *v = &wm->vtab;
 
@@ -850,6 +863,16 @@ static MC_Error foreign_get_state(MC_ForeignWindow *foreign, MC_WMWindowState *s
 
     if(wm->vtab.get_foreign_window_state){
         return wm->vtab.get_foreign_window_state(wm->target, foreign->target, state);
+    }
+
+    return MCE_NOT_SUPPORTED;
+}
+
+static MC_Error foreign_is_system(MC_ForeignWindow *foreign, bool *out){
+    MC_WM *wm = foreign->wm;
+
+    if(wm->vtab.is_foreign_window_system){
+        return wm->vtab.is_foreign_window_system(wm->target, foreign->target, out);
     }
 
     return MCE_NOT_SUPPORTED;

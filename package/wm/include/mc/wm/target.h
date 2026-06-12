@@ -253,6 +253,7 @@ struct MC_WMVtab{
     MC_Error (*get_foreign_window_title)(struct MC_TargetWM *wm, struct MC_TargetForeignWindow *window, char *utf8, size_t cap, size_t *len);
     MC_Error (*get_foreign_window_state)(struct MC_TargetWM *wm, struct MC_TargetForeignWindow *window, MC_WMWindowState *state);
     MC_Error (*get_foreign_window_rect)(struct MC_TargetWM *wm, struct MC_TargetForeignWindow *window, MC_WMArea area, MC_Rect2IU *rect);
+    MC_Error (*is_foreign_window_system)(struct MC_TargetWM *wm, struct MC_TargetForeignWindow *window, bool *out);
 };
 
 #endif // MC_WM_TARGET_H
