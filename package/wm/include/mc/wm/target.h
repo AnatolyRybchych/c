@@ -228,6 +228,7 @@ struct MC_WMVtab{
     MC_Error (*set_window_title)(struct MC_TargetWM *wm, struct MC_TargetWMWindow *window, MC_Str title);
     MC_Error (*set_window_state)(struct MC_TargetWM *wm, struct MC_TargetWMWindow *window, MC_WMWindowState state);
     MC_Error (*set_window_rect)(struct MC_TargetWM *wm, struct MC_TargetWMWindow *window, MC_WMArea area, MC_Rect2IU rect);
+    MC_Error (*focus_window)(struct MC_TargetWM *wm, struct MC_TargetWMWindow *window);
 
     MC_Error (*get_window_title)(struct MC_TargetWM *wm, struct MC_TargetWMWindow *window, char *utf8, size_t cap, size_t *len);
     MC_Error (*get_window_state)(struct MC_TargetWM *wm, struct MC_TargetWMWindow *window, MC_WMWindowState *state);
@@ -249,6 +250,7 @@ struct MC_WMVtab{
     MC_Error (*set_foreign_window_title)(struct MC_TargetWM *wm, struct MC_TargetForeignWindow *window, MC_Str title);
     MC_Error (*set_foreign_window_state)(struct MC_TargetWM *wm, struct MC_TargetForeignWindow *window, MC_WMWindowState state);
     MC_Error (*set_foreign_window_rect)(struct MC_TargetWM *wm, struct MC_TargetForeignWindow *window, MC_WMArea area, MC_Rect2IU rect);
+    MC_Error (*focus_foreign_window)(struct MC_TargetWM *wm, struct MC_TargetForeignWindow *window);
 
     MC_Error (*get_foreign_window_title)(struct MC_TargetWM *wm, struct MC_TargetForeignWindow *window, char *utf8, size_t cap, size_t *len);
     MC_Error (*get_foreign_window_state)(struct MC_TargetWM *wm, struct MC_TargetForeignWindow *window, MC_WMWindowState *state);

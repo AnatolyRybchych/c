@@ -90,6 +90,7 @@ unsigned mc_wm_window_refcount(MC_WindowRef *window);
 bool mc_wm_window_is_alive(MC_WindowRef *window);
 
 MC_Error mc_wm_window_close(MC_WindowRef *window);
+MC_Error mc_wm_window_focus(MC_WindowRef *window);
 
 MC_Error mc_wm_window_set_title(MC_WindowRef *window, MC_Str title);
 MC_Error mc_wm_window_set_state(MC_WindowRef *window, MC_WMWindowState state);

@@ -100,6 +100,7 @@ static void window_free(MC_WMWindow *window);
 static void foreign_free(MC_ForeignWindow *foreign);
 
 static MC_Error owner_close(MC_WMWindow *window);
+static MC_Error owner_focus(MC_WMWindow *window);
 static MC_Error owner_get_title(MC_WMWindow *window, char *utf8, size_t cap, size_t *len);
 static MC_Error owner_set_title(MC_WMWindow *window, MC_Str title);
 static MC_Error owner_set_state(MC_WMWindow *window, MC_WMWindowState state);
@@ -108,6 +109,7 @@ static MC_Error owner_set_rect(MC_WMWindow *window, MC_WMArea area, MC_Rect2IU r
 static MC_Error owner_get_rect(MC_WMWindow *window, MC_WMArea area, MC_Rect2IU *rect);
 
 static MC_Error foreign_close(MC_ForeignWindow *foreign);
+static MC_Error foreign_focus(MC_ForeignWindow *foreign);
 static MC_Error foreign_set_title(MC_ForeignWindow *foreign, MC_Str title);
 static MC_Error foreign_set_state(MC_ForeignWindow *foreign, MC_WMWindowState state);
 static MC_Error foreign_get_title(MC_ForeignWindow *foreign, char *utf8, size_t cap, size_t *len);
@@ -573,6 +575,16 @@ MC_Error mc_wm_window_close(MC_WindowRef *window){
     }
 }
 
+MC_Error mc_wm_window_focus(MC_WindowRef *window){
+    RETURN_IF_REF_BUSY(window);
+
+    switch(window->type){
+    case REFERENCE_FOREIGN: return foreign_focus((MC_ForeignWindow*)window);
+    case REFERENCE_INTERNAL: return owner_focus((MC_WMWindow*)window);
+    default: return MCE_NOT_SUPPORTED;
+    }
+}
+
 MC_Error mc_wm_window_set_state(MC_WindowRef *window, MC_WMWindowState state){
     RETURN_IF_REF_BUSY(window);
 
@@ -755,6 +767,17 @@ static MC_Error owner_close(MC_WMWindow *window){
     return MCE_OK;
 }
 
+static MC_Error owner_focus(MC_WMWindow *window){
+    MC_WM *wm = window->wm;
+    MC_WMVtab *v = &wm->vtab;
+
+    if(v->focus_window){
+        return v->focus_window(wm->target, window->target);
+    }
+
+    return MCE_NOT_SUPPORTED;
+}
+
 static MC_Error owner_set_state(MC_WMWindow *window, MC_WMWindowState state){
     MC_WM *wm = window->wm;
     MC_WMVtab *v = &wm->vtab;
@@ -823,6 +846,16 @@ static MC_Error foreign_close(MC_ForeignWindow *foreign){
 
     if(wm->vtab.close_foreign_window){
         return wm->vtab.close_foreign_window(wm->target, foreign->target);
+    }
+
+    return MCE_NOT_SUPPORTED;
+}
+
+static MC_Error foreign_focus(MC_ForeignWindow *foreign){
+    MC_WM *wm = foreign->wm;
+
+    if(wm->vtab.focus_foreign_window){
+        return wm->vtab.focus_foreign_window(wm->target, foreign->target);
     }
 
     return MCE_NOT_SUPPORTED;

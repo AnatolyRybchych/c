@@ -83,6 +83,7 @@ static MC_Error create_window_graphic(struct MC_TargetWM *wm, struct MC_TargetWM
 static MC_Error set_window_title(struct MC_TargetWM *wm, struct MC_TargetWMWindow *window, MC_Str title);
 static MC_Error set_window_state(struct MC_TargetWM *wm, struct MC_TargetWMWindow *window, MC_WMWindowState state);
 static MC_Error set_window_rect(struct MC_TargetWM *wm, struct MC_TargetWMWindow *window, MC_WMArea area, MC_Rect2IU rect);
+static MC_Error focus_window(struct MC_TargetWM *wm, struct MC_TargetWMWindow *window);
 static MC_Error get_window_rect(struct MC_TargetWM *wm, struct MC_TargetWMWindow *window, MC_WMArea area, MC_Rect2IU *rect);
 static MC_Error get_window_state(struct MC_TargetWM *wm, struct MC_TargetWMWindow *window, MC_WMWindowState *state);
 static MC_Error get_window_title(struct MC_TargetWM *wm, struct MC_TargetWMWindow *window, char *utf8, size_t cap, size_t *len);
@@ -108,6 +109,7 @@ static MC_Error close_foreign_window(struct MC_TargetWM *wm, struct MC_TargetFor
 static MC_Error set_foreign_window_title(struct MC_TargetWM *wm, struct MC_TargetForeignWindow *window, MC_Str title);
 static MC_Error set_foreign_window_rect(struct MC_TargetWM *wm, struct MC_TargetForeignWindow *window, MC_WMArea area, MC_Rect2IU rect);
 static MC_Error set_foreign_window_state(struct MC_TargetWM *wm, struct MC_TargetForeignWindow *window, MC_WMWindowState state);
+static MC_Error focus_foreign_window(struct MC_TargetWM *wm, struct MC_TargetForeignWindow *window);
 static MC_Error get_foreign_window_title(struct MC_TargetWM *wm, struct MC_TargetForeignWindow *window, char *utf8, size_t cap, size_t *len);
 static MC_Error get_foreign_window_rect(struct MC_TargetWM *wm, struct MC_TargetForeignWindow *window, MC_WMArea area, MC_Rect2IU *rect);
 static MC_Error get_foreign_window_state(struct MC_TargetWM *wm, struct MC_TargetForeignWindow *window, MC_WMWindowState *state);
@@ -127,6 +129,7 @@ static MC_Error hwnd_set_state(HWND hwnd, MC_WMWindowState state);
 static MC_Error hwnd_get_state(HWND hwnd, MC_WMWindowState *state);
 static MC_Error hwnd_close(HWND hwnd);
 static MC_Error hwnd_is_system(HWND hwnd, bool *out);
+static MC_Error hwnd_focus(HWND hwnd);
 
 
 static MC_WMVtab vtab = {
@@ -146,6 +149,7 @@ static MC_WMVtab vtab = {
     .set_window_title = set_window_title,
     .set_window_state = set_window_state,
     .set_window_rect = set_window_rect,
+    .focus_window = focus_window,
     .get_window_title = get_window_title,
     .get_window_state = get_window_state,
     .get_window_rect = get_window_rect,
@@ -165,6 +169,7 @@ static MC_WMVtab vtab = {
     .set_foreign_window_title = set_foreign_window_title,
     .set_foreign_window_state = set_foreign_window_state,
     .set_foreign_window_rect = set_foreign_window_rect,
+    .focus_foreign_window = focus_foreign_window,
 
     .get_foreign_window_title = get_foreign_window_title,
     .get_foreign_window_state = get_foreign_window_state,
@@ -450,6 +455,43 @@ static MC_Error hwnd_is_system(HWND hwnd, bool *out){
     return MCE_OK;
 }
 
+static MC_Error hwnd_focus(HWND hwnd){
+    if(!IsWindow(hwnd)){
+        return MCE_INVALID_INPUT;
+    }
+
+    if(IsIconic(hwnd)){
+        ShowWindow(hwnd, SW_RESTORE);
+    }
+
+    DWORD self_thread = GetCurrentThreadId();
+    HWND foreground = GetForegroundWindow();
+    DWORD foreground_thread = foreground != NULL ? GetWindowThreadProcessId(foreground, NULL) : 0;
+    DWORD target_thread = GetWindowThreadProcessId(hwnd, NULL);
+
+    bool attached_foreground = foreground_thread != 0 && foreground_thread != self_thread;
+    bool attached_target = target_thread != 0 && target_thread != self_thread && target_thread != foreground_thread;
+
+    if(attached_foreground){
+        AttachThreadInput(self_thread, foreground_thread, TRUE);
+    }
+    if(attached_target){
+        AttachThreadInput(self_thread, target_thread, TRUE);
+    }
+
+    BringWindowToTop(hwnd);
+    BOOL ok = SetForegroundWindow(hwnd);
+
+    if(attached_target){
+        AttachThreadInput(self_thread, target_thread, FALSE);
+    }
+    if(attached_foreground){
+        AttachThreadInput(self_thread, foreground_thread, FALSE);
+    }
+
+    return ok ? MCE_OK : MCE_UNKNOWN;
+}
+
 static MC_Error hwnd_get_state(HWND hwnd, MC_WMWindowState *state){
     if(IsIconic(hwnd)){
         *state = MC_WM_WINDOW_STATE_MINIMIZED;
@@ -524,6 +566,11 @@ static MC_Error set_window_state(struct MC_TargetWM *wm, struct MC_TargetWMWindo
         LOG("set_window_state: unsupported state %u", (unsigned)state);
         return MCE_INVALID_INPUT;
     }
+}
+
+static MC_Error focus_window(struct MC_TargetWM *wm, struct MC_TargetWMWindow *window){
+    (void)wm;
+    return hwnd_focus(window->hwnd);
 }
 
 static MC_Error get_window_state(struct MC_TargetWM *wm, struct MC_TargetWMWindow *window, MC_WMWindowState *state){
@@ -1053,6 +1100,11 @@ static MC_Error set_foreign_window_rect(struct MC_TargetWM *wm, struct MC_Target
 static MC_Error set_foreign_window_state(struct MC_TargetWM *wm, struct MC_TargetForeignWindow *window, MC_WMWindowState state){
     (void)wm;
     return hwnd_set_state(window->hwnd, state);
+}
+
+static MC_Error focus_foreign_window(struct MC_TargetWM *wm, struct MC_TargetForeignWindow *window){
+    (void)wm;
+    return hwnd_focus(window->hwnd);
 }
 
 static MC_Error get_foreign_window_title(struct MC_TargetWM *wm, struct MC_TargetForeignWindow *window, char *utf8, size_t cap, size_t *len){
