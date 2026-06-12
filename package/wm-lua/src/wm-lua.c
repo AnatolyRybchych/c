@@ -269,6 +269,13 @@ static void push_window(lua_State *L, int wm_index, MC_WindowRef *ref, MC_WMWind
     lua_setiuservalue(L, -2, 1);
 }
 
+void mc_wm_lua_push_window(lua_State *L, MC_WindowRef *window){
+    LuaWindow *lw = lua_newuserdatauv(L, sizeof(LuaWindow), 1);
+    lw->ref = window;
+    lw->window = NULL;
+    luaL_setmetatable(L, WINDOW_MT);
+}
+
 static int wm_create_window(lua_State *L){
     LuaWM *lwm = luaL_checkudata(L, 1, WM_MT);
     if(lwm->wm == NULL){
