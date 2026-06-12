@@ -148,9 +148,34 @@ static int win_set_title(lua_State *L){
     return 1;
 }
 
+static MC_WMArea check_area(lua_State *L, int idx){
+    const char *s = luaL_optstring(L, idx, "window");
+    if(strcmp(s, "window") == 0){
+        return MC_WM_AREA_WINDOW;
+    }
+    if(strcmp(s, "decorated") == 0){
+        return MC_WM_AREA_DECORATED;
+    }
+    if(strcmp(s, "drawable") == 0){
+        return MC_WM_AREA_DRAWABLE;
+    }
+
+    return (MC_WMArea)luaL_error(L, "mc.wm: unknown window area '%s' (want window/decorated/drawable)", s);
+}
+
+static int win_set_rect(lua_State *L){
+    MC_WindowRef *ref = window_ref(L);
+    MC_WMArea area = check_area(L, 3);
+    require_ok(L, mc_wm_window_set_rect(ref, area, check_rect(L, 2)), "set_rect");
+
+    lua_settop(L, 1);
+    return 1;
+}
+
 static int win_set_size(lua_State *L){
     MC_WindowRef *ref = window_ref(L);
-    require_ok(L, mc_wm_window_set_size(ref, check_size(L, 2)), "set_size");
+    MC_WMArea area = check_area(L, 3);
+    require_ok(L, mc_wm_window_set_size(ref, area, check_size(L, 2)), "set_size");
 
     lua_settop(L, 1);
     return 1;
@@ -158,15 +183,8 @@ static int win_set_size(lua_State *L){
 
 static int win_set_position(lua_State *L){
     MC_WindowRef *ref = window_ref(L);
-    require_ok(L, mc_wm_window_set_position(ref, check_position(L, 2)), "set_position");
-
-    lua_settop(L, 1);
-    return 1;
-}
-
-static int win_set_rect(lua_State *L){
-    MC_WindowRef *ref = window_ref(L);
-    require_ok(L, mc_wm_window_set_rect(ref, check_rect(L, 2)), "set_rect");
+    MC_WMArea area = check_area(L, 3);
+    require_ok(L, mc_wm_window_set_position(ref, area, check_position(L, 2)), "set_position");
 
     lua_settop(L, 1);
     return 1;
@@ -180,10 +198,19 @@ static int win_set_state(lua_State *L){
     return 1;
 }
 
+static int win_get_rect(lua_State *L){
+    MC_WindowRef *ref = window_ref(L);
+    MC_Rect2IU rect;
+    require_ok(L, mc_wm_window_get_rect(ref, check_area(L, 2), &rect), "get_rect");
+
+    push_rect(L, rect);
+    return 1;
+}
+
 static int win_get_size(lua_State *L){
     MC_WindowRef *ref = window_ref(L);
     MC_Size2U size;
-    require_ok(L, mc_wm_window_get_size(ref, &size), "get_size");
+    require_ok(L, mc_wm_window_get_size(ref, check_area(L, 2), &size), "get_size");
 
     push_size(L, size);
     return 1;
@@ -192,18 +219,9 @@ static int win_get_size(lua_State *L){
 static int win_get_position(lua_State *L){
     MC_WindowRef *ref = window_ref(L);
     MC_Vec2i position;
-    require_ok(L, mc_wm_window_get_position(ref, &position), "get_position");
+    require_ok(L, mc_wm_window_get_position(ref, check_area(L, 2), &position), "get_position");
 
     push_position(L, position);
-    return 1;
-}
-
-static int win_get_rect(lua_State *L){
-    MC_WindowRef *ref = window_ref(L);
-    MC_Rect2IU rect;
-    require_ok(L, mc_wm_window_get_rect(ref, &rect), "get_rect");
-
-    push_rect(L, rect);
     return 1;
 }
 
@@ -300,13 +318,13 @@ static int wm_create_window(lua_State *L){
 
         lua_getfield(L, 2, "size");
         if(!lua_isnil(L, -1)){
-            require_ok(L, mc_wm_window_set_size(ref, check_size(L, lua_gettop(L))), "set_size");
+            require_ok(L, mc_wm_window_set_size(ref, MC_WM_AREA_WINDOW, check_size(L, lua_gettop(L))), "set_size");
         }
         lua_pop(L, 1);
 
         lua_getfield(L, 2, "position");
         if(!lua_isnil(L, -1)){
-            require_ok(L, mc_wm_window_set_position(ref, check_position(L, lua_gettop(L))), "set_position");
+            require_ok(L, mc_wm_window_set_position(ref, MC_WM_AREA_WINDOW, check_position(L, lua_gettop(L))), "set_position");
         }
         lua_pop(L, 1);
 

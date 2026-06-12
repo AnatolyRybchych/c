@@ -13,7 +13,7 @@ ifeq ($(OS),Windows_NT)
     loadable    = $1.dll
     lua_link    = -llua54
     wm_backend  = win32_wm
-    wm_libs     = -lgdi32 -luser32
+    wm_libs     = -lgdi32 -luser32 -ldwmapi
     demo_skip   = http-server
     subprojects = demo
 else

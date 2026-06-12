@@ -9,6 +9,7 @@
 #include <mc/util/minmax.h>
 
 #include <windowsx.h>
+#include <dwmapi.h>
 
 #include <string.h>
 
@@ -75,8 +76,9 @@ static MC_Error init_window(struct MC_TargetWM *wm, struct MC_TargetWMWindow *wi
 static void destroy_window(struct MC_TargetWM *wm, struct MC_TargetWMWindow *window);
 static MC_Error create_window_graphic(struct MC_TargetWM *wm, struct MC_TargetWMWindow *window, struct MC_Graphics **g);
 static MC_Error set_window_title(struct MC_TargetWM *wm, struct MC_TargetWMWindow *window, MC_Str title);
-static MC_Error set_window_size(struct MC_TargetWM *wm, struct MC_TargetWMWindow *window, MC_Size2U size);
 static MC_Error set_window_state(struct MC_TargetWM *wm, struct MC_TargetWMWindow *window, MC_WMWindowState state);
+static MC_Error set_window_rect(struct MC_TargetWM *wm, struct MC_TargetWMWindow *window, MC_WMArea area, MC_Rect2IU rect);
+static MC_Error get_window_rect(struct MC_TargetWM *wm, struct MC_TargetWMWindow *window, MC_WMArea area, MC_Rect2IU *rect);
 static MC_Error get_window_state(struct MC_TargetWM *wm, struct MC_TargetWMWindow *window, MC_WMWindowState *state);
 static MC_Error get_window_title(struct MC_TargetWM *wm, struct MC_TargetWMWindow *window, char *utf8, size_t cap, size_t *len);
 static bool poll_event(struct MC_TargetWM *wm, struct MC_TargetWMEvent *event);
@@ -99,10 +101,10 @@ static MC_Error resolve_temporary_identity(struct MC_TargetWM *wm, uint64_t iden
 static void heartbeat(struct MC_TargetWM *wm);
 static MC_Error close_foreign_window(struct MC_TargetWM *wm, struct MC_TargetForeignWindow *window);
 static MC_Error set_foreign_window_title(struct MC_TargetWM *wm, struct MC_TargetForeignWindow *window, MC_Str title);
-static MC_Error set_foreign_window_rect(struct MC_TargetWM *wm, struct MC_TargetForeignWindow *window, MC_Rect2IU rect);
+static MC_Error set_foreign_window_rect(struct MC_TargetWM *wm, struct MC_TargetForeignWindow *window, MC_WMArea area, MC_Rect2IU rect);
 static MC_Error set_foreign_window_state(struct MC_TargetWM *wm, struct MC_TargetForeignWindow *window, MC_WMWindowState state);
 static MC_Error get_foreign_window_title(struct MC_TargetWM *wm, struct MC_TargetForeignWindow *window, char *utf8, size_t cap, size_t *len);
-static MC_Error get_foreign_window_rect(struct MC_TargetWM *wm, struct MC_TargetForeignWindow *window, MC_Rect2IU *rect);
+static MC_Error get_foreign_window_rect(struct MC_TargetWM *wm, struct MC_TargetForeignWindow *window, MC_WMArea area, MC_Rect2IU *rect);
 static MC_Error get_foreign_window_state(struct MC_TargetWM *wm, struct MC_TargetForeignWindow *window, MC_WMWindowState *state);
 static unsigned translate_global_event(const struct rawevent *e, MC_TargetIndication indications[MC_WM_MAX_INDICATIONS_PER_EVENT]);
 static void enqueue_global(struct MC_TargetWM *wm, UINT message, WPARAM wparam, POINT point);
@@ -113,11 +115,12 @@ static MC_Vec2i unpack_point(LPARAM lparam);
 
 static MC_Error hwnd_set_title(HWND hwnd, MC_Str title);
 static MC_Error hwnd_get_title(HWND hwnd, char *utf8, size_t cap, size_t *len);
-static MC_Error hwnd_set_rect(HWND hwnd, MC_Rect2IU rect);
-static MC_Error hwnd_get_rect(HWND hwnd, MC_Rect2IU *rect);
+static MC_Error hwnd_set_rect(HWND hwnd, MC_WMArea area, MC_Rect2IU rect);
+static MC_Error hwnd_get_rect(HWND hwnd, MC_WMArea area, MC_Rect2IU *rect);
 static MC_Error hwnd_set_state(HWND hwnd, MC_WMWindowState state);
 static MC_Error hwnd_get_state(HWND hwnd, MC_WMWindowState *state);
 static MC_Error hwnd_close(HWND hwnd);
+
 
 static MC_WMVtab vtab = {
     .name = "WIN32",
@@ -134,10 +137,11 @@ static MC_WMVtab vtab = {
     .create_window_graphic = create_window_graphic,
 
     .set_window_title = set_window_title,
-    .set_window_size = set_window_size,
     .set_window_state = set_window_state,
+    .set_window_rect = set_window_rect,
     .get_window_title = get_window_title,
     .get_window_state = get_window_state,
+    .get_window_rect = get_window_rect,
 
     .poll_event = poll_event,
     .translate_event = translate_event,
@@ -152,12 +156,12 @@ static MC_WMVtab vtab = {
 
     .close_foreign_window = close_foreign_window,
     .set_foreign_window_title = set_foreign_window_title,
-    .set_foreign_window_rect = set_foreign_window_rect,
     .set_foreign_window_state = set_foreign_window_state,
+    .set_foreign_window_rect = set_foreign_window_rect,
 
     .get_foreign_window_title = get_foreign_window_title,
-    .get_foreign_window_rect = get_foreign_window_rect,
     .get_foreign_window_state = get_foreign_window_state,
+    .get_foreign_window_rect = get_foreign_window_rect,
 };
 
 const MC_WMVtab *mc_win32_wm_vtab = &vtab;
@@ -291,17 +295,46 @@ static MC_Error hwnd_get_title(HWND hwnd, char *utf8, size_t cap, size_t *len){
     return MCE_OK;
 }
 
-static MC_Error hwnd_set_rect(HWND hwnd, MC_Rect2IU rect){
-    BOOL ok = SetWindowPos(hwnd, NULL, rect.x, rect.y, (int)rect.width, (int)rect.height,
-        SWP_NOZORDER | SWP_NOACTIVATE);
+static void hwnd_invisible_margins(HWND hwnd, int *left, int *top, int *right, int *bottom){
+    RECT window, frame;
+    if(!GetWindowRect(hwnd, &window) ||
+       FAILED(DwmGetWindowAttribute(hwnd, DWMWA_EXTENDED_FRAME_BOUNDS, &frame, sizeof(frame)))){
+        *left = *top = *right = *bottom = 0;
+        return;
+    }
 
-    return ok ? MCE_OK : MCE_UNKNOWN;
+    *left = frame.left - window.left;
+    *top = frame.top - window.top;
+    *right = window.right - frame.right;
+    *bottom = window.bottom - frame.bottom;
 }
 
-static MC_Error hwnd_get_rect(HWND hwnd, MC_Rect2IU *rect){
+static MC_Error hwnd_get_rect(HWND hwnd, MC_WMArea area, MC_Rect2IU *rect){
     RECT r;
-    if(!GetWindowRect(hwnd, &r)){
-        return MCE_UNKNOWN;
+    switch(area){
+    case MC_WM_AREA_WINDOW:
+        if(!GetWindowRect(hwnd, &r)){
+            return MCE_UNKNOWN;
+        }
+        break;
+    case MC_WM_AREA_DECORATED:
+        if(FAILED(DwmGetWindowAttribute(hwnd, DWMWA_EXTENDED_FRAME_BOUNDS, &r, sizeof(r))) && !GetWindowRect(hwnd, &r)){
+            return MCE_UNKNOWN;
+        }
+        break;
+    case MC_WM_AREA_DRAWABLE: {
+        POINT origin = {0, 0};
+        if(!GetClientRect(hwnd, &r) || !ClientToScreen(hwnd, &origin)){
+            return MCE_UNKNOWN;
+        }
+        r.left = origin.x;
+        r.top = origin.y;
+        r.right = origin.x + (r.right - r.left);
+        r.bottom = origin.y + (r.bottom - r.top);
+        break;
+    }
+    default:
+        return MCE_NOT_SUPPORTED;
     }
 
     *rect = (MC_Rect2IU){
@@ -312,6 +345,38 @@ static MC_Error hwnd_get_rect(HWND hwnd, MC_Rect2IU *rect){
     };
 
     return MCE_OK;
+}
+
+static MC_Error hwnd_set_rect(HWND hwnd, MC_WMArea area, MC_Rect2IU rect){
+    int left = 0, top = 0, right = 0, bottom = 0;
+    switch(area){
+    case MC_WM_AREA_WINDOW:
+        break;
+    case MC_WM_AREA_DECORATED:
+        hwnd_invisible_margins(hwnd, &left, &top, &right, &bottom);
+        break;
+    case MC_WM_AREA_DRAWABLE: {
+        RECT window, client;
+        POINT client_origin = {0, 0};
+        if(!GetWindowRect(hwnd, &window) || !ClientToScreen(hwnd, &client_origin) || !GetClientRect(hwnd, &client)){
+            return MCE_UNKNOWN;
+        }
+        left = client_origin.x - window.left;
+        top = client_origin.y - window.top;
+        right = window.right - (client_origin.x + (client.right - client.left));
+        bottom = window.bottom - (client_origin.y + (client.bottom - client.top));
+        break;
+    }
+    default:
+        return MCE_NOT_SUPPORTED;
+    }
+
+    BOOL ok = SetWindowPos(hwnd, NULL,
+        rect.x - left, rect.y - top,
+        (int)rect.width + left + right, (int)rect.height + top + bottom,
+        SWP_NOZORDER | SWP_NOACTIVATE);
+
+    return ok ? MCE_OK : MCE_UNKNOWN;
 }
 
 static MC_Error hwnd_set_state(HWND hwnd, MC_WMWindowState state){
@@ -354,18 +419,14 @@ static MC_Error set_window_title(struct MC_TargetWM *wm, struct MC_TargetWMWindo
     return hwnd_set_title(window->hwnd, title);
 }
 
-static MC_Error set_window_size(struct MC_TargetWM *wm, struct MC_TargetWMWindow *window, MC_Size2U size){
+static MC_Error set_window_rect(struct MC_TargetWM *wm, struct MC_TargetWMWindow *window, MC_WMArea area, MC_Rect2IU rect){
     (void)wm;
+    return hwnd_set_rect(window->hwnd, area, rect);
+}
 
-    RECT rect = {0, 0, (LONG)size.width, (LONG)size.height};
-    DWORD style = (DWORD)GetWindowLongPtr(window->hwnd, GWL_STYLE);
-    DWORD exstyle = (DWORD)GetWindowLongPtr(window->hwnd, GWL_EXSTYLE);
-    AdjustWindowRectEx(&rect, style, FALSE, exstyle);
-
-    SetWindowPos(window->hwnd, NULL, 0, 0, rect.right - rect.left, rect.bottom - rect.top,
-        SWP_NOMOVE | SWP_NOZORDER | SWP_NOACTIVATE);
-
-    return MCE_OK;
+static MC_Error get_window_rect(struct MC_TargetWM *wm, struct MC_TargetWMWindow *window, MC_WMArea area, MC_Rect2IU *rect){
+    (void)wm;
+    return hwnd_get_rect(window->hwnd, area, rect);
 }
 
 static void set_fullscreen(struct MC_TargetWMWindow *window, bool on){
@@ -934,9 +995,9 @@ static MC_Error set_foreign_window_title(struct MC_TargetWM *wm, struct MC_Targe
     return hwnd_set_title(window->hwnd, title);
 }
 
-static MC_Error set_foreign_window_rect(struct MC_TargetWM *wm, struct MC_TargetForeignWindow *window, MC_Rect2IU rect){
+static MC_Error set_foreign_window_rect(struct MC_TargetWM *wm, struct MC_TargetForeignWindow *window, MC_WMArea area, MC_Rect2IU rect){
     (void)wm;
-    return hwnd_set_rect(window->hwnd, rect);
+    return hwnd_set_rect(window->hwnd, area, rect);
 }
 
 static MC_Error set_foreign_window_state(struct MC_TargetWM *wm, struct MC_TargetForeignWindow *window, MC_WMWindowState state){
@@ -954,9 +1015,9 @@ static MC_Error get_foreign_window_state(struct MC_TargetWM *wm, struct MC_Targe
     return hwnd_get_state(window->hwnd, state);
 }
 
-static MC_Error get_foreign_window_rect(struct MC_TargetWM *wm, struct MC_TargetForeignWindow *window, MC_Rect2IU *rect){
+static MC_Error get_foreign_window_rect(struct MC_TargetWM *wm, struct MC_TargetForeignWindow *window, MC_WMArea area, MC_Rect2IU *rect){
     (void)wm;
-    return hwnd_get_rect(window->hwnd, rect);
+    return hwnd_get_rect(window->hwnd, area, rect);
 }
 
 static unsigned translate_global_event(const struct rawevent *e, MC_TargetIndication indications[MC_WM_MAX_INDICATIONS_PER_EVENT]){

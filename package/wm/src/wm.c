@@ -48,7 +48,7 @@ struct MC_WMWindow{
     struct MC_TargetWMWindow *target;
     bool is_alive;
     struct{
-        MC_Rect2IU rect;
+        MC_Rect2IU rect[MC_WM_AREA_COUNT];
         MC_Vec2i mouse_pos;
         bool mouse_over;
         MC_String *title;
@@ -102,26 +102,18 @@ static void foreign_free(MC_ForeignWindow *foreign);
 static MC_Error owner_close(MC_WMWindow *window);
 static MC_Error owner_get_title(MC_WMWindow *window, char *utf8, size_t cap, size_t *len);
 static MC_Error owner_set_title(MC_WMWindow *window, MC_Str title);
-static MC_Error owner_set_position(MC_WMWindow *window, MC_Vec2i position);
-static MC_Error owner_set_size(MC_WMWindow *window, MC_Size2U size);
-static MC_Error owner_set_rect(MC_WMWindow *window, MC_Rect2IU rect);
 static MC_Error owner_set_state(MC_WMWindow *window, MC_WMWindowState state);
-static MC_Error owner_get_position(MC_WMWindow *window, MC_Vec2i *position);
-static MC_Error owner_get_size(MC_WMWindow *window, MC_Size2U *size);
-static MC_Error owner_get_rect(MC_WMWindow *window, MC_Rect2IU *rect);
 static MC_Error owner_get_state(MC_WMWindow *window, MC_WMWindowState *state);
+static MC_Error owner_set_rect(MC_WMWindow *window, MC_WMArea area, MC_Rect2IU rect);
+static MC_Error owner_get_rect(MC_WMWindow *window, MC_WMArea area, MC_Rect2IU *rect);
 
 static MC_Error foreign_close(MC_ForeignWindow *foreign);
 static MC_Error foreign_set_title(MC_ForeignWindow *foreign, MC_Str title);
-static MC_Error foreign_set_position(MC_ForeignWindow *foreign, MC_Vec2i position);
-static MC_Error foreign_set_size(MC_ForeignWindow *foreign, MC_Size2U size);
-static MC_Error foreign_set_rect(MC_ForeignWindow *foreign, MC_Rect2IU rect);
 static MC_Error foreign_set_state(MC_ForeignWindow *foreign, MC_WMWindowState state);
 static MC_Error foreign_get_title(MC_ForeignWindow *foreign, char *utf8, size_t cap, size_t *len);
-static MC_Error foreign_get_position(MC_ForeignWindow *foreign, MC_Vec2i *position);
-static MC_Error foreign_get_size(MC_ForeignWindow *foreign, MC_Size2U *size);
-static MC_Error foreign_get_rect(MC_ForeignWindow *foreign, MC_Rect2IU *rect);
 static MC_Error foreign_get_state(MC_ForeignWindow *foreign, MC_WMWindowState *state);
+static MC_Error foreign_set_rect(MC_ForeignWindow *foreign, MC_WMArea area, MC_Rect2IU rect);
+static MC_Error foreign_get_rect(MC_ForeignWindow *foreign, MC_WMArea area, MC_Rect2IU *rect);
 
 static const MC_WMEvents indication_category[MC_WMIND_COUNT] = {
     #define MC_WMIDN(NAME, DUP_ACTION, CATEGORY) [MC_WMIND_##NAME] = MC_WM_EVENTS_##CATEGORY,
@@ -339,22 +331,22 @@ MC_Str mc_wm_window_cached_get_title(MC_WMWindow *window){
     return mc_string_str(window->cached.title);
 }
 
-MC_Vec2i mc_wm_window_cached_get_position(MC_WMWindow *window){
+MC_Rect2IU mc_wm_window_cached_get_rect(MC_WMWindow *window, MC_WMArea area){
+    return window->cached.rect[area];
+}
+
+MC_Vec2i mc_wm_window_cached_get_position(MC_WMWindow *window, MC_WMArea area){
     return (MC_Vec2i){
-        .x = window->cached.rect.x,
-        .y = window->cached.rect.y
+        .x = window->cached.rect[area].x,
+        .y = window->cached.rect[area].y
     };
 }
 
-MC_Size2U mc_wm_window_cached_get_size(MC_WMWindow *window){
+MC_Size2U mc_wm_window_cached_get_size(MC_WMWindow *window, MC_WMArea area){
     return (MC_Size2U){
-        .width = window->cached.rect.width,
-        .height = window->cached.rect.height
+        .width = window->cached.rect[area].width,
+        .height = window->cached.rect[area].height
     };
-}
-
-MC_Rect2IU mc_wm_window_cached_get_rect(MC_WMWindow *window){
-    return window->cached.rect;
 }
 
 MC_WMWindowState mc_wm_window_cached_get_state(MC_WMWindow *window){
@@ -529,34 +521,32 @@ MC_Error mc_wm_window_set_title(MC_WindowRef *window, MC_Str title){
     }
 }
 
-MC_Error mc_wm_window_set_position(MC_WindowRef *window, MC_Vec2i position){
+MC_Error mc_wm_window_set_rect(MC_WindowRef *window, MC_WMArea area, MC_Rect2IU rect){
     RETURN_IF_REF_BUSY(window);
 
     switch(window->type){
-    case REFERENCE_FOREIGN: return foreign_set_position((MC_ForeignWindow*)window, position);
-    case REFERENCE_INTERNAL: return owner_set_position((MC_WMWindow*)window, position);
+    case REFERENCE_FOREIGN: return foreign_set_rect((MC_ForeignWindow*)window, area, rect);
+    case REFERENCE_INTERNAL: return owner_set_rect((MC_WMWindow*)window, area, rect);
     default: return MCE_NOT_SUPPORTED;
     }
 }
 
-MC_Error mc_wm_window_set_size(MC_WindowRef *window, MC_Size2U size){
-    RETURN_IF_REF_BUSY(window);
+MC_Error mc_wm_window_set_size(MC_WindowRef *window, MC_WMArea area, MC_Size2U size){
+    MC_Rect2IU rect;
+    MC_RETURN_ERROR(mc_wm_window_get_rect(window, area, &rect));
 
-    switch(window->type){
-    case REFERENCE_FOREIGN: return foreign_set_size((MC_ForeignWindow*)window, size);
-    case REFERENCE_INTERNAL: return owner_set_size((MC_WMWindow*)window, size);
-    default: return MCE_NOT_SUPPORTED;
-    }
+    rect.width = size.width;
+    rect.height = size.height;
+    return mc_wm_window_set_rect(window, area, rect);
 }
 
-MC_Error mc_wm_window_set_rect(MC_WindowRef *window, MC_Rect2IU rect){
-    RETURN_IF_REF_BUSY(window);
+MC_Error mc_wm_window_set_position(MC_WindowRef *window, MC_WMArea area, MC_Vec2i position){
+    MC_Rect2IU rect;
+    MC_RETURN_ERROR(mc_wm_window_get_rect(window, area, &rect));
 
-    switch(window->type){
-    case REFERENCE_FOREIGN: return foreign_set_rect((MC_ForeignWindow*)window, rect);
-    case REFERENCE_INTERNAL: return owner_set_rect((MC_WMWindow*)window, rect);
-    default: return MCE_NOT_SUPPORTED;
-    }
+    rect.x = position.x;
+    rect.y = position.y;
+    return mc_wm_window_set_rect(window, area, rect);
 }
 
 MC_Error mc_wm_window_close(MC_WindowRef *window){
@@ -589,34 +579,30 @@ MC_Error mc_wm_window_get_title(MC_WindowRef *window, char *utf8, size_t cap, si
     }
 }
 
-MC_Error mc_wm_window_get_position(MC_WindowRef *window, MC_Vec2i *position){
+MC_Error mc_wm_window_get_rect(MC_WindowRef *window, MC_WMArea area, MC_Rect2IU *rect){
     RETURN_IF_REF_BUSY(window);
 
     switch(window->type){
-    case REFERENCE_FOREIGN: return foreign_get_position((MC_ForeignWindow*)window, position);
-    case REFERENCE_INTERNAL: return owner_get_position((MC_WMWindow*)window, position);
+    case REFERENCE_FOREIGN: return foreign_get_rect((MC_ForeignWindow*)window, area, rect);
+    case REFERENCE_INTERNAL: return owner_get_rect((MC_WMWindow*)window, area, rect);
     default: return MCE_NOT_SUPPORTED;
     }
 }
 
-MC_Error mc_wm_window_get_size(MC_WindowRef *window, MC_Size2U *size){
-    RETURN_IF_REF_BUSY(window);
+MC_Error mc_wm_window_get_size(MC_WindowRef *window, MC_WMArea area, MC_Size2U *size){
+    MC_Rect2IU rect;
+    MC_RETURN_ERROR(mc_wm_window_get_rect(window, area, &rect));
 
-    switch(window->type){
-    case REFERENCE_FOREIGN: return foreign_get_size((MC_ForeignWindow*)window, size);
-    case REFERENCE_INTERNAL: return owner_get_size((MC_WMWindow*)window, size);
-    default: return MCE_NOT_SUPPORTED;
-    }
+    *size = (MC_Size2U){.width = rect.width, .height = rect.height};
+    return MCE_OK;
 }
 
-MC_Error mc_wm_window_get_rect(MC_WindowRef *window, MC_Rect2IU *rect){
-    RETURN_IF_REF_BUSY(window);
+MC_Error mc_wm_window_get_position(MC_WindowRef *window, MC_WMArea area, MC_Vec2i *position){
+    MC_Rect2IU rect;
+    MC_RETURN_ERROR(mc_wm_window_get_rect(window, area, &rect));
 
-    switch(window->type){
-    case REFERENCE_FOREIGN: return foreign_get_rect((MC_ForeignWindow*)window, rect);
-    case REFERENCE_INTERNAL: return owner_get_rect((MC_WMWindow*)window, rect);
-    default: return MCE_NOT_SUPPORTED;
-    }
+    *position = (MC_Vec2i){.x = rect.x, .y = rect.y};
+    return MCE_OK;
 }
 
 MC_Error mc_wm_window_get_state(MC_WindowRef *window, MC_WMWindowState *state){
@@ -721,116 +707,20 @@ static MC_Error owner_get_title(MC_WMWindow *window, char *utf8, size_t cap, siz
     return MCE_NOT_SUPPORTED;
 }
 
-static MC_Error owner_set_position(MC_WMWindow *window, MC_Vec2i position){
+static MC_Error owner_set_rect(MC_WMWindow *window, MC_WMArea area, MC_Rect2IU rect){
     MC_WM *wm = window->wm;
     MC_WMVtab *v = &wm->vtab;
 
-    MC_Error status = MCE_NOT_SUPPORTED;
-
-    if(v->set_window_position){
-        status = v->set_window_position(wm->target, window->target, position);
-        if(status == MCE_OK){
-            window->cached.rect.x = position.x;
-            window->cached.rect.y = position.y;
-            return MCE_OK;
-        }
-    }
-
     if(v->set_window_rect){
-        status = v->set_window_rect(wm->target, window->target, (MC_Rect2IU){
-            .x = position.x,
-            .y = position.y,
-            .width = window->cached.rect.width,
-            .height = window->cached.rect.height
-        });
-
+        MC_Error status = v->set_window_rect(wm->target, window->target, area, rect);
         if(status == MCE_OK){
-            window->cached.rect.x = position.x;
-            window->cached.rect.y = position.y;
-            return MCE_OK;
+            window->cached.rect[area] = rect;
         }
+
+        return status;
     }
 
-    return status;
-}
-
-static MC_Error owner_set_size(MC_WMWindow *window, MC_Size2U size){
-    MC_WM *wm = window->wm;
-    MC_WMVtab *v = &wm->vtab;
-
-    MC_Error status = MCE_NOT_SUPPORTED;
-
-    if(v->set_window_size){
-        status = v->set_window_size(wm->target, window->target, size);
-        if(status == MCE_OK){
-            window->cached.rect.width = size.width;
-            window->cached.rect.height = size.height;
-            return MCE_OK;
-        }
-    }
-
-    if(v->set_window_rect){
-        status = v->set_window_rect(wm->target, window->target, (MC_Rect2IU){
-            .x = window->cached.rect.x,
-            .y = window->cached.rect.y,
-            .width = size.width,
-            .height = size.height
-        });
-
-        if(status == MCE_OK){
-            window->cached.rect.width = size.width;
-            window->cached.rect.height = size.height;
-            return MCE_OK;
-        }
-    }
-
-    return status;
-}
-
-static MC_Error owner_set_rect(MC_WMWindow *window, MC_Rect2IU rect){
-    MC_WM *wm = window->wm;
-    MC_WMVtab *v = &wm->vtab;
-
-    MC_Error status = MCE_NOT_SUPPORTED;
-
-    if(v->set_window_rect){
-        status = v->set_window_rect(wm->target, window->target, rect);
-        if(status == MCE_OK){
-            window->cached.rect = rect;
-            return MCE_OK;
-        }
-    }
-
-    if(v->set_window_position && v->set_window_size){
-        MC_Error position_status = v->set_window_position(wm->target, window->target, (MC_Vec2i){
-            .x = rect.x,
-            .y = rect.y,
-        });
-
-        MC_Error size_status = v->set_window_size(wm->target, window->target, (MC_Size2U){
-            .width = rect.width,
-            .height = rect.height,
-        });
-
-        if(position_status == MCE_OK){
-            window->cached.rect.x = rect.x;
-            window->cached.rect.y = rect.y;
-        }
-
-        if(size_status == MCE_OK){
-            window->cached.rect.width = rect.width;
-            window->cached.rect.height = rect.height;
-        }
-
-        if(size_status != MCE_OK){
-            status = size_status;
-        }
-        else if(position_status != MCE_OK){
-            status = position_status;
-        }
-    }
-
-    return status;
+    return MCE_NOT_SUPPORTED;
 }
 
 static MC_Error owner_close(MC_WMWindow *window){
@@ -850,111 +740,20 @@ static MC_Error owner_set_state(MC_WMWindow *window, MC_WMWindowState state){
     return MCE_NOT_SUPPORTED;
 }
 
-static MC_Error owner_get_position(MC_WMWindow *window, MC_Vec2i *position){
+static MC_Error owner_get_rect(MC_WMWindow *window, MC_WMArea area, MC_Rect2IU *rect){
     MC_WM *wm = window->wm;
     MC_WMVtab *v = &wm->vtab;
 
-    MC_Error status = MCE_NOT_SUPPORTED;
-
-    if(v->get_window_position){
-        MC_Error position_status = v->get_window_position(wm->target, window->target, position);
-        if(position_status == MCE_OK){
-            window->cached.rect.x = position->x;
-            window->cached.rect.y = position->y;
-            return MCE_OK;
-        }
-
-        status = position_status;
-    }
-
     if(v->get_window_rect){
-        MC_Rect2IU rect;
-        MC_Error rect_status = v->get_window_rect(wm->target, window->target, &rect);
-        if(rect_status == MCE_OK){
-            window->cached.rect = rect;
-            position->x = rect.x;
-            position->y = rect.y;
-            return MCE_OK;
+        MC_Error status = v->get_window_rect(wm->target, window->target, area, rect);
+        if(status == MCE_OK){
+            window->cached.rect[area] = *rect;
         }
 
-        status = rect_status;
+        return status;
     }
 
-    return status;
-}
-
-static MC_Error owner_get_size(MC_WMWindow *window, MC_Size2U *size){
-    MC_WM *wm = window->wm;
-    MC_WMVtab *v = &wm->vtab;
-
-    MC_Error status = MCE_NOT_SUPPORTED;
-
-    if(v->get_window_size){
-        MC_Error size_status = v->get_window_size(wm->target, window->target, size);
-        if(size_status == MCE_OK){
-            window->cached.rect.width = size->width;
-            window->cached.rect.height = size->height;
-            return MCE_OK;
-        }
-
-        status = size_status;
-    }
-
-    if(v->get_window_rect){
-        MC_Rect2IU rect;
-        MC_Error rect_status = v->get_window_rect(wm->target, window->target, &rect);
-        if(rect_status == MCE_OK){
-            window->cached.rect = rect;
-            size->width = rect.width;
-            size->height = rect.height;
-            return MCE_OK;
-        }
-
-        status = rect_status;
-    }
-
-    return status;
-}
-
-static MC_Error owner_get_rect(MC_WMWindow *window, MC_Rect2IU *rect){
-    MC_WM *wm = window->wm;
-    MC_WMVtab *v = &wm->vtab;
-
-    MC_Error status = MCE_NOT_SUPPORTED;
-
-    if(v->get_window_rect){
-        MC_Error rect_status = v->get_window_rect(wm->target, window->target, rect);
-        if(rect_status == MCE_OK){
-            window->cached.rect = *rect;
-            return MCE_OK;
-        }
-
-        status = rect_status;
-    }
-
-    if(v->get_window_position){
-        MC_Vec2i position;
-        MC_Error position_status = v->get_window_position(wm->target, window->target, &position);
-        if(position_status == MCE_OK){
-            window->cached.rect.x = position.x;
-            window->cached.rect.y = position.y;
-        }
-
-        status = position_status;
-    }
-
-    if(v->get_window_size){
-        MC_Size2U size;
-        MC_Error size_status = v->get_window_size(wm->target, window->target, &size);
-        if(size_status == MCE_OK){
-            window->cached.rect.width = size.width;
-            window->cached.rect.height = size.height;
-        }
-
-        status = size_status;
-    }
-
-    return status;
+    return MCE_NOT_SUPPORTED;
 }
 
 static MC_Error owner_get_state(MC_WMWindow *window, MC_WMWindowState *state){
@@ -983,34 +782,14 @@ static MC_Error foreign_set_title(MC_ForeignWindow *foreign, MC_Str title){
     return MCE_NOT_SUPPORTED;
 }
 
-static MC_Error foreign_set_rect(MC_ForeignWindow *foreign, MC_Rect2IU rect){
+static MC_Error foreign_set_rect(MC_ForeignWindow *foreign, MC_WMArea area, MC_Rect2IU rect){
     MC_WM *wm = foreign->wm;
 
     if(wm->vtab.set_foreign_window_rect){
-        return wm->vtab.set_foreign_window_rect(wm->target, foreign->target, rect);
+        return wm->vtab.set_foreign_window_rect(wm->target, foreign->target, area, rect);
     }
 
     return MCE_NOT_SUPPORTED;
-}
-
-static MC_Error foreign_set_position(MC_ForeignWindow *foreign, MC_Vec2i position){
-    MC_Rect2IU rect;
-    MC_RETURN_ERROR(foreign_get_rect(foreign, &rect));
-
-    rect.x = position.x;
-    rect.y = position.y;
-
-    return foreign_set_rect(foreign, rect);
-}
-
-static MC_Error foreign_set_size(MC_ForeignWindow *foreign, MC_Size2U size){
-    MC_Rect2IU rect;
-    MC_RETURN_ERROR(foreign_get_rect(foreign, &rect));
-
-    rect.width = size.width;
-    rect.height = size.height;
-
-    return foreign_set_rect(foreign, rect);
 }
 
 static MC_Error foreign_close(MC_ForeignWindow *foreign){
@@ -1043,11 +822,11 @@ static MC_Error foreign_get_title(MC_ForeignWindow *foreign, char *utf8, size_t 
     return MCE_NOT_SUPPORTED;
 }
 
-static MC_Error foreign_get_rect(MC_ForeignWindow *foreign, MC_Rect2IU *rect){
+static MC_Error foreign_get_rect(MC_ForeignWindow *foreign, MC_WMArea area, MC_Rect2IU *rect){
     MC_WM *wm = foreign->wm;
 
     if(wm->vtab.get_foreign_window_rect){
-        return wm->vtab.get_foreign_window_rect(wm->target, foreign->target, rect);
+        return wm->vtab.get_foreign_window_rect(wm->target, foreign->target, area, rect);
     }
 
     return MCE_NOT_SUPPORTED;
@@ -1061,26 +840,6 @@ static MC_Error foreign_get_state(MC_ForeignWindow *foreign, MC_WMWindowState *s
     }
 
     return MCE_NOT_SUPPORTED;
-}
-
-static MC_Error foreign_get_position(MC_ForeignWindow *foreign, MC_Vec2i *position){
-    MC_Rect2IU rect;
-    MC_RETURN_ERROR(foreign_get_rect(foreign, &rect));
-
-    position->x = rect.x;
-    position->y = rect.y;
-
-    return MCE_OK;
-}
-
-static MC_Error foreign_get_size(MC_ForeignWindow *foreign, MC_Size2U *size){
-    MC_Rect2IU rect;
-    MC_RETURN_ERROR(foreign_get_rect(foreign, &rect));
-
-    size->width = rect.width;
-    size->height = rect.height;
-
-    return MCE_OK;
 }
 
 MC_Error mc_wm_poll_event(MC_WM *wm, MC_WMEvent *event){
@@ -1145,13 +904,9 @@ static void dump_vtable(MC_WM *wm){
     DUMP_IF_NOT_IMPLEMENTED(destroy_window);
 
     DUMP_IF_NOT_IMPLEMENTED(set_window_title);
-    DUMP_IF_NOT_IMPLEMENTED(set_window_position);
-    DUMP_IF_NOT_IMPLEMENTED(set_window_size);
     DUMP_IF_NOT_IMPLEMENTED(set_window_rect);
     DUMP_IF_NOT_IMPLEMENTED(set_window_state);
     DUMP_IF_NOT_IMPLEMENTED(get_window_title);
-    DUMP_IF_NOT_IMPLEMENTED(get_window_position);
-    DUMP_IF_NOT_IMPLEMENTED(get_window_size);
     DUMP_IF_NOT_IMPLEMENTED(get_window_rect);
 
 

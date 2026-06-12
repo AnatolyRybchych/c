@@ -226,16 +226,12 @@ struct MC_WMVtab{
     MC_Error (*create_window_graphic)(struct MC_TargetWM *wm, struct MC_TargetWMWindow *window, struct MC_Graphics **g);
 
     MC_Error (*set_window_title)(struct MC_TargetWM *wm, struct MC_TargetWMWindow *window, MC_Str title);
-    MC_Error (*set_window_position)(struct MC_TargetWM *wm, struct MC_TargetWMWindow *window, MC_Vec2i position);
-    MC_Error (*set_window_size)(struct MC_TargetWM *wm, struct MC_TargetWMWindow *window, MC_Size2U size);
-    MC_Error (*set_window_rect)(struct MC_TargetWM *wm, struct MC_TargetWMWindow *window, MC_Rect2IU rect);
     MC_Error (*set_window_state)(struct MC_TargetWM *wm, struct MC_TargetWMWindow *window, MC_WMWindowState state);
+    MC_Error (*set_window_rect)(struct MC_TargetWM *wm, struct MC_TargetWMWindow *window, MC_WMArea area, MC_Rect2IU rect);
 
     MC_Error (*get_window_title)(struct MC_TargetWM *wm, struct MC_TargetWMWindow *window, char *utf8, size_t cap, size_t *len);
-    MC_Error (*get_window_position)(struct MC_TargetWM *wm, struct MC_TargetWMWindow *window, MC_Vec2i *position);
-    MC_Error (*get_window_size)(struct MC_TargetWM *wm, struct MC_TargetWMWindow *window, MC_Size2U *size);
-    MC_Error (*get_window_rect)(struct MC_TargetWM *wm, struct MC_TargetWMWindow *window, MC_Rect2IU *rect);
     MC_Error (*get_window_state)(struct MC_TargetWM *wm, struct MC_TargetWMWindow *window, MC_WMWindowState *state);
+    MC_Error (*get_window_rect)(struct MC_TargetWM *wm, struct MC_TargetWMWindow *window, MC_WMArea area, MC_Rect2IU *rect);
 
     bool (*poll_event)(struct MC_TargetWM *wm, struct MC_TargetWMEvent *event);
     unsigned (*translate_event)(struct MC_TargetWM *wm, const struct MC_TargetWMEvent *event, MC_TargetIndication indications[MC_WM_MAX_INDICATIONS_PER_EVENT]);
@@ -251,12 +247,12 @@ struct MC_WMVtab{
     MC_Error (*close_foreign_window)(struct MC_TargetWM *wm, struct MC_TargetForeignWindow *window);
 
     MC_Error (*set_foreign_window_title)(struct MC_TargetWM *wm, struct MC_TargetForeignWindow *window, MC_Str title);
-    MC_Error (*set_foreign_window_rect)(struct MC_TargetWM *wm, struct MC_TargetForeignWindow *window, MC_Rect2IU rect);
     MC_Error (*set_foreign_window_state)(struct MC_TargetWM *wm, struct MC_TargetForeignWindow *window, MC_WMWindowState state);
+    MC_Error (*set_foreign_window_rect)(struct MC_TargetWM *wm, struct MC_TargetForeignWindow *window, MC_WMArea area, MC_Rect2IU rect);
 
     MC_Error (*get_foreign_window_title)(struct MC_TargetWM *wm, struct MC_TargetForeignWindow *window, char *utf8, size_t cap, size_t *len);
-    MC_Error (*get_foreign_window_rect)(struct MC_TargetWM *wm, struct MC_TargetForeignWindow *window, MC_Rect2IU *rect);
     MC_Error (*get_foreign_window_state)(struct MC_TargetWM *wm, struct MC_TargetForeignWindow *window, MC_WMWindowState *state);
+    MC_Error (*get_foreign_window_rect)(struct MC_TargetWM *wm, struct MC_TargetForeignWindow *window, MC_WMArea area, MC_Rect2IU *rect);
 };
 
 #endif // MC_WM_TARGET_H

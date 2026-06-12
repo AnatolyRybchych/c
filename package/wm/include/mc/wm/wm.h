@@ -45,6 +45,13 @@ enum MC_WMEvents{
     MC_WM_EVENTS_GLOBAL_MOUSE    = 1 << 4,
 };
 
+typedef enum MC_WMArea {
+    MC_WM_AREA_WINDOW = 0,
+    MC_WM_AREA_DECORATED = 1,
+    MC_WM_AREA_DRAWABLE = 2,
+    MC_WM_AREA_COUNT = 3,
+} MC_WMArea;
+
 struct MC_Graphics;
 
 MC_Error mc_wm_init(MC_WM **wm, const MC_WMVtab *vtab);
@@ -63,9 +70,9 @@ struct MC_TargetWMWindow *mc_wm_window_get_target(MC_WMWindow *window);
 MC_Error mc_wm_window_get_graphic(MC_WMWindow *window, struct MC_Graphics **g);
 
 MC_Str mc_wm_window_cached_get_title(MC_WMWindow *window);
-MC_Vec2i mc_wm_window_cached_get_position(MC_WMWindow *window);
-MC_Size2U mc_wm_window_cached_get_size(MC_WMWindow *window);
-MC_Rect2IU mc_wm_window_cached_get_rect(MC_WMWindow *window);
+MC_Vec2i mc_wm_window_cached_get_position(MC_WMWindow *window, MC_WMArea area);
+MC_Size2U mc_wm_window_cached_get_size(MC_WMWindow *window, MC_WMArea area);
+MC_Rect2IU mc_wm_window_cached_get_rect(MC_WMWindow *window, MC_WMArea area);
 MC_WMWindowState mc_wm_window_cached_get_state(MC_WMWindow *window);
 bool mc_wm_window_cached_is_mouse_over(MC_WMWindow *window);
 
@@ -83,16 +90,16 @@ bool mc_wm_window_is_alive(MC_WindowRef *window);
 MC_Error mc_wm_window_close(MC_WindowRef *window);
 
 MC_Error mc_wm_window_set_title(MC_WindowRef *window, MC_Str title);
-MC_Error mc_wm_window_set_position(MC_WindowRef *window, MC_Vec2i position);
-MC_Error mc_wm_window_set_size(MC_WindowRef *window, MC_Size2U size);
-MC_Error mc_wm_window_set_rect(MC_WindowRef *window, MC_Rect2IU rect);
 MC_Error mc_wm_window_set_state(MC_WindowRef *window, MC_WMWindowState state);
-
 MC_Error mc_wm_window_get_title(MC_WindowRef *window, char *utf8, size_t cap, size_t *len);
-MC_Error mc_wm_window_get_position(MC_WindowRef *window, MC_Vec2i *position);
-MC_Error mc_wm_window_get_size(MC_WindowRef *window, MC_Size2U *size);
-MC_Error mc_wm_window_get_rect(MC_WindowRef *window, MC_Rect2IU *rect);
 MC_Error mc_wm_window_get_state(MC_WindowRef *window, MC_WMWindowState *state);
+
+MC_Error mc_wm_window_set_position(MC_WindowRef *window, MC_WMArea area, MC_Vec2i position);
+MC_Error mc_wm_window_set_size(MC_WindowRef *window, MC_WMArea area, MC_Size2U size);
+MC_Error mc_wm_window_set_rect(MC_WindowRef *window, MC_WMArea area, MC_Rect2IU rect);
+MC_Error mc_wm_window_get_position(MC_WindowRef *window, MC_WMArea area, MC_Vec2i *position);
+MC_Error mc_wm_window_get_size(MC_WindowRef *window, MC_WMArea area, MC_Size2U *size);
+MC_Error mc_wm_window_get_rect(MC_WindowRef *window, MC_WMArea area, MC_Rect2IU *rect);
 
 MC_Error mc_wm_poll_event(MC_WM *wm, MC_WMEvent *event);
 
