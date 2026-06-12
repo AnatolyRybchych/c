@@ -459,6 +459,20 @@ MC_Error mc_wm_get_all_windows(MC_WM *wm, MC_Error (*visit)(MC_WindowRef *window
     return MCE_OK;
 }
 
+MC_Error mc_wm_resolve_window(MC_WM *wm, uint64_t identity, MC_WindowRef **window){
+    if(wm == NULL || window == NULL){
+        return MCE_INVALID_INPUT;
+    }
+
+    *window = NULL;
+
+    if(wm->vtab.resolve_temporary_identity == NULL){
+        return MCE_NOT_SUPPORTED;
+    }
+
+    return window_from_identity(wm, identity, window);
+}
+
 struct MC_TargetForeignWindow *mc_wm_window_get_foreign_target(MC_WindowRef *window){
     if(window->type == REFERENCE_FOREIGN){
         return ((MC_ForeignWindow*)window)->target;
