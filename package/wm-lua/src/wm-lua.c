@@ -292,6 +292,15 @@ static int win_is_alive(lua_State *L){
     return 1;
 }
 
+static int win_is_system(lua_State *L){
+    MC_WindowRef *ref = window_ref(L);
+    bool sys = false;
+    require_ok(L, mc_wm_window_is_system(ref, &sys), "is_system");
+
+    lua_pushboolean(L, sys);
+    return 1;
+}
+
 static int win_close(lua_State *L){
     MC_WindowRef *ref = window_ref(L);
     require_ok(L, mc_wm_window_close(ref), "close");
@@ -537,6 +546,7 @@ static const luaL_Reg window_methods[] = {
     {"get_title", win_get_title},
     {"get_state", win_get_state},
     {"is_alive", win_is_alive},
+    {"is_system", win_is_system},
     {"close", win_close},
     {"destroy", win_destroy},
     {"__gc", win_gc},
