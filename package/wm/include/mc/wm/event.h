@@ -5,6 +5,8 @@
 #include <mc/wm/mouse_button.h>
 #include <mc/wm/key.h>
 
+#include <string.h>
+
 #define MC_ITER_WM_EVENTS() \
     MC_EVENT(NONE,) \
     MC_EVENT(RAW,) \
@@ -50,6 +52,14 @@ inline const char *mc_wm_event_type_str(MC_WMEventType type){
     #undef MC_EVENT
     default: return NULL;
     }
+}
+
+inline MC_WMEventType mc_wm_event_type_from_str(const char *name){
+    #define MC_EVENT(NAME, ...) if(strcmp(name, #NAME) == 0){ return MC_WME_##NAME; }
+        MC_ITER_WM_EVENTS()
+    #undef MC_EVENT
+
+    return MC_WME_COUNT;
 }
 
 struct MC_WMEvent{
@@ -177,5 +187,17 @@ struct MC_WMEvent{
         } global_mouse_wheel;
     } as;
 };
+
+typedef struct MC_WMEventSubscription MC_WMEventSubscription;
+
+typedef struct MC_WMEventMatch{
+    MC_WMEventType type;
+} MC_WMEventMatch;
+
+typedef void (*MC_WMEventCallback)(MC_WM *wm, const MC_WMEvent *event, void *user_data);
+
+MC_Error mc_wm_subscribe_event(MC_WM *wm, MC_WMEventMatch match, MC_WMEventCallback callback, void *user_data, MC_WMEventSubscription **out);
+void mc_wm_unsubscribe_event(MC_WMEventSubscription *subscription);
+void mc_wm_dispatch_event_callbacks(MC_WM *wm, const MC_WMEvent *event);
 
 #endif // MC_WM_EVENT_H

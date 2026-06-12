@@ -82,9 +82,19 @@ struct MC_WM{
     Windows *windows;
     ForeignWindows *foreign_windows;
 
+    MC_WMEventSubscription *event_subs;
+
     MC_Arena *arena;
 
     alignas(void*) uint8_t data[];
+};
+
+struct MC_WMEventSubscription{
+    MC_WMEventSubscription *next;
+    MC_WM *wm;
+    MC_WMEventMatch match;
+    MC_WMEventCallback callback;
+    void *user_data;
 };
 
 static void dump_vtable(MC_WM *wm);
@@ -210,6 +220,12 @@ void mc_wm_destroy(MC_WM *wm){
 
         MC_VECTOR_ERASE(wm->foreign_windows, 0, 1);
         mc_free(NULL, foreign);
+    }
+
+    while(wm->event_subs != NULL){
+        MC_WMEventSubscription *next = wm->event_subs->next;
+        mc_free(NULL, wm->event_subs);
+        wm->event_subs = next;
     }
 
     if(wm->vtab.destroy){
@@ -956,6 +972,66 @@ MC_Error mc_wm_poll_event(MC_WM *wm, MC_WMEvent *event){
 
             return MCE_OK;
         }
+    }
+}
+
+static bool event_matches(const MC_WMEventMatch *match, const MC_WMEvent *event){
+    return match->type == MC_WME_NONE || match->type == event->type;
+}
+
+MC_Error mc_wm_subscribe_event(MC_WM *wm, MC_WMEventMatch match, MC_WMEventCallback callback, void *user_data, MC_WMEventSubscription **out){
+    if(wm == NULL || callback == NULL){
+        return MCE_INVALID_INPUT;
+    }
+
+    MC_WMEventSubscription *sub;
+    MC_RETURN_ERROR(mc_alloc(NULL, sizeof(*sub), (void**)&sub));
+
+    sub->next = wm->event_subs;
+    sub->wm = wm;
+    sub->match = match;
+    sub->callback = callback;
+    sub->user_data = user_data;
+    wm->event_subs = sub;
+
+    if(out != NULL){
+        *out = sub;
+    }
+
+    return MCE_OK;
+}
+
+void mc_wm_unsubscribe_event(MC_WMEventSubscription *subscription){
+    if(subscription == NULL){
+        return;
+    }
+
+    MC_WMEventSubscription **link = &subscription->wm->event_subs;
+    while(*link != NULL){
+        if(*link == subscription){
+            *link = subscription->next;
+            break;
+        }
+
+        link = &(*link)->next;
+    }
+
+    mc_free(NULL, subscription);
+}
+
+void mc_wm_dispatch_event_callbacks(MC_WM *wm, const MC_WMEvent *event){
+    if(wm == NULL || event == NULL){
+        return;
+    }
+
+    MC_WMEventSubscription *sub = wm->event_subs;
+    while(sub != NULL){
+        MC_WMEventSubscription *next = sub->next;
+        if(event_matches(&sub->match, event)){
+            sub->callback(wm, event, sub->user_data);
+        }
+
+        sub = next;
     }
 }
 
