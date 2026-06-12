@@ -11,4 +11,6 @@ int mc_wm_lua_module(struct lua_State *L, const MC_WMVtab *vtab);
 
 void mc_wm_lua_push_window(struct lua_State *L, MC_WindowRef *window);
 
+MC_WindowRef *mc_wm_lua_check_window(struct lua_State *L, int idx);
+
 #endif // MC_WM_LUA_H

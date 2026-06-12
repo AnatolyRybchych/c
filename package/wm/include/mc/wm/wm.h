@@ -81,6 +81,7 @@ MC_Error mc_wm_get_hovered_window(MC_WM *wm, MC_WindowRef **window);
 MC_Error mc_wm_get_all_windows(MC_WM *wm, MC_Error (*visit)(MC_WindowRef *window, void *ctx), void *ctx);
 MC_Error mc_wm_resolve_window(MC_WM *wm, uint64_t identity, MC_WindowRef **window);
 struct MC_TargetForeignWindow *mc_wm_window_get_foreign_target(MC_WindowRef *window);
+MC_Error mc_wm_window_get_identity(MC_WindowRef *window, uint64_t *out);
 
 MC_WindowRef *mc_wm_window_ref(MC_WindowRef *window);
 void mc_wm_window_unref(MC_WindowRef *window);

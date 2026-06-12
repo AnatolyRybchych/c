@@ -166,13 +166,17 @@ static void push_rect(lua_State *L, MC_Rect2IU rect){
     lua_setfield(L, -2, "height");
 }
 
-static MC_WindowRef *window_ref(lua_State *L){
-    LuaWindow *lw = luaL_checkudata(L, 1, WINDOW_MT);
+MC_WindowRef *mc_wm_lua_check_window(lua_State *L, int idx){
+    LuaWindow *lw = luaL_checkudata(L, idx, WINDOW_MT);
     if(lw->ref == NULL){
         luaL_error(L, "mc.wm: window is closed");
     }
 
     return lw->ref;
+}
+
+static MC_WindowRef *window_ref(lua_State *L){
+    return mc_wm_lua_check_window(L, 1);
 }
 
 static int win_set_title(lua_State *L){

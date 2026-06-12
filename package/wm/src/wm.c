@@ -473,6 +473,19 @@ struct MC_TargetForeignWindow *mc_wm_window_get_foreign_target(MC_WindowRef *win
     return NULL;
 }
 
+MC_Error mc_wm_window_get_identity(MC_WindowRef *window, uint64_t *out){
+    if(window == NULL || out == NULL){
+        return MCE_INVALID_INPUT;
+    }
+
+    if(window->type != REFERENCE_FOREIGN){
+        return MCE_NOT_SUPPORTED;
+    }
+
+    *out = ((MC_ForeignWindow*)window)->identity;
+    return MCE_OK;
+}
+
 MC_WindowRef *mc_wm_window_ref(MC_WindowRef *window){
     window->refcount++;
     return window;
