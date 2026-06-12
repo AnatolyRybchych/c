@@ -9,9 +9,11 @@
 #include <mc/data/str.h>
 
 #include <string.h>
+#include <stdio.h>
 
-#define WM_MT     "mc.wm.WM"
-#define WINDOW_MT "mc.wm.Window"
+#define WM_MT           "mc.wm.WM"
+#define WINDOW_MT       "mc.wm.Window"
+#define SUBSCRIPTION_MT "mc.wm.Subscription"
 
 typedef struct LuaWM{
     MC_WM *wm;
@@ -501,6 +503,90 @@ static int wm_poll_event(lua_State *L){
     return 1;
 }
 
+typedef struct LuaSubscription{
+    MC_WM *wm;
+    MC_WMEventSubscription *sub;
+    lua_State *L;
+    int ref;
+} LuaSubscription;
+
+static void lua_event_cb(MC_WM *wm, const MC_WMEvent *event, void *user_data){
+    (void)wm;
+    (void)event;
+
+    LuaSubscription *s = user_data;
+    if(s->ref == LUA_NOREF){
+        return;
+    }
+
+    lua_rawgeti(s->L, LUA_REGISTRYINDEX, s->ref);
+    if(lua_pcall(s->L, 0, 0, 0) != LUA_OK){
+        fprintf(stderr, "mc.wm: event callback error: %s\n", lua_tostring(s->L, -1));
+        lua_pop(s->L, 1);
+    }
+}
+
+static void subscription_release(LuaSubscription *s){
+    if(s->sub != NULL){
+        mc_wm_unsubscribe_event(s->sub);
+        s->sub = NULL;
+    }
+
+    if(s->ref != LUA_NOREF){
+        luaL_unref(s->L, LUA_REGISTRYINDEX, s->ref);
+        s->ref = LUA_NOREF;
+    }
+}
+
+static int sub_unsubscribe(lua_State *L){
+    subscription_release(luaL_checkudata(L, 1, SUBSCRIPTION_MT));
+    return 0;
+}
+
+static int sub_gc(lua_State *L){
+    subscription_release(luaL_checkudata(L, 1, SUBSCRIPTION_MT));
+    return 0;
+}
+
+static int wm_on_event(lua_State *L){
+    LuaWM *lwm = luaL_checkudata(L, 1, WM_MT);
+    if(lwm->wm == NULL){
+        return luaL_error(L, "mc.wm: window manager is destroyed");
+    }
+
+    MC_WMEventMatch match = { .type = MC_WME_NONE };
+    if(!lua_isnoneornil(L, 2)){
+        const char *name = luaL_checkstring(L, 2);
+        match.type = mc_wm_event_type_from_str(name);
+        if(match.type == MC_WME_COUNT){
+            return luaL_error(L, "mc.wm: unknown event type '%s'", name);
+        }
+    }
+
+    luaL_checktype(L, 3, LUA_TFUNCTION);
+
+    LuaSubscription *s = lua_newuserdatauv(L, sizeof(LuaSubscription), 1);
+    s->wm = lwm->wm;
+    s->sub = NULL;
+    s->L = L;
+    s->ref = LUA_NOREF;
+    luaL_setmetatable(L, SUBSCRIPTION_MT);
+
+    lua_pushvalue(L, 1);
+    lua_setiuservalue(L, -2, 1);
+
+    lua_pushvalue(L, 3);
+    s->ref = luaL_ref(L, LUA_REGISTRYINDEX);
+
+    if(mc_wm_subscribe_event(lwm->wm, match, lua_event_cb, s, &s->sub) != MCE_OK){
+        luaL_unref(L, LUA_REGISTRYINDEX, s->ref);
+        s->ref = LUA_NOREF;
+        return luaL_error(L, "mc.wm: on_event failed");
+    }
+
+    return 1;
+}
+
 static int wm_destroy(lua_State *L){
     LuaWM *lwm = luaL_checkudata(L, 1, WM_MT);
     if(lwm->wm){
@@ -537,8 +623,15 @@ static const luaL_Reg wm_methods[] = {
     {"get_hovered_window", wm_get_hovered_window},
     {"get_all_windows", wm_get_all_windows},
     {"poll_event", wm_poll_event},
+    {"on_event", wm_on_event},
     {"destroy", wm_destroy},
     {"__gc", wm_destroy},
+    {NULL, NULL},
+};
+
+static const luaL_Reg subscription_methods[] = {
+    {"unsubscribe", sub_unsubscribe},
+    {"__gc", sub_gc},
     {NULL, NULL},
 };
 
@@ -582,6 +675,7 @@ int mc_wm_lua_module(lua_State *L, const MC_WMVtab *vtab){
 
     register_class(L, WM_MT, wm_methods);
     register_class(L, WINDOW_MT, window_methods);
+    register_class(L, SUBSCRIPTION_MT, subscription_methods);
 
     luaL_newlib(L, module);
     return 1;
