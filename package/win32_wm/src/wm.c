@@ -94,7 +94,6 @@ static MC_Error request_events(struct MC_TargetWM *wm, MC_WMEvents events);
 static MC_Error get_focused_window(struct MC_TargetWM *wm, uint64_t *identity);
 static MC_Error get_hovered_window(struct MC_TargetWM *wm, uint64_t *identity);
 static MC_Error get_all_windows(struct MC_TargetWM *wm, uint64_t **identities, size_t *count);
-static MC_Error identity_for_hwnd(struct MC_TargetWM *wm, HWND hwnd, uint64_t *identity);
 static BOOL CALLBACK enum_windows_proc(HWND hwnd, LPARAM lparam);
 static MC_Error resolve_temporary_identity(struct MC_TargetWM *wm, uint64_t identity, MC_TargetResolvedIdentity *out);
 static void heartbeat(struct MC_TargetWM *wm);
@@ -817,7 +816,7 @@ static MC_Error request_events(struct MC_TargetWM *wm, MC_WMEvents events){
     return MCE_OK;
 }
 
-static MC_Error identity_for_hwnd(struct MC_TargetWM *wm, HWND hwnd, uint64_t *identity){
+MC_Error mc_wm_win32_identity_from_hwnd(struct MC_TargetWM *wm, HWND hwnd, uint64_t *identity){
     if(hwnd == NULL){
         return MCE_NOT_FOUND;
     }
@@ -848,7 +847,7 @@ static MC_Error identity_for_hwnd(struct MC_TargetWM *wm, HWND hwnd, uint64_t *i
 }
 
 static MC_Error get_focused_window(struct MC_TargetWM *wm, uint64_t *identity){
-    return identity_for_hwnd(wm, GetForegroundWindow(), identity);
+    return mc_wm_win32_identity_from_hwnd(wm, GetForegroundWindow(), identity);
 }
 
 static MC_Error get_hovered_window(struct MC_TargetWM *wm, uint64_t *identity){
@@ -862,7 +861,7 @@ static MC_Error get_hovered_window(struct MC_TargetWM *wm, uint64_t *identity){
         hwnd = GetAncestor(hwnd, GA_ROOT);
     }
 
-    return identity_for_hwnd(wm, hwnd, identity);
+    return mc_wm_win32_identity_from_hwnd(wm, hwnd, identity);
 }
 
 struct enum_collect{
@@ -884,7 +883,7 @@ static BOOL CALLBACK enum_windows_proc(HWND hwnd, LPARAM lparam){
     }
 
     uint64_t identity;
-    MC_Error status = identity_for_hwnd(collect->wm, hwnd, &identity);
+    MC_Error status = mc_wm_win32_identity_from_hwnd(collect->wm, hwnd, &identity);
     if(status != MCE_OK){
         collect->status = status;
         return FALSE;
