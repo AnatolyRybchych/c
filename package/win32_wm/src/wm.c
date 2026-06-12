@@ -388,6 +388,11 @@ static MC_Error hwnd_set_rect(HWND hwnd, MC_WMArea area, MC_Rect2IU rect){
 }
 
 static MC_Error hwnd_set_state(HWND hwnd, MC_WMWindowState state){
+    MC_WMWindowState current;
+    if(hwnd_get_state(hwnd, &current) == MCE_OK && current == state){
+        return MCE_OK;
+    }
+
     switch(state){
     case MC_WM_WINDOW_STATE_NORMAL:
         ShowWindow(hwnd, SW_SHOWNORMAL);
