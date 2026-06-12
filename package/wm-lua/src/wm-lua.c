@@ -22,6 +22,44 @@ typedef struct LuaWindow{
     MC_WMWindow *window;
 } LuaWindow;
 
+#define OBJECT_CACHE "mc.wm.objects"
+
+static void push_object_cache(lua_State *L){
+    if(luaL_getsubtable(L, LUA_REGISTRYINDEX, OBJECT_CACHE)){
+        return;
+    }
+
+    lua_newtable(L);
+    lua_pushstring(L, "v");
+    lua_setfield(L, -2, "__mode");
+    lua_setmetatable(L, -2);
+}
+
+static bool cache_get(lua_State *L, const void *key){
+    push_object_cache(L);
+    if(lua_rawgetp(L, -1, key) == LUA_TNIL){
+        lua_pop(L, 2);
+        return false;
+    }
+
+    lua_remove(L, -2);
+    return true;
+}
+
+static void cache_put(lua_State *L, const void *key){
+    push_object_cache(L);
+    lua_pushvalue(L, -2);
+    lua_rawsetp(L, -2, key);
+    lua_pop(L, 1);
+}
+
+static void cache_remove(lua_State *L, const void *key){
+    push_object_cache(L);
+    lua_pushnil(L);
+    lua_rawsetp(L, -2, key);
+    lua_pop(L, 1);
+}
+
 static void require_ok(lua_State *L, MC_Error e, const char *what){
     if(e != MCE_OK){
         luaL_error(L, "mc.wm: %s failed (error %d)", what, (int)e);
@@ -270,6 +308,7 @@ static int win_destroy(lua_State *L){
 static int win_gc(lua_State *L){
     LuaWindow *lw = luaL_checkudata(L, 1, WINDOW_MT);
     if(lw->ref){
+        cache_remove(L, lw->ref);
         mc_wm_window_unref(lw->ref);
         lw->ref = NULL;
     }
@@ -278,20 +317,31 @@ static int win_gc(lua_State *L){
 }
 
 static void push_window(lua_State *L, int wm_index, MC_WindowRef *ref, MC_WMWindow *window){
+    if(cache_get(L, ref)){
+        LuaWindow *cached = luaL_checkudata(L, -1, WINDOW_MT);
+        if(window != NULL && cached->window == NULL){
+            cached->window = window;
+        }
+
+        mc_wm_window_unref(ref);
+        return;
+    }
+
     LuaWindow *lw = lua_newuserdatauv(L, sizeof(LuaWindow), 1);
     lw->ref = ref;
     lw->window = window;
     luaL_setmetatable(L, WINDOW_MT);
 
-    lua_pushvalue(L, wm_index);
-    lua_setiuservalue(L, -2, 1);
+    if(wm_index != 0){
+        lua_pushvalue(L, wm_index);
+        lua_setiuservalue(L, -2, 1);
+    }
+
+    cache_put(L, ref);
 }
 
 void mc_wm_lua_push_window(lua_State *L, MC_WindowRef *window){
-    LuaWindow *lw = lua_newuserdatauv(L, sizeof(LuaWindow), 1);
-    lw->ref = window;
-    lw->window = NULL;
-    luaL_setmetatable(L, WINDOW_MT);
+    push_window(L, 0, window, NULL);
 }
 
 static int wm_create_window(lua_State *L){
@@ -433,6 +483,7 @@ static int wm_poll_event(lua_State *L){
 static int wm_destroy(lua_State *L){
     LuaWM *lwm = luaL_checkudata(L, 1, WM_MT);
     if(lwm->wm){
+        cache_remove(L, lwm->wm);
         mc_wm_destroy(lwm->wm);
         lwm->wm = NULL;
     }
@@ -446,9 +497,16 @@ static int wm_resolve(lua_State *L){
     MC_WM *wm;
     require_ok(L, impl ? mc_wm_resolve_as(impl, &wm) : mc_wm_resolve(&wm), "resolve");
 
+    if(cache_get(L, wm)){
+        mc_wm_destroy(wm);
+        return 1;
+    }
+
     LuaWM *lwm = lua_newuserdatauv(L, sizeof(LuaWM), 0);
     lwm->wm = wm;
     luaL_setmetatable(L, WM_MT);
+
+    cache_put(L, wm);
     return 1;
 }
 
