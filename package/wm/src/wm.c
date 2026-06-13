@@ -115,6 +115,7 @@ static void handle_duplicate_indications(MC_WM *wm);
 static MC_WMEvent translate_indication(MC_WM *wm);
 static void discard_indication(MC_WM *wm);
 static MC_WMWindow *window_from_target(MC_WM *wm, struct MC_TargetWMWindow *target);
+static MC_WMWindow *find_window(MC_WM *wm, uint64_t identity);
 static MC_ForeignWindow *find_foreign(MC_WM *wm, uint64_t identity);
 static bool is_ref_busy(MC_WindowRef *ref);
 static MC_Error alloc_foreign(MC_WM *wm, MC_ForeignWindow **out);
@@ -427,11 +428,22 @@ bool mc_wm_window_cached_is_mouse_over(MC_WMWindow *window){
 static MC_Error window_from_identity(MC_WM *wm, uint64_t identity, MC_WindowRef **ret_window){
     MC_WMVtab *v = &wm->vtab;
 
+    MC_WMWindow *local = find_window(wm, identity);
+    if(local){
+        local->ref.refcount++;
+        *ret_window = &local->ref;
+        return MCE_OK;
+    }
+
     MC_ForeignWindow *existing = find_foreign(wm, identity);
     if(existing){
         existing->ref.refcount++;
         *ret_window = &existing->ref;
         return MCE_OK;
+    }
+
+    if(v->resolve_temporary_identity == NULL){
+        return MCE_NOT_FOUND;
     }
 
     MC_TargetResolvedIdentity resolved;
@@ -536,10 +548,6 @@ MC_Error mc_wm_resolve_window(MC_WMRef *ref, uint64_t identity, MC_WindowRef **w
 
     MC_WM *wm = wm_of(ref);
     *window = NULL;
-
-    if(wm->vtab.resolve_temporary_identity == NULL){
-        return MCE_NOT_SUPPORTED;
-    }
 
     return window_from_identity(wm, identity, window);
 }
@@ -1426,6 +1434,17 @@ static MC_WMWindow *window_from_target(MC_WM *wm, struct MC_TargetWMWindow *targ
     MC_WMWindow **w;
     MC_VECTOR_EACH(wm->windows, w){
         if((*w)->target == target){
+            return *w;
+        }
+    }
+
+    return NULL;
+}
+
+static MC_WMWindow *find_window(MC_WM *wm, uint64_t identity){
+    MC_WMWindow **w;
+    MC_VECTOR_EACH(wm->windows, w){
+        if((*w)->parameters.identity == identity){
             return *w;
         }
     }
