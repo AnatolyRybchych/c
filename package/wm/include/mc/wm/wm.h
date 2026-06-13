@@ -55,6 +55,12 @@ typedef enum MC_WMArea {
 
 struct MC_Graphics;
 
+// Immutable, per-window properties filled by the target's init_window and cached on
+// the window. `identity` MUST be uniq
+typedef struct MC_WindowParameters {
+    uint64_t identity;
+} MC_WindowParameters;
+
 MC_Error mc_wm_init(MC_WM **wm, const MC_WMVtab *vtab);
 void mc_wm_destroy(MC_WM *wm);
 MC_WMRef *mc_wm_get_ref(MC_WM *wm);

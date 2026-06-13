@@ -54,6 +54,7 @@ struct MC_WMWindow{
     MC_WM *wm;
     struct MC_TargetWMWindow *target;
     bool is_alive;
+    MC_WindowParameters parameters;
     struct{
         MC_Rect2IU rect[MC_WM_AREA_COUNT];
         MC_Vec2i mouse_pos;
@@ -334,7 +335,7 @@ MC_Error mc_wm_window_init(MC_WMRef *ref, MC_WMWindow **ret_window){
     }
     wm->windows = new_windows;
 
-    MC_Error status = v->init_window(wm->target, window->target);
+    MC_Error status = v->init_window(wm->target, window->target, &window->parameters);
     if(status != MCE_OK){
         wm->windows->end--;
         mc_free(NULL, window);
@@ -556,12 +557,13 @@ MC_Error mc_wm_window_get_identity(MC_WindowRef *window, uint64_t *out){
         return MCE_INVALID_INPUT;
     }
 
-    if(window->type != REFERENCE_FOREIGN){
-        return MCE_NOT_SUPPORTED;
-    }
+    RETURN_IF_REF_BUSY(window);
 
-    *out = ((MC_ForeignWindow*)window)->identity;
-    return MCE_OK;
+    switch(window->type){
+    case REFERENCE_FOREIGN: *out = ((MC_ForeignWindow*)window)->identity; return MCE_OK;
+    case REFERENCE_INTERNAL: *out = ((MC_WMWindow*)window)->parameters.identity; return MCE_OK;
+    default: return MCE_NOT_SUPPORTED;
+    }
 }
 
 MC_WindowRef *mc_wm_window_ref(MC_WindowRef *window){

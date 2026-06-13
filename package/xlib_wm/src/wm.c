@@ -41,7 +41,7 @@ struct MC_TargetWMEvent{
 
 static MC_Error init(struct MC_TargetWM *wm, MC_Stream *log, MC_Alloc *arena);
 static void destroy(struct MC_TargetWM *wm);
-static MC_Error init_window(struct MC_TargetWM *wm, struct MC_TargetWMWindow *window);
+static MC_Error init_window(struct MC_TargetWM *wm, struct MC_TargetWMWindow *window, MC_WindowParameters *params);
 static void destroy_window(struct MC_TargetWM *wm, struct MC_TargetWMWindow *window);
 static MC_Error create_window_graphic(struct MC_TargetWM *wm, struct MC_TargetWMWindow *window, struct MC_Graphics **g);
 static MC_Error set_window_title(struct MC_TargetWM *wm, struct MC_TargetWMWindow *window, MC_Str title);
@@ -132,7 +132,7 @@ static void destroy(struct MC_TargetWM *wm){
     XCloseDisplay(wm->dpy);
 }
 
-static MC_Error init_window(struct MC_TargetWM *wm, struct MC_TargetWMWindow *window){
+static MC_Error init_window(struct MC_TargetWM *wm, struct MC_TargetWMWindow *window, MC_WindowParameters *params){
     int screen = DefaultScreen(wm->dpy);
     Window root = RootWindow(wm->dpy, screen);
 
@@ -141,6 +141,8 @@ static MC_Error init_window(struct MC_TargetWM *wm, struct MC_TargetWMWindow *wi
 
     window->window_id = XCreateWindow(wm->dpy, root, 0, 0, 800, 600, 0,
         DefaultDepth(wm->dpy, screen), CopyFromParent, DefaultVisual(wm->dpy, screen), CWBackPixmap, &attributes);
+
+    params->identity = (uint64_t)window->window_id;
 
     XSelectInput(wm->dpy, window->window_id,
         KeyPressMask | KeyReleaseMask | ButtonPressMask | ButtonReleaseMask | EnterWindowMask

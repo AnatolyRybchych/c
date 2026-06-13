@@ -220,7 +220,7 @@ struct MC_WMVtab{
     MC_Error (*init)(struct MC_TargetWM *wm, MC_Stream *log, MC_Alloc *arena);
     void (*destroy)(struct MC_TargetWM *wm);
 
-    MC_Error (*init_window)(struct MC_TargetWM *wm, struct MC_TargetWMWindow *window);
+    MC_Error (*init_window)(struct MC_TargetWM *wm, struct MC_TargetWMWindow *window, MC_WindowParameters *params);
     void (*destroy_window)(struct MC_TargetWM *wm, struct MC_TargetWMWindow *window);
 
     MC_Error (*create_window_graphic)(struct MC_TargetWM *wm, struct MC_TargetWMWindow *window, struct MC_Graphics **g);

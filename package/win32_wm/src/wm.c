@@ -77,7 +77,7 @@ static struct MC_TargetWM *global_hook_wm;
 
 static MC_Error init(struct MC_TargetWM *wm, MC_Stream *log, MC_Alloc *arena);
 static void destroy(struct MC_TargetWM *wm);
-static MC_Error init_window(struct MC_TargetWM *wm, struct MC_TargetWMWindow *window);
+static MC_Error init_window(struct MC_TargetWM *wm, struct MC_TargetWMWindow *window, MC_WindowParameters *params);
 static void destroy_window(struct MC_TargetWM *wm, struct MC_TargetWMWindow *window);
 static MC_Error create_window_graphic(struct MC_TargetWM *wm, struct MC_TargetWMWindow *window, struct MC_Graphics **g);
 static MC_Error set_window_title(struct MC_TargetWM *wm, struct MC_TargetWMWindow *window, MC_Str title);
@@ -245,7 +245,7 @@ static void destroy(struct MC_TargetWM *wm){
     }
 }
 
-static MC_Error init_window(struct MC_TargetWM *wm, struct MC_TargetWMWindow *window){
+static MC_Error init_window(struct MC_TargetWM *wm, struct MC_TargetWMWindow *window, MC_WindowParameters *params){
     window->wm = wm;
     window->hwnd = NULL;
     window->mouse_inside = false;
@@ -260,6 +260,7 @@ static MC_Error init_window(struct MC_TargetWM *wm, struct MC_TargetWMWindow *wi
     }
 
     window->hwnd = hwnd;
+    params->identity = (uint64_t)(uintptr_t)hwnd;
 
     ShowWindow(hwnd, SW_SHOW);
     UpdateWindow(hwnd);
