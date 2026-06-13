@@ -126,6 +126,153 @@ size_t mc_json_length(MC_Json *json){
     }
 }
 
+static double number_value(MC_Json *json){
+    switch(json->subtype){
+    case SUBTYPE_U64: return (double)json->as.u64;
+    case SUBTYPE_I64: return (double)json->as.i64;
+    default:          return json->as.lf;
+    }
+}
+
+static double str_to_number(MC_Str str){
+    double value;
+    MC_Str rest = mc_str_tolf(mc_str_trim(str), &value);
+    if(mc_str_len(rest) != 0){
+        return nan("");
+    }
+
+    return value;
+}
+
+bool mc_json_is_integer(MC_Json *json){
+    return mc_json_type(json) == MC_JSON_NUMBER && json->subtype != SUBTYPE_LF;
+}
+
+MC_Error mc_json_bool(MC_Json *json, bool *out){
+    MC_RETURN_INVALID(out == NULL || mc_json_type(json) != MC_JSON_BOOL);
+
+    *out = json->as.u64 != 0;
+    return MCE_OK;
+}
+
+MC_Error mc_json_i64(MC_Json *json, int64_t *out){
+    MC_RETURN_INVALID(out == NULL || mc_json_type(json) != MC_JSON_NUMBER);
+
+    switch(json->subtype){
+    case SUBTYPE_U64: *out = (int64_t)json->as.u64; return MCE_OK;
+    case SUBTYPE_I64: *out = json->as.i64; return MCE_OK;
+    default:          return MCE_INVALID_INPUT;
+    }
+}
+
+MC_Error mc_json_u64(MC_Json *json, uint64_t *out){
+    MC_RETURN_INVALID(out == NULL || mc_json_type(json) != MC_JSON_NUMBER);
+
+    switch(json->subtype){
+    case SUBTYPE_U64: *out = json->as.u64; return MCE_OK;
+    case SUBTYPE_I64: *out = (uint64_t)json->as.i64; return MCE_OK;
+    default:          return MCE_INVALID_INPUT;
+    }
+}
+
+MC_Error mc_json_f64(MC_Json *json, double *out){
+    MC_RETURN_INVALID(out == NULL || mc_json_type(json) != MC_JSON_NUMBER || json->subtype != SUBTYPE_LF);
+
+    *out = json->as.lf;
+    return MCE_OK;
+}
+
+MC_Error mc_json_number(MC_Json *json, double *out){
+    MC_RETURN_INVALID(out == NULL || mc_json_type(json) != MC_JSON_NUMBER);
+
+    *out = number_value(json);
+    return MCE_OK;
+}
+
+MC_Error mc_json_str(MC_Json *json, MC_Str *out){
+    MC_RETURN_INVALID(out == NULL || mc_json_type(json) != MC_JSON_STRING);
+
+    *out = mc_string_str(json->as.string);
+    return MCE_OK;
+}
+
+MC_Error mc_json_at(MC_Json *json, size_t index, MC_Json **out){
+    MC_RETURN_INVALID(out == NULL || mc_json_type(json) != MC_JSON_LIST);
+
+    if(json->as.arr == NULL || index >= json->as.arr->size){
+        return MCE_NOT_FOUND;
+    }
+
+    *out = json->as.arr->items[index];
+    return MCE_OK;
+}
+
+MC_Error mc_json_object_at(MC_Json *json, size_t index, MC_Str *key, MC_Json **out){
+    MC_RETURN_INVALID(out == NULL || mc_json_type(json) != MC_JSON_OBJECT);
+
+    if(json->as.kv_arr == NULL || index >= json->as.kv_arr->size){
+        return MCE_NOT_FOUND;
+    }
+
+    struct Kv *kv = &json->as.kv_arr->kvs[index];
+    if(key != NULL){
+        *key = mc_string_str(kv->key);
+    }
+
+    *out = kv->value;
+    return MCE_OK;
+}
+
+bool mc_json_as_bool(MC_Json *json){
+    switch(mc_json_type(json)){
+    case MC_JSON_BOOL:   return json->as.u64 != 0;
+    case MC_JSON_NUMBER:{
+        double value = number_value(json);
+        return value != 0.0 && !isnan(value);
+    }
+    case MC_JSON_STRING: return mc_json_length(json) != 0;
+    case MC_JSON_LIST:
+    case MC_JSON_OBJECT: return true;
+    default:             return false;
+    }
+}
+
+double mc_json_as_f64(MC_Json *json){
+    switch(mc_json_type(json)){
+    case MC_JSON_NULL:   return 0.0;
+    case MC_JSON_BOOL:   return json->as.u64 ? 1.0 : 0.0;
+    case MC_JSON_NUMBER: return number_value(json);
+    case MC_JSON_STRING: return str_to_number(mc_string_str(json->as.string));
+    default:             return nan("");
+    }
+}
+
+int64_t mc_json_as_i64(MC_Json *json){
+    if(mc_json_type(json) == MC_JSON_NUMBER){
+        switch(json->subtype){
+        case SUBTYPE_U64: return (int64_t)json->as.u64;
+        case SUBTYPE_I64: return json->as.i64;
+        default:          break;
+        }
+    }
+
+    double value = mc_json_as_f64(json);
+    return isnan(value) ? 0 : (int64_t)value;
+}
+
+uint64_t mc_json_as_u64(MC_Json *json){
+    if(mc_json_type(json) == MC_JSON_NUMBER){
+        switch(json->subtype){
+        case SUBTYPE_U64: return json->as.u64;
+        case SUBTYPE_I64: return (uint64_t)json->as.i64;
+        default:          break;
+        }
+    }
+
+    double value = mc_json_as_f64(json);
+    return isnan(value) ? 0 : (uint64_t)value;
+}
+
 MC_Error mc_json_set_bool(MC_Json *json, bool value){
     MC_RETURN_INVALID(json == NULL);
 
@@ -181,7 +328,7 @@ MC_Error mc_json_set_stringf(MC_Json *json, const char *fmt, ...){
     va_list args;
     va_start(args, fmt);
     MC_String *string = NULL;
-    MC_Error status = mc_string_fmt(json->alloc, &string, fmt, args);
+    MC_Error status = mc_string_fmtv(json->alloc, &string, fmt, args);
     va_end(args);
 
     MC_RETURN_ERROR(status);
@@ -288,7 +435,7 @@ MC_Error mc_json_object_addv(MC_Json *json, MC_Json *item, const char *key_fmt, 
     MC_RETURN_INVALID(json == NULL);
 
     MC_String *key;
-    MC_RETURN_ERROR(mc_string_fmt(json->alloc, &key, key_fmt, args));
+    MC_RETURN_ERROR(mc_string_fmtv(json->alloc, &key, key_fmt, args));
 
     MC_Error status = object_add(json, key, item);
     if(status != MCE_OK){
@@ -313,6 +460,54 @@ MC_Error mc_json_object_add_new(MC_Json *json, MC_Json **item, const char *key_f
 
     return status;
 }
+
+#define DEFINE_LIST_ADD(SUFFIX, TYPE, SETTER) \
+MC_Error mc_json_list_add_##SUFFIX(MC_Json *json, TYPE value){ \
+    MC_RETURN_INVALID(json == NULL); \
+    MC_Json *item; \
+    MC_RETURN_ERROR(mc_json_new(json->alloc, &item)); \
+    MC_Error status = SETTER(item, value); \
+    if(status == MCE_OK){ \
+        status = mc_json_list_add(json, item); \
+    } \
+    if(status != MCE_OK){ \
+        mc_json_delete(&item); \
+    } \
+    return status; \
+}
+
+#define DEFINE_OBJECT_ADD(SUFFIX, TYPE, SETTER) \
+MC_Error mc_json_object_add_##SUFFIX(MC_Json *json, TYPE value, const char *key_fmt, ...){ \
+    MC_RETURN_INVALID(json == NULL); \
+    MC_Json *item; \
+    MC_RETURN_ERROR(mc_json_new(json->alloc, &item)); \
+    MC_Error status = SETTER(item, value); \
+    if(status == MCE_OK){ \
+        va_list args; \
+        va_start(args, key_fmt); \
+        status = mc_json_object_addv(json, item, key_fmt, args); \
+        va_end(args); \
+    } \
+    if(status != MCE_OK){ \
+        mc_json_delete(&item); \
+    } \
+    return status; \
+}
+
+DEFINE_LIST_ADD(bool, bool, mc_json_set_bool)
+DEFINE_LIST_ADD(i64, int64_t, mc_json_set_i64)
+DEFINE_LIST_ADD(u64, uint64_t, mc_json_set_u64)
+DEFINE_LIST_ADD(f64, double, mc_json_set_lf)
+DEFINE_LIST_ADD(str, MC_Str, mc_json_set_string)
+
+DEFINE_OBJECT_ADD(bool, bool, mc_json_set_bool)
+DEFINE_OBJECT_ADD(i64, int64_t, mc_json_set_i64)
+DEFINE_OBJECT_ADD(u64, uint64_t, mc_json_set_u64)
+DEFINE_OBJECT_ADD(f64, double, mc_json_set_lf)
+DEFINE_OBJECT_ADD(str, MC_Str, mc_json_set_string)
+
+#undef DEFINE_LIST_ADD
+#undef DEFINE_OBJECT_ADD
 
 MC_Error mc_json_dump(MC_Json *json, MC_Stream *out){
     return json_dump(json, out, MC_STRC("  "), 0);
