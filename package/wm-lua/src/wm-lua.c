@@ -7,6 +7,7 @@
 #include <mc/wm/event.h>
 #include <mc/wm/resolver.h>
 #include <mc/data/str.h>
+#include <mc/data/json.h>
 
 #include <string.h>
 #include <stdio.h>
@@ -367,6 +368,66 @@ void mc_wm_lua_push_window(lua_State *L, MC_WindowRef *window){
     push_window(L, 0, window, NULL);
 }
 
+static void push_json(lua_State *L, MC_Json *json){
+    switch(mc_json_type(json)){
+    case MC_JSON_BOOL:{
+        bool value = false;
+        mc_json_bool(json, &value);
+        lua_pushboolean(L, value);
+        return;
+    }
+    case MC_JSON_NUMBER:
+        if(mc_json_is_integer(json)){
+            int64_t value = 0;
+            mc_json_i64(json, &value);
+            lua_pushinteger(L, (lua_Integer)value);
+        }
+        else{
+            double value = 0;
+            mc_json_f64(json, &value);
+            lua_pushnumber(L, value);
+        }
+        return;
+    case MC_JSON_STRING:{
+        MC_Str s = MC_STRC("");
+        mc_json_str(json, &s);
+        lua_pushlstring(L, s.beg, (size_t)(s.end - s.beg));
+        return;
+    }
+    case MC_JSON_LIST:{
+        size_t n = mc_json_length(json);
+        lua_createtable(L, (int)n, 0);
+        for(size_t i = 0; i < n; i++){
+            MC_Json *item = NULL;
+            mc_json_at(json, i, &item);
+            push_json(L, item);
+            lua_rawseti(L, -2, (lua_Integer)(i + 1));
+        }
+        return;
+    }
+    case MC_JSON_OBJECT:{
+        size_t n = mc_json_length(json);
+        lua_createtable(L, 0, (int)n);
+        for(size_t i = 0; i < n; i++){
+            MC_Str key = MC_STRC("");
+            MC_Json *value = NULL;
+            mc_json_object_at(json, i, &key, &value);
+            lua_pushlstring(L, key.beg, (size_t)(key.end - key.beg));
+            push_json(L, value);
+            lua_settable(L, -3);
+        }
+        return;
+    }
+    default:
+        lua_pushnil(L);
+        return;
+    }
+}
+
+void mc_wm_lua_push_json(lua_State *L, MC_Json *json){
+    push_json(L, json);
+}
+
 static int wm_create_window(lua_State *L){
     LuaWM *lwm = luaL_checkudata(L, 1, WM_MT);
     if(lwm->wm == NULL){
@@ -482,17 +543,73 @@ typedef struct LuaSubscription{
     int ref;
 } LuaSubscription;
 
-static void lua_event_cb(MC_WMRef *wm, const MC_WMEvent *event, void *user_data){
-    (void)wm;
-    (void)event;
+static int event_window_index(lua_State *L){
+    const char *key = lua_tostring(L, 2);
+    if(key == NULL || strcmp(key, "window") != 0){
+        lua_pushnil(L);
+        return 1;
+    }
 
+    MC_WMRef *wm = lua_touserdata(L, lua_upvalueindex(1));
+    uint64_t identity = (uint64_t)lua_tointeger(L, lua_upvalueindex(2));
+
+    MC_WindowRef *ref = NULL;
+    if(wm == NULL || mc_wm_resolve_window(wm, identity, &ref) != MCE_OK){
+        lua_pushnil(L);
+    }
+    else{
+        mc_wm_lua_push_window(L, ref);
+    }
+
+    lua_pushvalue(L, 2);
+    lua_pushvalue(L, -2);
+    lua_rawset(L, 1);
+
+    lua_pushnil(L);
+    lua_setmetatable(L, 1);
+
+    return 1;
+}
+
+static void push_event(lua_State *L, MC_WMRef *wm, const MC_WMEvent *event){
+    MC_Json *json = NULL;
+    if(mc_wm_event_to_json(NULL, event, &json) != MCE_OK){
+        lua_newtable(L);
+        return;
+    }
+
+    push_json(L, json);
+    mc_json_delete(&json);
+
+    lua_getfield(L, -1, "window");
+    if(!lua_isinteger(L, -1)){
+        lua_pop(L, 1);
+        return;
+    }
+
+    uint64_t identity = (uint64_t)lua_tointeger(L, -1);
+    lua_pop(L, 1);
+
+    lua_pushnil(L);
+    lua_setfield(L, -2, "window");
+
+    lua_createtable(L, 0, 1);
+    lua_pushlightuserdata(L, wm);
+    lua_pushinteger(L, (lua_Integer)identity);
+    lua_pushcclosure(L, event_window_index, 2);
+    lua_setfield(L, -2, "__index");
+    lua_setmetatable(L, -2);
+}
+
+static void lua_event_cb(MC_WMRef *wm, const MC_WMEvent *event, void *user_data){
     LuaSubscription *s = user_data;
     if(s->ref == LUA_NOREF){
         return;
     }
 
     lua_rawgeti(s->L, LUA_REGISTRYINDEX, s->ref);
-    if(lua_pcall(s->L, 0, 0, 0) != LUA_OK){
+    push_event(s->L, wm, event);
+    if(lua_pcall(s->L, 1, 0, 0) != LUA_OK){
         fprintf(stderr, "mc.wm: event callback error: %s\n", lua_tostring(s->L, -1));
         lua_pop(s->L, 1);
     }
