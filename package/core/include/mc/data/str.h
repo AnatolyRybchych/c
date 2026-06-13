@@ -128,6 +128,9 @@ inline MC_Str mc_str_hex_toull(MC_Str str, uint64_t *val) {
     return str;
 }
 
+MC_Str mc_str_tolf(MC_Str str, double *val);
+MC_Str mc_str_tolf_noexp(MC_Str str, double *val);
+
 inline bool mc_str_starts_with(MC_Str str, MC_Str substr){
     if(mc_str_len(substr) > mc_str_len(str)) {
         return false;

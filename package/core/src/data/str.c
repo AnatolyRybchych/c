@@ -387,3 +387,84 @@ bool mc_str_match(MC_Str str, const char *fmt, MC_Str *whole, ...) {
     return match;
 }
 
+static MC_Str parse_lf(MC_Str str, double *val, bool allow_exp) {
+    *val = 0.0;
+    MC_Str cur = str;
+
+    double sign = 1.0;
+    if(mc_str_len(cur) && *cur.beg == '-'){
+        sign = -1.0;
+        cur.beg++;
+    }
+
+    const char *int_beg = cur.beg;
+    uint64_t integer = 0;
+    cur = mc_str_toull(cur, &integer);
+    bool has_int = cur.beg != int_beg;
+
+    double value = (double)integer;
+    bool has_frac = false;
+
+    if(mc_str_len(cur) && *cur.beg == '.'){
+        MC_Str frac_str = cur;
+        frac_str.beg++;
+
+        const char *frac_beg = frac_str.beg;
+        uint64_t frac = 0;
+        MC_Str rest = mc_str_toull(frac_str, &frac);
+        size_t frac_digits = rest.beg - frac_beg;
+
+        if(frac_digits != 0){
+            double scale = 1.0;
+            for(size_t i = 0; i < frac_digits; i++){
+                scale *= 10.0;
+            }
+
+            value += (double)frac / scale;
+            has_frac = true;
+            cur = rest;
+        }
+    }
+
+    if(!has_int && !has_frac){
+        *val = 0.0;
+        return str;
+    }
+
+    if(allow_exp && mc_str_len(cur) && (*cur.beg == 'e' || *cur.beg == 'E')){
+        MC_Str exp_str = cur;
+        exp_str.beg++;
+
+        bool exp_negative = false;
+        if(mc_str_len(exp_str) && (*exp_str.beg == '-' || *exp_str.beg == '+')){
+            exp_negative = *exp_str.beg == '-';
+            exp_str.beg++;
+        }
+
+        const char *exp_beg = exp_str.beg;
+        uint64_t exponent = 0;
+        MC_Str rest = mc_str_toull(exp_str, &exponent);
+
+        if(rest.beg != exp_beg){
+            double scale = 1.0;
+            for(uint64_t i = 0; i < exponent; i++){
+                scale *= 10.0;
+            }
+
+            value = exp_negative ? value / scale : value * scale;
+            cur = rest;
+        }
+    }
+
+    *val = sign * value;
+    return cur;
+}
+
+MC_Str mc_str_tolf(MC_Str str, double *val) {
+    return parse_lf(str, val, true);
+}
+
+MC_Str mc_str_tolf_noexp(MC_Str str, double *val) {
+    return parse_lf(str, val, false);
+}
+
