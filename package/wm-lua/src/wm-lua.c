@@ -16,7 +16,7 @@
 #define SUBSCRIPTION_MT "mc.wm.Subscription"
 
 typedef struct LuaWM{
-    MC_WM *wm;
+    MC_WMRef *wm;
 } LuaWM;
 
 typedef struct LuaWindow{
@@ -475,42 +475,14 @@ static int wm_get_all_windows(lua_State *L){
     return 1;
 }
 
-static int wm_poll_event(lua_State *L){
-    LuaWM *lwm = luaL_checkudata(L, 1, WM_MT);
-    if(lwm->wm == NULL){
-        return luaL_error(L, "mc.wm: window manager is destroyed");
-    }
-
-    MC_WMEvent event;
-    if(mc_wm_poll_event(lwm->wm, &event) != MCE_OK){
-        lua_pushnil(L);
-        return 1;
-    }
-
-    lua_createtable(L, 0, 2);
-    lua_pushstring(L, mc_wm_event_type_str(event.type));
-    lua_setfield(L, -2, "type");
-
-    if(event.type == MC_WME_KEY_DOWN){
-        lua_pushinteger(L, (lua_Integer)event.as.key_down.key);
-        lua_setfield(L, -2, "key");
-    }
-    else if(event.type == MC_WME_KEY_UP){
-        lua_pushinteger(L, (lua_Integer)event.as.key_up.key);
-        lua_setfield(L, -2, "key");
-    }
-
-    return 1;
-}
-
 typedef struct LuaSubscription{
-    MC_WM *wm;
+    MC_WMRef *wm;
     MC_WMEventSubscription *sub;
     lua_State *L;
     int ref;
 } LuaSubscription;
 
-static void lua_event_cb(MC_WM *wm, const MC_WMEvent *event, void *user_data){
+static void lua_event_cb(MC_WMRef *wm, const MC_WMEvent *event, void *user_data){
     (void)wm;
     (void)event;
 
@@ -591,7 +563,7 @@ static int wm_destroy(lua_State *L){
     LuaWM *lwm = luaL_checkudata(L, 1, WM_MT);
     if(lwm->wm){
         cache_remove(L, lwm->wm);
-        mc_wm_destroy(lwm->wm);
+        mc_wm_unref(lwm->wm);
         lwm->wm = NULL;
     }
 
@@ -601,11 +573,11 @@ static int wm_destroy(lua_State *L){
 static int wm_resolve(lua_State *L){
     const char *impl = luaL_optstring(L, 1, NULL);
 
-    MC_WM *wm;
+    MC_WMRef *wm;
     require_ok(L, impl ? mc_wm_resolve_as(impl, &wm) : mc_wm_resolve(&wm), "resolve");
 
     if(cache_get(L, wm)){
-        mc_wm_destroy(wm);
+        mc_wm_unref(wm);
         return 1;
     }
 
@@ -622,7 +594,6 @@ static const luaL_Reg wm_methods[] = {
     {"get_focused_window", wm_get_focused_window},
     {"get_hovered_window", wm_get_hovered_window},
     {"get_all_windows", wm_get_all_windows},
-    {"poll_event", wm_poll_event},
     {"on_event", wm_on_event},
     {"destroy", wm_destroy},
     {"__gc", wm_destroy},
