@@ -4,6 +4,7 @@
 #include <mc/wm/wm.h>
 #include <mc/wm/mouse_button.h>
 #include <mc/wm/key.h>
+#include <mc/data/json.h>
 
 #include <string.h>
 
@@ -200,5 +201,7 @@ MC_Error mc_wm_subscribe_event(MC_WMRef *wm, MC_WMEventMatch match,
 
 void mc_wm_unsubscribe_event(MC_WMEventSubscription *subscription);
 void mc_wm_dispatch_event_callbacks(MC_WMRef *wm, const MC_WMEvent *event);
+
+MC_Error mc_wm_event_to_json(MC_Alloc *alloc, const MC_WMEvent *event, MC_Json **out);
 
 #endif // MC_WM_EVENT_H
