@@ -1,6 +1,8 @@
 #ifndef MC_WM_MOUSE_BUTTON_H
 #define MC_WM_MOUSE_BUTTON_H
 
+#include <string.h>
+
 #define MC_ITER_MOUSE_BUTTONS() \
     MOUSE_BUTTON(UNKNOWN, "Unknown",) \
     MOUSE_BUTTON(LEFT, "Left",) \
@@ -25,9 +27,20 @@ enum MC_MouseButton{
     #define MOUSE_BUTTON(NAME, ...) MC_MOUSE_##NAME,
     MC_ITER_MOUSE_BUTTONS()
     #undef MOUSE_BUTTON
+
+    MC_MOUSE_COUNT
 };
 
 inline const char *mc_mouse_button_str(MC_MouseButton button){
+    switch (button){
+    #define MOUSE_BUTTON(NAME, ...) case MC_MOUSE_##NAME: return #NAME;
+    MC_ITER_MOUSE_BUTTONS()
+    #undef MOUSE_BUTTON
+    default: return (void*)0;
+    }
+}
+
+inline const char *mc_mouse_button_human_str(MC_MouseButton button){
     switch (button){
     #define MOUSE_BUTTON(NAME, HUMAN, ...) case MC_MOUSE_##NAME: return HUMAN;
     MC_ITER_MOUSE_BUTTONS()
@@ -36,13 +49,12 @@ inline const char *mc_mouse_button_str(MC_MouseButton button){
     }
 }
 
-inline const char *mc_mouse_button_enum_str(MC_MouseButton button){
-    switch (button){
-    #define MOUSE_BUTTON(NAME, ...) case MC_MOUSE_##NAME: return #NAME;
+inline MC_MouseButton mc_mouse_button_from_str(const char *name){
+    #define MOUSE_BUTTON(NAME, HUMAN, ...) if(strcmp(name, #NAME) == 0 || strcmp(name, HUMAN) == 0){ return MC_MOUSE_##NAME; }
     MC_ITER_MOUSE_BUTTONS()
     #undef MOUSE_BUTTON
-    default: return (void*)0;
-    }
+
+    return MC_MOUSE_COUNT;
 }
 
 #endif // MC_WM_MOUSE_BUTTON_H
