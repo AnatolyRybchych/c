@@ -27,6 +27,13 @@
         } \
     } while(0)
 
+#define RETURN_IF_WM_BUSY(REF) \
+    do { \
+        if(!wm_of(REF)->is_alive){ \
+            return MCE_BUSY; \
+        } \
+    } while(0)
+
 MC_DEFINE_VECTOR(Windows, MC_WMWindow*);
 MC_DEFINE_VECTOR(ForeignWindows, MC_ForeignWindow*);
 
@@ -67,8 +74,13 @@ struct MC_ForeignWindow{
     alignas(void*) uint8_t data[];
 };
 
-struct MC_WM{
+struct MC_WMRef{
     unsigned refcount;
+};
+
+struct MC_WM{
+    MC_WMRef ref;
+    bool is_alive;
     MC_WMVtab vtab;
     MC_Stream *log;
     struct MC_TargetWM *target;
@@ -93,7 +105,7 @@ struct MC_WMEventSubscription{
     MC_WMEventSubscription *next;
     MC_WM *wm;
     MC_WMEventMatch match;
-    MC_WMEventCallback callback;
+    void (*callback)(MC_WMRef *wm, const MC_WMEvent *event, void *user_data);
     void *user_data;
 };
 
@@ -174,7 +186,8 @@ MC_Error mc_wm_init(MC_WM **ret_wm, const MC_WMVtab *vtab){
         return init_status;
     }
 
-    wm->refcount = 1;
+    wm->ref.refcount = 1;
+    wm->is_alive = true;
 
     mc_wm_resolver_register(vtab);
     mc_wm_resolver_set(wm);
@@ -186,19 +199,25 @@ MC_Error mc_wm_init(MC_WM **ret_wm, const MC_WMVtab *vtab){
     return MCE_OK;
 }
 
-MC_WM *mc_wm_ref(MC_WM *wm){
-    wm->refcount++;
-
-    return wm;
+static MC_WM *wm_of(MC_WMRef *ref){
+    return (MC_WM*)ref;
 }
 
-void mc_wm_destroy(MC_WM *wm){
-    MC_ASSERT_FAULT(wm->refcount > 0);
+MC_WMRef *mc_wm_get_ref(MC_WM *wm){
+    return &wm->ref;
+}
 
-    wm->refcount--;
-    if(wm->refcount > 0){
+MC_WMRef *mc_wm_ref(MC_WMRef *ref){
+    wm_of(ref)->ref.refcount++;
+
+    return ref;
+}
+
+static void wm_teardown(MC_WM *wm){
+    if(!wm->is_alive){
         return;
     }
+    wm->is_alive = false;
 
     mc_wm_resolver_forget(wm);
 
@@ -236,19 +255,44 @@ void mc_wm_destroy(MC_WM *wm){
     MC_VECTOR_FREE(wm->foreign_windows);
 
     mc_arena_destroy(wm->arena);
+}
 
+static void wm_release(MC_WM *wm){
+    MC_ASSERT_FAULT(wm->ref.refcount > 0);
+
+    wm->ref.refcount--;
+    if(wm->ref.refcount > 0){
+        return;
+    }
+
+    wm_teardown(wm);
+
+    mc_free(NULL, wm->target_event);
     mc_free(NULL, wm);
 }
 
-const char *mc_wm_impl_name(MC_WM *wm){
-    return wm->vtab.name;
+void mc_wm_destroy(MC_WM *wm){
+    wm_teardown(wm);
+    wm_release(wm);
 }
 
-struct MC_TargetWM *mc_wm_get_target(MC_WM *wm){
-    return wm->target;
+void mc_wm_unref(MC_WMRef *ref){
+    wm_release(wm_of(ref));
 }
 
-MC_Error mc_wm_request_events(MC_WM *wm, MC_WMEvents events){
+const char *mc_wm_impl_name(MC_WMRef *ref){
+    return wm_of(ref)->vtab.name;
+}
+
+struct MC_TargetWM *mc_wm_get_target(MC_WMRef *ref){
+    MC_WM *wm = wm_of(ref);
+    return wm->is_alive ? wm->target : NULL;
+}
+
+MC_Error mc_wm_request_events(MC_WMRef *ref, MC_WMEvents events){
+    RETURN_IF_WM_BUSY(ref);
+
+    MC_WM *wm = wm_of(ref);
     wm->events |= events;
 
     if(wm->vtab.request_events){
@@ -258,11 +302,14 @@ MC_Error mc_wm_request_events(MC_WM *wm, MC_WMEvents events){
     return MCE_OK;
 }
 
-MC_WMEvents mc_wm_get_requested_events(MC_WM *wm){
-    return wm->events;
+MC_WMEvents mc_wm_get_requested_events(MC_WMRef *ref){
+    return wm_of(ref)->events;
 }
 
-MC_Error mc_wm_window_init(MC_WM *wm, MC_WMWindow **ret_window){
+MC_Error mc_wm_window_init(MC_WMRef *ref, MC_WMWindow **ret_window){
+    RETURN_IF_WM_BUSY(ref);
+
+    MC_WM *wm = wm_of(ref);
     *ret_window = NULL;
     MC_WMVtab *v = &wm->vtab;
 
@@ -415,7 +462,10 @@ static MC_Error window_from_identity(MC_WM *wm, uint64_t identity, MC_WindowRef 
     return MCE_OK;
 }
 
-MC_Error mc_wm_get_focused_window(MC_WM *wm, MC_WindowRef **ret_window){
+MC_Error mc_wm_get_focused_window(MC_WMRef *ref, MC_WindowRef **ret_window){
+    RETURN_IF_WM_BUSY(ref);
+
+    MC_WM *wm = wm_of(ref);
     *ret_window = NULL;
     MC_WMVtab *v = &wm->vtab;
 
@@ -429,7 +479,10 @@ MC_Error mc_wm_get_focused_window(MC_WM *wm, MC_WindowRef **ret_window){
     return window_from_identity(wm, identity, ret_window);
 }
 
-MC_Error mc_wm_get_hovered_window(MC_WM *wm, MC_WindowRef **ret_window){
+MC_Error mc_wm_get_hovered_window(MC_WMRef *ref, MC_WindowRef **ret_window){
+    RETURN_IF_WM_BUSY(ref);
+
+    MC_WM *wm = wm_of(ref);
     *ret_window = NULL;
     MC_WMVtab *v = &wm->vtab;
 
@@ -443,7 +496,10 @@ MC_Error mc_wm_get_hovered_window(MC_WM *wm, MC_WindowRef **ret_window){
     return window_from_identity(wm, identity, ret_window);
 }
 
-MC_Error mc_wm_get_all_windows(MC_WM *wm, MC_Error (*visit)(MC_WindowRef *window, void *ctx), void *ctx){
+MC_Error mc_wm_get_all_windows(MC_WMRef *ref, MC_Error (*visit)(MC_WindowRef *window, void *ctx), void *ctx){
+    RETURN_IF_WM_BUSY(ref);
+
+    MC_WM *wm = wm_of(ref);
     MC_WMVtab *v = &wm->vtab;
 
     if(v->get_all_windows == NULL || v->resolve_temporary_identity == NULL){
@@ -470,11 +526,14 @@ MC_Error mc_wm_get_all_windows(MC_WM *wm, MC_Error (*visit)(MC_WindowRef *window
     return MCE_OK;
 }
 
-MC_Error mc_wm_resolve_window(MC_WM *wm, uint64_t identity, MC_WindowRef **window){
-    if(wm == NULL || window == NULL){
+MC_Error mc_wm_resolve_window(MC_WMRef *ref, uint64_t identity, MC_WindowRef **window){
+    if(ref == NULL || window == NULL){
         return MCE_INVALID_INPUT;
     }
 
+    RETURN_IF_WM_BUSY(ref);
+
+    MC_WM *wm = wm_of(ref);
     *window = NULL;
 
     if(wm->vtab.resolve_temporary_identity == NULL){
@@ -928,6 +987,10 @@ static MC_Error foreign_is_system(MC_ForeignWindow *foreign, bool *out){
 }
 
 MC_Error mc_wm_poll_event(MC_WM *wm, MC_WMEvent *event){
+    if(!wm->is_alive){
+        return MCE_BUSY;
+    }
+
     MC_WMVtab *v = &wm->vtab;
 
     for(;;){
@@ -979,10 +1042,14 @@ static bool event_matches(const MC_WMEventMatch *match, const MC_WMEvent *event)
     return match->type == MC_WME_NONE || match->type == event->type;
 }
 
-MC_Error mc_wm_subscribe_event(MC_WM *wm, MC_WMEventMatch match, MC_WMEventCallback callback, void *user_data, MC_WMEventSubscription **out){
-    if(wm == NULL || callback == NULL){
+MC_Error mc_wm_subscribe_event(MC_WMRef *ref, MC_WMEventMatch match, void (*callback)(MC_WMRef *wm, const MC_WMEvent *event, void *user_data), void *user_data, MC_WMEventSubscription **out){
+    if(ref == NULL || callback == NULL){
         return MCE_INVALID_INPUT;
     }
+
+    RETURN_IF_WM_BUSY(ref);
+
+    MC_WM *wm = wm_of(ref);
 
     MC_WMEventSubscription *sub;
     MC_RETURN_ERROR(mc_alloc(NULL, sizeof(*sub), (void**)&sub));
@@ -1019,8 +1086,13 @@ void mc_wm_unsubscribe_event(MC_WMEventSubscription *subscription){
     mc_free(NULL, subscription);
 }
 
-void mc_wm_dispatch_event_callbacks(MC_WM *wm, const MC_WMEvent *event){
-    if(wm == NULL || event == NULL){
+void mc_wm_dispatch_event_callbacks(MC_WMRef *ref, const MC_WMEvent *event){
+    if(ref == NULL || event == NULL){
+        return;
+    }
+
+    MC_WM *wm = wm_of(ref);
+    if(!wm->is_alive){
         return;
     }
 
@@ -1028,7 +1100,7 @@ void mc_wm_dispatch_event_callbacks(MC_WM *wm, const MC_WMEvent *event){
     while(sub != NULL){
         MC_WMEventSubscription *next = sub->next;
         if(event_matches(&sub->match, event)){
-            sub->callback(wm, event, sub->user_data);
+            sub->callback(ref, event, sub->user_data);
         }
 
         sub = next;

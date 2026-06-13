@@ -194,10 +194,11 @@ typedef struct MC_WMEventMatch{
     MC_WMEventType type;
 } MC_WMEventMatch;
 
-typedef void (*MC_WMEventCallback)(MC_WM *wm, const MC_WMEvent *event, void *user_data);
+MC_Error mc_wm_subscribe_event(MC_WMRef *wm, MC_WMEventMatch match,
+    void (*callback)(MC_WMRef *wm, const MC_WMEvent *event, void *user_data),
+    void *user_data, MC_WMEventSubscription **out);
 
-MC_Error mc_wm_subscribe_event(MC_WM *wm, MC_WMEventMatch match, MC_WMEventCallback callback, void *user_data, MC_WMEventSubscription **out);
 void mc_wm_unsubscribe_event(MC_WMEventSubscription *subscription);
-void mc_wm_dispatch_event_callbacks(MC_WM *wm, const MC_WMEvent *event);
+void mc_wm_dispatch_event_callbacks(MC_WMRef *wm, const MC_WMEvent *event);
 
 #endif // MC_WM_EVENT_H

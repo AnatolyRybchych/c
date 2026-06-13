@@ -12,6 +12,7 @@
 #include <stdbool.h>
 
 typedef struct MC_WM MC_WM;
+typedef struct MC_WMRef MC_WMRef;
 typedef struct MC_WMWindow MC_WMWindow;
 typedef struct MC_WMVtab MC_WMVtab;
 typedef struct MC_WMEvent MC_WMEvent;
@@ -55,15 +56,18 @@ typedef enum MC_WMArea {
 struct MC_Graphics;
 
 MC_Error mc_wm_init(MC_WM **wm, const MC_WMVtab *vtab);
-MC_WM *mc_wm_ref(MC_WM *wm);
 void mc_wm_destroy(MC_WM *wm);
-const char *mc_wm_impl_name(MC_WM *wm);
-struct MC_TargetWM *mc_wm_get_target(MC_WM *wm);
+MC_WMRef *mc_wm_get_ref(MC_WM *wm);
 
-MC_Error mc_wm_request_events(MC_WM *wm, MC_WMEvents events);
-MC_WMEvents mc_wm_get_requested_events(MC_WM *wm);
+MC_WMRef *mc_wm_ref(MC_WMRef *ref);
+void mc_wm_unref(MC_WMRef *ref);
+const char *mc_wm_impl_name(MC_WMRef *ref);
+struct MC_TargetWM *mc_wm_get_target(MC_WMRef *ref);
 
-MC_Error mc_wm_window_init(MC_WM *wm, MC_WMWindow **window);
+MC_Error mc_wm_request_events(MC_WMRef *ref, MC_WMEvents events);
+MC_WMEvents mc_wm_get_requested_events(MC_WMRef *ref);
+
+MC_Error mc_wm_window_init(MC_WMRef *ref, MC_WMWindow **window);
 void mc_wm_window_destroy(MC_WMWindow *window);
 MC_WindowRef *mc_wm_window_get_ref(MC_WMWindow *window);
 struct MC_TargetWMWindow *mc_wm_window_get_target(MC_WMWindow *window);
@@ -76,10 +80,10 @@ MC_Rect2IU mc_wm_window_cached_get_rect(MC_WMWindow *window, MC_WMArea area);
 MC_WMWindowState mc_wm_window_cached_get_state(MC_WMWindow *window);
 bool mc_wm_window_cached_is_mouse_over(MC_WMWindow *window);
 
-MC_Error mc_wm_get_focused_window(MC_WM *wm, MC_WindowRef **window);
-MC_Error mc_wm_get_hovered_window(MC_WM *wm, MC_WindowRef **window);
-MC_Error mc_wm_get_all_windows(MC_WM *wm, MC_Error (*visit)(MC_WindowRef *window, void *ctx), void *ctx);
-MC_Error mc_wm_resolve_window(MC_WM *wm, uint64_t identity, MC_WindowRef **window);
+MC_Error mc_wm_get_focused_window(MC_WMRef *ref, MC_WindowRef **window);
+MC_Error mc_wm_get_hovered_window(MC_WMRef *ref, MC_WindowRef **window);
+MC_Error mc_wm_get_all_windows(MC_WMRef *ref, MC_Error (*visit)(MC_WindowRef *window, void *ctx), void *ctx);
+MC_Error mc_wm_resolve_window(MC_WMRef *ref, uint64_t identity, MC_WindowRef **window);
 struct MC_TargetForeignWindow *mc_wm_window_get_foreign_target(MC_WindowRef *window);
 MC_Error mc_wm_window_get_identity(MC_WindowRef *window, uint64_t *out);
 MC_Error mc_wm_window_is_system(MC_WindowRef *window, bool *out);

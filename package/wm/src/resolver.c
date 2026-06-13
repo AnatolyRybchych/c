@@ -47,13 +47,24 @@ void mc_wm_resolver_forget(MC_WM *wm) {
     }
 }
 
-MC_Error mc_wm_resolve(MC_WM **wm) {
+static MC_Error create_owned(const MC_WMVtab *vtab, MC_WMRef **wm) {
+    MC_WM *owner;
+    MC_Error status = mc_wm_init(&owner, vtab);
+    if (status != MCE_OK) {
+        return status;
+    }
+
+    *wm = mc_wm_get_ref(owner);
+    return MCE_OK;
+}
+
+MC_Error mc_wm_resolve(MC_WMRef **wm) {
     if (wm == NULL) {
         return MCE_INVALID_INPUT;
     }
 
     if (current != NULL) {
-        *wm = mc_wm_ref(current);
+        *wm = mc_wm_ref(mc_wm_get_ref(current));
         return MCE_OK;
     }
 
@@ -61,16 +72,16 @@ MC_Error mc_wm_resolve(MC_WM **wm) {
         return MCE_NOT_FOUND;
     }
 
-    return mc_wm_init(wm, registered[registered_count - 1]);
+    return create_owned(registered[registered_count - 1], wm);
 }
 
-MC_Error mc_wm_resolve_as(const char *impl, MC_WM **wm) {
+MC_Error mc_wm_resolve_as(const char *impl, MC_WMRef **wm) {
     if (impl == NULL || wm == NULL) {
         return MCE_INVALID_INPUT;
     }
 
-    if (current != NULL && strcmp(mc_wm_impl_name(current), impl) == 0) {
-        *wm = mc_wm_ref(current);
+    if (current != NULL && strcmp(mc_wm_impl_name(mc_wm_get_ref(current)), impl) == 0) {
+        *wm = mc_wm_ref(mc_wm_get_ref(current));
         return MCE_OK;
     }
 
@@ -79,5 +90,5 @@ MC_Error mc_wm_resolve_as(const char *impl, MC_WM **wm) {
         return MCE_NOT_FOUND;
     }
 
-    return mc_wm_init(wm, vtab);
+    return create_owned(vtab, wm);
 }
