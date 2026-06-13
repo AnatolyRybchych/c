@@ -1186,6 +1186,10 @@ static void discard_indication(MC_WM *wm){
     memmove(wm->indications, wm->indications + 1, sizeof(MC_TargetIndication[--wm->pending_indications]));
 }
 
+static uint64_t window_identity(MC_WMWindow *window){
+    return window ? window->parameters.identity : 0;
+}
+
 static MC_WMEvent translate_indication(MC_WM *wm){
     MC_TargetIndication ind = *wm->indications;
     memmove(wm->indications, wm->indications + 1, sizeof(MC_TargetIndication[--wm->pending_indications]));
@@ -1199,7 +1203,7 @@ static MC_WMEvent translate_indication(MC_WM *wm){
         return (MC_WMEvent){
             .type = MC_WME_WINDOW_READY,
             .as.window_ready = {
-                .window = window,
+                .window = window_identity(window),
             }
         };
     case MC_WMIND_WINDOW_MOVED:
@@ -1208,7 +1212,7 @@ static MC_WMEvent translate_indication(MC_WM *wm){
         return (MC_WMEvent){
             .type = MC_WME_WINDOW_MOVED,
             .as.window_moved = {
-                .window = window,
+                .window = window_identity(window),
                 .new_position = ind.as.window_moved.new_position,
             }
         };
@@ -1218,7 +1222,7 @@ static MC_WMEvent translate_indication(MC_WM *wm){
         return (MC_WMEvent){
             .type = MC_WME_WINDOW_RESIZED,
             .as.window_resized = {
-                .window = window,
+                .window = window_identity(window),
                 .new_size = ind.as.window_resized.new_size,
             }
         };
@@ -1228,7 +1232,7 @@ static MC_WMEvent translate_indication(MC_WM *wm){
         return (MC_WMEvent){
             .type = MC_WME_WINDOW_REDRAW_REQUESTED,
             .as.redraw_requested = {
-                .window = window,
+                .window = window_identity(window),
             }
         };
     case MC_WMIND_WINDOW_CLOSE_REQUESTED:
@@ -1237,7 +1241,7 @@ static MC_WMEvent translate_indication(MC_WM *wm){
         return (MC_WMEvent){
             .type = MC_WME_WINDOW_CLOSE_REQUESTED,
             .as.window_close_requested = {
-                .window = window,
+                .window = window_identity(window),
             }
         };
     case MC_WMIND_WINDOW_STATE_CHANGED:
@@ -1247,7 +1251,7 @@ static MC_WMEvent translate_indication(MC_WM *wm){
         return (MC_WMEvent){
             .type = MC_WME_WINDOW_STATE_CHANGED,
             .as.window_state_changed = {
-                .window = window,
+                .window = window_identity(window),
                 .state = ind.as.window_state_changed.state,
             }
         };
@@ -1257,7 +1261,7 @@ static MC_WMEvent translate_indication(MC_WM *wm){
         return (MC_WMEvent){
             .type = MC_WME_FOCUS_GAINED,
             .as.focus_gained = {
-                .window = window,
+                .window = window_identity(window),
             }
         };
     case MC_WMIND_FOCUS_LOST:
@@ -1266,7 +1270,7 @@ static MC_WMEvent translate_indication(MC_WM *wm){
         return (MC_WMEvent){
             .type = MC_WME_FOCUS_LOST,
             .as.focus_lost = {
-                .window = window,
+                .window = window_identity(window),
             }
         };
     case MC_WMIND_MOUSE_DOWN:
@@ -1275,7 +1279,7 @@ static MC_WMEvent translate_indication(MC_WM *wm){
         return (MC_WMEvent){
             .type = MC_WME_MOUSE_DOWN,
             .as.mouse_down = {
-                .window = window,
+                .window = window_identity(window),
                 .button = ind.as.mouse_down.button,
                 .position = window->cached.mouse_pos,
             }
@@ -1286,7 +1290,7 @@ static MC_WMEvent translate_indication(MC_WM *wm){
         return (MC_WMEvent){
             .type = MC_WME_MOUSE_UP,
             .as.mouse_up = {
-                .window = window,
+                .window = window_identity(window),
                 .button = ind.as.mouse_up.button,
                 .position = window->cached.mouse_pos,
             }
@@ -1298,7 +1302,7 @@ static MC_WMEvent translate_indication(MC_WM *wm){
         return (MC_WMEvent){
             .type = MC_WME_MOUSE_MOVED,
             .as.mouse_moved = {
-                .window = window,
+                .window = window_identity(window),
                 .position = ind.as.mouse_moved.position,
             }
         };
@@ -1309,7 +1313,7 @@ static MC_WMEvent translate_indication(MC_WM *wm){
         return (MC_WMEvent){
             .type = MC_WME_MOUSE_ENTER,
             .as.mouse_enter = {
-                .window = window,
+                .window = window_identity(window),
                 .position = window->cached.mouse_pos,
             }
         };
@@ -1320,7 +1324,7 @@ static MC_WMEvent translate_indication(MC_WM *wm){
         return (MC_WMEvent){
             .type = MC_WME_MOUSE_LEAVE,
             .as.mouse_enter = {
-                .window = window,
+                .window = window_identity(window),
                 .position = window->cached.mouse_pos,
             }
         };
@@ -1328,7 +1332,7 @@ static MC_WMEvent translate_indication(MC_WM *wm){
         return (MC_WMEvent){
             .type = MC_WME_KEY_DOWN,
             .as.key_down = {
-                .window = NULL,
+                .window = 0,
                 .key = ind.as.key_down.key,
             }
         };
@@ -1336,7 +1340,7 @@ static MC_WMEvent translate_indication(MC_WM *wm){
         return (MC_WMEvent){
             .type = MC_WME_KEY_UP,
             .as.key_up = {
-                .window = NULL,
+                .window = 0,
                 .key = ind.as.key_up.key,
             }
         };
@@ -1347,7 +1351,7 @@ static MC_WMEvent translate_indication(MC_WM *wm){
             MC_WMEvent event = {
                 .type = MC_WME_TEXT_INPUT,
                 .as.text_input = {
-                    .window = window,
+                    .window = window_identity(window),
                 }
             };
 
@@ -1361,7 +1365,7 @@ static MC_WMEvent translate_indication(MC_WM *wm){
         return (MC_WMEvent){
             .type = MC_WME_PASTE_TEXT,
             .as.paste_text = {
-                .window = window,
+                .window = window_identity(window),
                 .text = ind.as.paste_text.text,
             }
         };

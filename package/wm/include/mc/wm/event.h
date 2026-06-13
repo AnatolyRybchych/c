@@ -68,69 +68,69 @@ struct MC_WMEvent{
         void *raw;
 
         struct MC_WME_WindowReady{
-            MC_WMWindow *window;
+            uint64_t window;
         } window_ready;
 
         struct MC_WME_WindowResized{
-            MC_WMWindow *window;
+            uint64_t window;
             MC_Size2U new_size;
         } window_resized;
 
         struct MC_WME_WindowMoved{
-            MC_WMWindow *window;
+            uint64_t window;
             MC_Vec2i new_position;
         } window_moved;
 
         struct MC_WME_RedrawRequest{
-            MC_WMWindow *window;
+            uint64_t window;
         } redraw_requested;
 
         struct MC_WME_WindowStateChanged{
-            MC_WMWindow *window;
+            uint64_t window;
             MC_WMWindowState state;
         } window_state_changed;
 
         struct MC_WME_WindowCloseRequest{
-            MC_WMWindow *window;
+            uint64_t window;
         } window_close_requested;
 
         struct MC_WME_FocusGained{
-            MC_WMWindow *window;
+            uint64_t window;
         } focus_gained;
 
         struct MC_WME_FocusLost{
-            MC_WMWindow *window;
+            uint64_t window;
         } focus_lost;
 
         struct MC_WME_MouseMoved{
-            struct MC_WMWindow *window;
+            uint64_t window;
             MC_Vec2i position;
         } mouse_moved;
 
         struct MC_WME_MouseDown{
-            struct MC_WMWindow *window;
+            uint64_t window;
             MC_Vec2i position;
             MC_MouseButton button;
         } mouse_down;
 
         struct MC_WME_MouseUp{
-            struct MC_WMWindow *window;
+            uint64_t window;
             MC_Vec2i position;
             MC_MouseButton button;
         } mouse_up;
 
         struct MC_WME_MouseEnter{
-            struct MC_WMWindow *window;
+            uint64_t window;
             MC_Vec2i position;
         } mouse_enter;
 
         struct MC_WME_MouseLeave{
-            struct MC_WMWindow *window;
+            uint64_t window;
             MC_Vec2i position;
         } mouse_leave;
 
         struct MC_WME_MouseWheel{
-            struct MC_WMWindow *window;
+            uint64_t window;
             MC_Vec2i position;
             int up;
             int right;
@@ -138,23 +138,23 @@ struct MC_WMEvent{
 
         struct MC_WME_KeyDown{
             // optional
-            struct MC_WMWindow *window;
+            uint64_t window;
             MC_Key key;
         } key_down;
 
         struct MC_WME_KeyUp{
             // optional
-            struct MC_WMWindow *window;
+            uint64_t window;
             MC_Key key;
         } key_up;
 
         struct MC_WME_TextInput{
-            struct MC_WMWindow *window;
+            uint64_t window;
             char utf8[MC_WM_TEXT_INPUT_CAP];
         } text_input;
 
         struct MC_WME_PasteText{
-            struct MC_WMWindow *window;
+            uint64_t window;
             MC_Str text;
         } paste_text;
 
