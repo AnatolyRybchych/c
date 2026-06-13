@@ -38,7 +38,7 @@ MC_Error mc_string_fmtv(MC_Alloc *alloc, MC_String **out_string, const char *fmt
 
     MC_RETURN_ERROR(mc_stringn(alloc, out_string, len));
     MC_String *string = *out_string;
-    vsnprintf(string->data, len, fmt, args);
+    vsnprintf(string->data, len + 1, fmt, args);
 
     return MCE_OK;
 }
