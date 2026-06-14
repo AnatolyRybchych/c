@@ -93,6 +93,8 @@ typedef struct MC_WMUserEventDef{
     const char *name;
 } MC_WMUserEventDef;
 
+MC_Alloc *mc_wm_event_allocator(MC_WMRef *wm);
+
 MC_Error mc_wm_register_user_event(MC_WMRef *wm, const char *subgroup,
     const MC_WMUserEventDef *events, size_t count, MC_WMEventType *out_offset);
 MC_Error mc_wm_user_event(MC_WMRef *wm, MC_WMEventType type, MC_WMEvent *out);

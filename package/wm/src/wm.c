@@ -1150,6 +1150,14 @@ void mc_wm_dispatch_event_callbacks(MC_WMRef *ref, const MC_WMEvent *event){
 extern inline const char *mc_wm_event_type_str_static(MC_WMEventType type);
 extern inline MC_WMEventType mc_wm_event_type_from_str_static(const char *name);
 
+MC_Alloc *mc_wm_event_allocator(MC_WMRef *ref){
+    if(ref == NULL){
+        return NULL;
+    }
+
+    return wm_of(ref)->event_alloc;
+}
+
 static UserSubgroup *find_user_subgroup(MC_WM *wm, MC_WMEventType type){
     UserSubgroup *sg;
     MC_VECTOR_EACH(wm->user_subgroups, sg){
