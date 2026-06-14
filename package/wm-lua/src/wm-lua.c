@@ -8,6 +8,7 @@
 #include <mc/wm/resolver.h>
 #include <mc/data/str.h>
 #include <mc/data/json.h>
+#include <mc/util/error.h>
 
 #include <string.h>
 #include <stdio.h>
@@ -428,6 +429,104 @@ void mc_wm_lua_push_json(lua_State *L, MC_Json *json){
     push_json(L, json);
 }
 
+static bool table_is_array(lua_State *L, int idx){
+    idx = lua_absindex(L, idx);
+    lua_Integer n = luaL_len(L, idx);
+
+    bool array = n > 0;
+    lua_pushnil(L);
+    while(lua_next(L, idx)){
+        if(!lua_isinteger(L, -2) || lua_tointeger(L, -2) < 1 || lua_tointeger(L, -2) > n){
+            array = false;
+        }
+
+        lua_pop(L, 1);
+        if(!array){
+            lua_pop(L, 1);
+            break;
+        }
+    }
+
+    return array;
+}
+
+static MC_Error lua_to_json(lua_State *L, int idx, MC_Json *node){
+    idx = lua_absindex(L, idx);
+
+    switch(lua_type(L, idx)){
+    case LUA_TNIL:
+        return mc_json_set_null(node);
+    case LUA_TBOOLEAN:
+        return mc_json_set_bool(node, lua_toboolean(L, idx));
+    case LUA_TNUMBER:
+        if(lua_isinteger(L, idx)){
+            return mc_json_set_i64(node, lua_tointeger(L, idx));
+        }
+        return mc_json_set_lf(node, lua_tonumber(L, idx));
+    case LUA_TSTRING:{
+        size_t len;
+        const char *s = lua_tolstring(L, idx, &len);
+        return mc_json_set_string(node, MC_STR(s, s + len));
+    }
+    case LUA_TTABLE:
+        if(table_is_array(L, idx)){
+            MC_RETURN_ERROR(mc_json_set_list(node));
+            lua_Integer n = luaL_len(L, idx);
+            for(lua_Integer i = 1; i <= n; i++){
+                lua_geti(L, idx, i);
+
+                MC_Json *item = NULL;
+                MC_Error e = mc_json_list_add_new(node, &item);
+                if(e == MCE_OK){
+                    e = lua_to_json(L, -1, item);
+                }
+
+                lua_pop(L, 1);
+                MC_RETURN_ERROR(e);
+            }
+
+            return MCE_OK;
+        }
+
+        MC_RETURN_ERROR(mc_json_set_object(node));
+        lua_pushnil(L);
+        while(lua_next(L, idx)){
+            MC_Error e = MCE_OK;
+            if(lua_type(L, -2) == LUA_TSTRING){
+                size_t klen;
+                const char *key = lua_tolstring(L, -2, &klen);
+
+                MC_Json *item = NULL;
+                e = mc_json_object_add_new(node, &item, "%.*s", (int)klen, key);
+                if(e == MCE_OK){
+                    e = lua_to_json(L, -1, item);
+                }
+            }
+
+            lua_pop(L, 1);
+            MC_RETURN_ERROR(e);
+        }
+
+        return MCE_OK;
+    default:
+        return mc_json_set_null(node);
+    }
+}
+
+#define USER_GROUP_REGISTRY "mc.wm.user_groups"
+
+static void push_group_set(lua_State *L, MC_WMRef *wm){
+    luaL_getsubtable(L, LUA_REGISTRYINDEX, USER_GROUP_REGISTRY);
+    if(lua_rawgetp(L, -1, wm) != LUA_TTABLE){
+        lua_pop(L, 1);
+        lua_newtable(L);
+        lua_pushvalue(L, -1);
+        lua_rawsetp(L, -3, wm);
+    }
+
+    lua_remove(L, -2);
+}
+
 static int wm_create_window(lua_State *L){
     LuaWM *lwm = luaL_checkudata(L, 1, WM_MT);
     if(lwm->wm == NULL){
@@ -536,12 +635,23 @@ static int wm_get_all_windows(lua_State *L){
     return 1;
 }
 
-typedef struct LuaSubscription{
-    MC_WMRef *wm;
-    MC_WMEventSubscription *sub;
+typedef struct LuaCallback{
     lua_State *L;
     int ref;
+} LuaCallback;
+
+typedef struct LuaSubscription{
+    MC_WMEventSubscription *sub;
+    LuaCallback *k;
 } LuaSubscription;
+
+static void lua_callback_free(LuaCallback *k){
+    if(k->ref != LUA_NOREF){
+        luaL_unref(k->L, LUA_REGISTRYINDEX, k->ref);
+    }
+
+    mc_free(NULL, k);
+}
 
 static int event_window_index(lua_State *L){
     const char *key = lua_tostring(L, 2);
@@ -602,16 +712,16 @@ static void push_event(lua_State *L, MC_WMRef *wm, const MC_WMEvent *event){
 }
 
 static void lua_event_cb(MC_WMRef *wm, const MC_WMEvent *event, void *user_data){
-    LuaSubscription *s = user_data;
-    if(s->ref == LUA_NOREF){
+    LuaCallback *k = user_data;
+    if(k->ref == LUA_NOREF){
         return;
     }
 
-    lua_rawgeti(s->L, LUA_REGISTRYINDEX, s->ref);
-    push_event(s->L, wm, event);
-    if(lua_pcall(s->L, 1, 0, 0) != LUA_OK){
-        fprintf(stderr, "mc.wm: event callback error: %s\n", lua_tostring(s->L, -1));
-        lua_pop(s->L, 1);
+    lua_rawgeti(k->L, LUA_REGISTRYINDEX, k->ref);
+    push_event(k->L, wm, event);
+    if(lua_pcall(k->L, 1, 0, 0) != LUA_OK){
+        fprintf(stderr, "mc.wm: event callback error: %s\n", lua_tostring(k->L, -1));
+        lua_pop(k->L, 1);
     }
 }
 
@@ -621,18 +731,13 @@ static void subscription_release(LuaSubscription *s){
         s->sub = NULL;
     }
 
-    if(s->ref != LUA_NOREF){
-        luaL_unref(s->L, LUA_REGISTRYINDEX, s->ref);
-        s->ref = LUA_NOREF;
+    if(s->k != NULL){
+        lua_callback_free(s->k);
+        s->k = NULL;
     }
 }
 
 static int sub_unsubscribe(lua_State *L){
-    subscription_release(luaL_checkudata(L, 1, SUBSCRIPTION_MT));
-    return 0;
-}
-
-static int sub_gc(lua_State *L){
     subscription_release(luaL_checkudata(L, 1, SUBSCRIPTION_MT));
     return 0;
 }
@@ -654,26 +759,132 @@ static int wm_on_event(lua_State *L){
 
     luaL_checktype(L, 3, LUA_TFUNCTION);
 
-    LuaSubscription *s = lua_newuserdatauv(L, sizeof(LuaSubscription), 1);
-    s->wm = lwm->wm;
+    LuaCallback *k = NULL;
+    if(mc_alloc(NULL, sizeof(*k), (void**)&k) != MCE_OK){
+        return luaL_error(L, "mc.wm: on_event: out of memory");
+    }
+    k->L = L;
+    lua_pushvalue(L, 3);
+    k->ref = luaL_ref(L, LUA_REGISTRYINDEX);
+
+    LuaSubscription *s = lua_newuserdatauv(L, sizeof(LuaSubscription), 0);
     s->sub = NULL;
-    s->L = L;
-    s->ref = LUA_NOREF;
+    s->k = k;
     luaL_setmetatable(L, SUBSCRIPTION_MT);
 
-    lua_pushvalue(L, 1);
-    lua_setiuservalue(L, -2, 1);
-
-    lua_pushvalue(L, 3);
-    s->ref = luaL_ref(L, LUA_REGISTRYINDEX);
-
-    if(mc_wm_subscribe_event(lwm->wm, match, lua_event_cb, s, &s->sub) != MCE_OK){
-        luaL_unref(L, LUA_REGISTRYINDEX, s->ref);
-        s->ref = LUA_NOREF;
+    if(mc_wm_subscribe_event(lwm->wm, match, lua_event_cb, k, &s->sub) != MCE_OK){
+        s->k = NULL;
+        lua_callback_free(k);
         return luaL_error(L, "mc.wm: on_event failed");
     }
 
     return 1;
+}
+
+static int wm_register_events(lua_State *L){
+    LuaWM *lwm = luaL_checkudata(L, 1, WM_MT);
+    if(lwm->wm == NULL){
+        return luaL_error(L, "mc.wm: window manager is destroyed");
+    }
+
+    const char *group = luaL_checkstring(L, 2);
+    luaL_checktype(L, 3, LUA_TTABLE);
+
+    static const char PREFIX[] = "USER.";
+    size_t prefix_len = sizeof(PREFIX) - 1;
+    if(strncmp(group, PREFIX, prefix_len) != 0 || group[prefix_len] == '\0'){
+        return luaL_error(L, "mc.wm: event group '%s' must start with 'USER.'", group);
+    }
+
+    const char *subgroup = group + prefix_len;
+
+    lua_Integer count = luaL_len(L, 3);
+    if(count <= 0){
+        return luaL_error(L, "mc.wm: event group '%s' must define at least one event", group);
+    }
+
+    push_group_set(L, lwm->wm);
+    int set = lua_gettop(L);
+
+    if(lua_getfield(L, set, group) != LUA_TNIL){
+        return luaL_error(L, "mc.wm: event group '%s' already exists", group);
+    }
+    lua_pop(L, 1);
+
+    MC_WMUserEventDef *defs = NULL;
+    if(mc_alloc(NULL, sizeof(MC_WMUserEventDef) * (size_t)count, (void**)&defs) != MCE_OK){
+        return luaL_error(L, "mc.wm: out of memory");
+    }
+
+    for(lua_Integer i = 0; i < count; i++){
+        lua_geti(L, 3, i + 1);
+        if(!lua_istable(L, -1)){
+            mc_free(NULL, defs);
+            return luaL_error(L, "mc.wm: event #%d must be a table", (int)(i + 1));
+        }
+
+        lua_getfield(L, -1, "name");
+        if(lua_type(L, -1) != LUA_TSTRING){
+            mc_free(NULL, defs);
+            return luaL_error(L, "mc.wm: event #%d is missing a string 'name'", (int)(i + 1));
+        }
+
+        defs[i].name = lua_tostring(L, -1);
+        lua_remove(L, -2);
+    }
+
+    MC_WMEventType offset;
+    MC_Error e = mc_wm_register_user_event(lwm->wm, subgroup, defs, (size_t)count, &offset);
+    mc_free(NULL, defs);
+    lua_pop(L, (int)count);
+
+    if(e != MCE_OK){
+        return luaL_error(L, "mc.wm: register_events('%s') failed (%s)", group, mc_strerror(e));
+    }
+
+    lua_pushboolean(L, 1);
+    lua_setfield(L, set, group);
+
+    return 0;
+}
+
+static int wm_send_event(lua_State *L){
+    LuaWM *lwm = luaL_checkudata(L, 1, WM_MT);
+    if(lwm->wm == NULL){
+        return luaL_error(L, "mc.wm: window manager is destroyed");
+    }
+
+    const char *name = luaL_checkstring(L, 2);
+
+    static const char PREFIX[] = "USER.";
+    if(strncmp(name, PREFIX, sizeof(PREFIX) - 1) != 0){
+        return luaL_error(L, "mc.wm: event '%s' must start with 'USER.'", name);
+    }
+
+    MC_WMEventType type = mc_wm_event_type_from_str(lwm->wm, name);
+    if(type == MC_WME_NONE){
+        return luaL_error(L, "mc.wm: event '%s' is not registered", name);
+    }
+
+    MC_WMEvent event;
+    require_ok(L, mc_wm_user_event(lwm->wm, type, &event), "send_event");
+
+    if(!lua_isnoneornil(L, 3)){
+        luaL_checktype(L, 3, LUA_TTABLE);
+        MC_Error e = lua_to_json(L, 3, event.as.user.data);
+        if(e != MCE_OK){
+            mc_json_delete(&event.as.user.data);
+            return luaL_error(L, "mc.wm: send_event('%s') payload failed (%s)", name, mc_strerror(e));
+        }
+    }
+
+    MC_Error e = mc_wm_push_user_event(lwm->wm, &event);
+    if(e != MCE_OK){
+        mc_json_delete(&event.as.user.data);
+        return luaL_error(L, "mc.wm: send_event('%s') failed (%s)", name, mc_strerror(e));
+    }
+
+    return 0;
 }
 
 static int wm_destroy(lua_State *L){
@@ -712,6 +923,8 @@ static const luaL_Reg wm_methods[] = {
     {"get_hovered_window", wm_get_hovered_window},
     {"get_all_windows", wm_get_all_windows},
     {"on_event", wm_on_event},
+    {"register_events", wm_register_events},
+    {"send_event", wm_send_event},
     {"destroy", wm_destroy},
     {"__gc", wm_destroy},
     {NULL, NULL},
@@ -719,7 +932,6 @@ static const luaL_Reg wm_methods[] = {
 
 static const luaL_Reg subscription_methods[] = {
     {"unsubscribe", sub_unsubscribe},
-    {"__gc", sub_gc},
     {NULL, NULL},
 };
 
