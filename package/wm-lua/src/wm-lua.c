@@ -647,7 +647,7 @@ static int wm_on_event(lua_State *L){
     if(!lua_isnoneornil(L, 2)){
         const char *name = luaL_checkstring(L, 2);
         match.type = mc_wm_event_type_from_str(name);
-        if(match.type == MC_WME_COUNT){
+        if(match.type == MC_WME_NONE){
             return luaL_error(L, "mc.wm: unknown event type '%s'", name);
         }
     }
