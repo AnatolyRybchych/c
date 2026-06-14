@@ -26,6 +26,8 @@ enum MC_JsonType{
 MC_Error mc_json_new(MC_Alloc *alloc, MC_Json **json);
 void mc_json_delete(MC_Json **json);
 
+MC_Error mc_json_copy(MC_Json *dst, MC_Json *src);
+
 MC_JsonType mc_json_type(MC_Json *json);
 size_t mc_json_length(MC_Json *json);
 

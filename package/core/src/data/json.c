@@ -364,6 +364,63 @@ MC_Error mc_json_set_object(MC_Json *json){
     return MCE_OK;
 }
 
+MC_Error mc_json_copy(MC_Json *dst, MC_Json *src){
+    MC_RETURN_INVALID(dst == NULL || src == NULL);
+
+    switch(mc_json_type(src)){
+    case MC_JSON_NULL:
+        return mc_json_set_null(dst);
+    case MC_JSON_BOOL:{
+        bool value;
+        MC_RETURN_ERROR(mc_json_bool(src, &value));
+        return mc_json_set_bool(dst, value);
+    }
+    case MC_JSON_NUMBER:
+        if(mc_json_is_integer(src)){
+            int64_t value;
+            if(mc_json_i64(src, &value) == MCE_OK){
+                return mc_json_set_i64(dst, value);
+            }
+            return mc_json_set_u64(dst, mc_json_as_u64(src));
+        }
+        return mc_json_set_lf(dst, mc_json_as_f64(src));
+    case MC_JSON_STRING:{
+        MC_Str value;
+        MC_RETURN_ERROR(mc_json_str(src, &value));
+        return mc_json_set_string(dst, value);
+    }
+    case MC_JSON_LIST:{
+        MC_RETURN_ERROR(mc_json_set_list(dst));
+        size_t len = mc_json_length(src);
+        for(size_t i = 0; i < len; i++){
+            MC_Json *item;
+            MC_RETURN_ERROR(mc_json_at(src, i, &item));
+
+            MC_Json *copy;
+            MC_RETURN_ERROR(mc_json_list_add_new(dst, &copy));
+            MC_RETURN_ERROR(mc_json_copy(copy, item));
+        }
+        return MCE_OK;
+    }
+    case MC_JSON_OBJECT:{
+        MC_RETURN_ERROR(mc_json_set_object(dst));
+        size_t len = mc_json_length(src);
+        for(size_t i = 0; i < len; i++){
+            MC_Str key;
+            MC_Json *item;
+            MC_RETURN_ERROR(mc_json_object_at(src, i, &key, &item));
+
+            MC_Json *copy;
+            MC_RETURN_ERROR(mc_json_object_add_new(dst, &copy, "%.*s", (int)MC_STR_LEN(key), key.beg));
+            MC_RETURN_ERROR(mc_json_copy(copy, item));
+        }
+        return MCE_OK;
+    }
+    default:
+        return mc_json_set_null(dst);
+    }
+}
+
 MC_Error mc_json_list_add_new(MC_Json *json, MC_Json **item){
     MC_RETURN_INVALID(json == NULL);
     MC_RETURN_ERROR(mc_json_new(json->alloc, item));
