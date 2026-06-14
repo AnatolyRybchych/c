@@ -37,6 +37,14 @@
 MC_DEFINE_VECTOR(Windows, MC_WMWindow*);
 MC_DEFINE_VECTOR(ForeignWindows, MC_ForeignWindow*);
 
+typedef struct UserSubgroup{
+    MC_WMEventType offset;
+    MC_String *name;
+    MC_String **serials;
+    size_t count;
+} UserSubgroup;
+MC_DEFINE_VECTOR(UserSubgroups, UserSubgroup);
+
 typedef struct indicationNode indicationNode;
 
 typedef enum ReferenceType{
@@ -96,6 +104,10 @@ struct MC_WM{
     ForeignWindows *foreign_windows;
 
     MC_WMEventSubscription *event_subs;
+
+    MC_Alloc *event_alloc;
+    UserSubgroups *user_subgroups;
+    uint16_t user_event_next;
 
     MC_Arena *arena;
 
@@ -173,6 +185,11 @@ MC_Error mc_wm_init(MC_WM **ret_wm, const MC_WMVtab *vtab){
     wm->log = MC_STDERR;
     wm->events = MC_WM_EVENTS_CORE | MC_WM_EVENTS_WINDOW_CORE;
 
+    // dedicated allocator for event payloads; for now the general WM allocator (NULL = default)
+    wm->event_alloc = NULL;
+    wm->user_subgroups = NULL;
+    wm->user_event_next = 0;
+
     MC_Error arena_status = mc_arena_init(&wm->arena, NULL);
     if(arena_status != MCE_OK){
         mc_free(NULL, wm->target_event);
@@ -247,6 +264,19 @@ static void wm_teardown(MC_WM *wm){
         MC_WMEventSubscription *next = wm->event_subs->next;
         mc_free(NULL, wm->event_subs);
         wm->event_subs = next;
+    }
+
+    if(wm->user_subgroups != NULL){
+        UserSubgroup *sg;
+        MC_VECTOR_EACH(wm->user_subgroups, sg){
+            for(size_t i = 0; i < sg->count; i++){
+                mc_free(wm->event_alloc, sg->serials[i]);
+            }
+            mc_free(wm->event_alloc, sg->serials);
+            mc_free(wm->event_alloc, sg->name);
+        }
+        MC_VECTOR_FREE(wm->user_subgroups);
+        wm->user_subgroups = NULL;
     }
 
     if(wm->vtab.destroy){
@@ -1115,6 +1145,131 @@ void mc_wm_dispatch_event_callbacks(MC_WMRef *ref, const MC_WMEvent *event){
 
         sub = next;
     }
+}
+
+extern inline const char *mc_wm_event_type_str_static(MC_WMEventType type);
+extern inline MC_WMEventType mc_wm_event_type_from_str_static(const char *name);
+
+static UserSubgroup *find_user_subgroup(MC_WM *wm, MC_WMEventType type){
+    UserSubgroup *sg;
+    MC_VECTOR_EACH(wm->user_subgroups, sg){
+        if(type >= sg->offset && (size_t)(type - sg->offset) < sg->count){
+            return sg;
+        }
+    }
+
+    return NULL;
+}
+
+MC_Error mc_wm_register_user_event(MC_WMRef *ref, const char *subgroup,
+        const MC_WMUserEventDef *events, size_t count, MC_WMEventType *out_offset){
+    if(ref == NULL || subgroup == NULL || events == NULL || count == 0 || out_offset == NULL){
+        return MCE_INVALID_INPUT;
+    }
+
+    MC_WM *wm = wm_of(ref);
+
+    if((size_t)wm->user_event_next + count > (1u << MC_WME_GROUP_SHIFT)){
+        return MCE_INVALID_INPUT;
+    }
+
+    MC_WMEventType offset = (MC_WMEventType)(wm->user_event_next | (MC_WME_GROUP_USER << MC_WME_GROUP_SHIFT));
+
+    MC_String *name = NULL;
+    MC_RETURN_ERROR(mc_string_fmt(wm->event_alloc, &name, "%s", subgroup));
+
+    MC_String **serials = NULL;
+    MC_Error status = mc_alloc(wm->event_alloc, count * sizeof(MC_String*), (void**)&serials);
+    if(status != MCE_OK){
+        mc_free(wm->event_alloc, name);
+        return status;
+    }
+
+    for(size_t i = 0; i < count; i++){
+        status = mc_string_fmt(wm->event_alloc, &serials[i], "USER.%s.%s", subgroup, events[i].name);
+        if(status != MCE_OK){
+            for(size_t j = 0; j < i; j++){
+                mc_free(wm->event_alloc, serials[j]);
+            }
+            mc_free(wm->event_alloc, serials);
+            mc_free(wm->event_alloc, name);
+            return status;
+        }
+    }
+
+    UserSubgroup entry = { .offset = offset, .name = name, .serials = serials, .count = count };
+    UserSubgroups *grown = MC_VECTOR_PUSHN(wm->user_subgroups, 1, (&entry));
+    if(grown == NULL){
+        for(size_t i = 0; i < count; i++){
+            mc_free(wm->event_alloc, serials[i]);
+        }
+        mc_free(wm->event_alloc, serials);
+        mc_free(wm->event_alloc, name);
+        return MCE_OUT_OF_MEMORY;
+    }
+    wm->user_subgroups = grown;
+    wm->user_event_next += (uint16_t)count;
+
+    *out_offset = offset;
+    return MCE_OK;
+}
+
+MC_Error mc_wm_user_event(MC_WMRef *ref, MC_WMEventType type, MC_WMEvent *out){
+    if(ref == NULL || out == NULL){
+        return MCE_INVALID_INPUT;
+    }
+
+    MC_WM *wm = wm_of(ref);
+
+    UserSubgroup *sg = find_user_subgroup(wm, type);
+    if(sg == NULL){
+        return MCE_NOT_FOUND;
+    }
+
+    MC_Json *data;
+    MC_RETURN_ERROR(mc_json_new(wm->event_alloc, &data));
+
+    *out = (MC_WMEvent){ .type = type };
+    out->as.user.offset = sg->offset;
+    out->as.user.data = data;
+    return MCE_OK;
+}
+
+const char *mc_wm_event_type_str(MC_WMRef *ref, MC_WMEventType type){
+    if(ref != NULL && mc_wm_event_type_group(type) == MC_WME_GROUP_USER){
+        MC_WM *wm = wm_of(ref);
+        UserSubgroup *sg = find_user_subgroup(wm, type);
+        if(sg != NULL){
+            return sg->serials[type - sg->offset]->data;
+        }
+    }
+
+    return mc_wm_event_type_str_static(type);
+}
+
+MC_WMEventType mc_wm_event_type_from_str(MC_WMRef *ref, const char *name){
+    if(name == NULL){
+        return MC_WME_NONE;
+    }
+
+    MC_WMEventType type = mc_wm_event_type_from_str_static(name);
+    if(type != MC_WME_NONE){
+        return type;
+    }
+
+    if(ref != NULL){
+        MC_WM *wm = wm_of(ref);
+        UserSubgroup *sg;
+        MC_VECTOR_EACH(wm->user_subgroups, sg){
+            for(size_t i = 0; i < sg->count; i++){
+                if(strcmp(sg->serials[i]->data, name) == 0){
+                    return (MC_WMEventType)(sg->offset + i);
+                }
+            }
+        }
+    }
+
+    return MC_WME_NONE;
 }
 
 static void dump_vtable(MC_WM *wm){

@@ -45,12 +45,13 @@ enum MC_WMEventGroup{
     MC_WME_GROUP_WINDOW  = 2,
     MC_WME_GROUP_GLOBAL  = 3,
     MC_WME_GROUP_APP     = 4,
+    MC_WME_GROUP_USER    = 5,
 };
 
 #define MC_WME_GROUP_BITS 4
 #define MC_WME_GROUP_SHIFT (16 - MC_WME_GROUP_BITS)
 
-static_assert(MC_WME_GROUP_APP < (1 << MC_WME_GROUP_BITS), "MC_WMEventGroup must fit in MC_WME_GROUP_BITS bits");
+static_assert(MC_WME_GROUP_USER < (1 << MC_WME_GROUP_BITS), "MC_WMEventGroup must fit in MC_WME_GROUP_BITS bits");
 
 typedef uint16_t MC_WMEventType;
 
@@ -70,22 +71,33 @@ inline MC_WMEventGroup mc_wm_event_type_group(MC_WMEventType type){
     return type >> MC_WME_GROUP_SHIFT;
 }
 
-inline const char *mc_wm_event_type_str(MC_WMEventType type){
+inline const char *mc_wm_event_type_str_static(MC_WMEventType type){
     switch (type){
     #define MC_EVENT(NAME, GROUP, SERIAL) case MC_WME_##NAME: return #SERIAL;
         MC_ITER_WM_EVENTS()
     #undef MC_EVENT
-    default: return NULL;
+    default:
+        return mc_wm_event_type_group(type) == MC_WME_GROUP_USER ? "USER.UNKNOWN" : NULL;
     }
 }
 
-inline MC_WMEventType mc_wm_event_type_from_str(const char *name){
+inline MC_WMEventType mc_wm_event_type_from_str_static(const char *name){
     #define MC_EVENT(NAME, GROUP, SERIAL) if(strcmp(name, #SERIAL) == 0){ return MC_WME_##NAME; }
         MC_ITER_WM_EVENTS()
     #undef MC_EVENT
 
     return MC_WME_NONE;
 }
+
+typedef struct MC_WMUserEventDef{
+    const char *name;
+} MC_WMUserEventDef;
+
+MC_Error mc_wm_register_user_event(MC_WMRef *wm, const char *subgroup,
+    const MC_WMUserEventDef *events, size_t count, MC_WMEventType *out_offset);
+MC_Error mc_wm_user_event(MC_WMRef *wm, MC_WMEventType type, MC_WMEvent *out);
+const char *mc_wm_event_type_str(MC_WMRef *wm, MC_WMEventType type);
+MC_WMEventType mc_wm_event_type_from_str(MC_WMRef *wm, const char *name);
 
 typedef struct MC_WMWindowEvent{
     uint64_t window;
@@ -95,6 +107,11 @@ struct MC_WMEvent{
     MC_WMEventType type;
     union {
         void *raw;
+
+        struct MC_WME_User{
+            MC_WMEventType offset;
+            MC_Json *data;
+        } user;
 
         MC_WMWindowEvent window;
 
@@ -230,6 +247,6 @@ MC_Error mc_wm_subscribe_event(MC_WMRef *wm, MC_WMEventMatch match,
 void mc_wm_unsubscribe_event(MC_WMEventSubscription *subscription);
 void mc_wm_dispatch_event_callbacks(MC_WMRef *wm, const MC_WMEvent *event);
 
-MC_Error mc_wm_event_to_json(MC_Alloc *alloc, const MC_WMEvent *event, MC_Json **out);
+MC_Error mc_wm_event_to_json(MC_WMRef *wm, MC_Alloc *alloc, const MC_WMEvent *event, MC_Json **out);
 
 #endif // MC_WM_EVENT_H

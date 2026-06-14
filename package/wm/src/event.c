@@ -2,8 +2,6 @@
 
 #include <mc/util/error.h>
 
-extern inline const char *mc_wm_event_type_str(MC_WMEventType type);
-extern inline MC_WMEventType mc_wm_event_type_from_str(const char *name);
 extern inline MC_WMEventGroup mc_wm_event_type_group(MC_WMEventType type);
 
 static const char *window_state_str(MC_WMWindowState state){
@@ -99,11 +97,17 @@ static MC_Error event_fields(MC_Json *obj, const MC_WMEvent *e){
         MC_RETURN_ERROR(add_i64(obj, "up", e->as.global_mouse_wheel.up));
         return add_i64(obj, "right", e->as.global_mouse_wheel.right);
     default:
+        if(mc_wm_event_type_group(e->type) == MC_WME_GROUP_USER && e->as.user.data != NULL){
+            MC_Json *data;
+            MC_RETURN_ERROR(mc_json_object_add_new(obj, &data, "data"));
+            return mc_json_copy(data, e->as.user.data);
+        }
+
         return MCE_OK;
     }
 }
 
-MC_Error mc_wm_event_to_json(MC_Alloc *alloc, const MC_WMEvent *event, MC_Json **out){
+MC_Error mc_wm_event_to_json(MC_WMRef *wm, MC_Alloc *alloc, const MC_WMEvent *event, MC_Json **out){
     if(event == NULL || out == NULL){
         return MCE_INVALID_INPUT;
     }
@@ -113,7 +117,7 @@ MC_Error mc_wm_event_to_json(MC_Alloc *alloc, const MC_WMEvent *event, MC_Json *
 
     MC_Error status = mc_json_set_object(obj);
     if(status == MCE_OK){
-        status = add_cstr(obj, "type", mc_wm_event_type_str(event->type));
+        status = add_cstr(obj, "type", mc_wm_event_type_str(wm, event->type));
     }
 
     if(status == MCE_OK && mc_wm_event_type_group(event->type) == MC_WME_GROUP_WINDOW){
