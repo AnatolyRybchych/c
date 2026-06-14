@@ -6,6 +6,7 @@
 #include <mc/data/string.h>
 #include <mc/data/vector.h>
 #include <mc/data/arena.h>
+#include <mc/data/dbarena.h>
 
 #include <mc/os/file.h>
 #include <mc/util/assert.h>
@@ -16,6 +17,7 @@
 #include <memory.h>
 
 #define INDICATIONS_BUFFER_SIZE (MC_WM_MAX_INDICATIONS_PER_EVENT * 16)
+#define DEFAULT_EVENT_QUEUE_LIMIT 256
 
 #define WM_LOGE(FMT, ...) if(wm->log) mc_fmt(wm->log, "[WM] " FMT "\n", ##__VA_ARGS__)
 #define WM_LOG_DEV(FMT, ...) if(wm->log) mc_fmt(wm->log, "%s() [DEV][WM][%s] " FMT "\n", __func__, wm->vtab.name, ##__VA_ARGS__)
@@ -45,10 +47,10 @@ typedef struct UserSubgroup{
 } UserSubgroup;
 MC_DEFINE_VECTOR(UserSubgroups, UserSubgroup);
 
-typedef struct UserEventNode{
-    struct UserEventNode *next;
+typedef struct EventNode{
+    struct EventNode *next;
     MC_WMEvent event;
-} UserEventNode;
+} EventNode;
 
 typedef struct indicationNode indicationNode;
 
@@ -110,11 +112,18 @@ struct MC_WM{
 
     MC_WMEventSubscription *event_subs;
 
+    MC_DBArena *event_arena;
     MC_Alloc *event_alloc;
+    EventNode *event_queue;
+    EventNode *event_queue_tail;
+    EventNode *event_queue_mark;
+    EventNode *pending_user;
+    EventNode *pending_user_tail;
+    size_t event_count;
+    size_t event_limit;
+
     UserSubgroups *user_subgroups;
     uint16_t user_event_next;
-    UserEventNode *user_event_queue;
-    UserEventNode *user_event_queue_tail;
 
     MC_Arena *arena;
 
@@ -192,15 +201,19 @@ MC_Error mc_wm_init(MC_WM **ret_wm, const MC_WMVtab *vtab){
     wm->log = MC_STDERR;
     wm->events = MC_WM_EVENTS_CORE | MC_WM_EVENTS_WINDOW_CORE;
 
-    // dedicated allocator for event payloads; for now the general WM allocator (NULL = default)
-    wm->event_alloc = NULL;
-    wm->user_subgroups = NULL;
-    wm->user_event_next = 0;
-    wm->user_event_queue = NULL;
-    wm->user_event_queue_tail = NULL;
+    wm->event_limit = DEFAULT_EVENT_QUEUE_LIMIT;
+
+    MC_Error event_arena_status = mc_dbarena_init(&wm->event_arena, NULL);
+    if(event_arena_status != MCE_OK){
+        mc_free(NULL, wm->target_event);
+        mc_free(NULL, wm);
+        return event_arena_status;
+    }
+    wm->event_alloc = mc_dbarena_allocator(wm->event_arena);
 
     MC_Error arena_status = mc_arena_init(&wm->arena, NULL);
     if(arena_status != MCE_OK){
+        mc_dbarena_destroy(wm->event_arena);
         mc_free(NULL, wm->target_event);
         mc_free(NULL, wm);
         return arena_status;
@@ -209,6 +222,7 @@ MC_Error mc_wm_init(MC_WM **ret_wm, const MC_WMVtab *vtab){
     MC_Error init_status = vtab->init(wm->target, wm->log, mc_arena_allocator(wm->arena));
     if(init_status != MCE_OK){
         mc_arena_destroy(wm->arena);
+        mc_dbarena_destroy(wm->event_arena);
         mc_free(NULL, wm->target_event);
         mc_free(NULL, wm);
         return init_status;
@@ -275,25 +289,14 @@ static void wm_teardown(MC_WM *wm){
         wm->event_subs = next;
     }
 
-    while(wm->user_event_queue != NULL){
-        UserEventNode *node = wm->user_event_queue;
-        wm->user_event_queue = node->next;
-        if(mc_wm_event_type_group(node->event.type) == MC_WME_GROUP_USER){
-            mc_json_delete(&node->event.as.user.data);
-        }
-
-        mc_free(wm->event_alloc, node);
-    }
-    wm->user_event_queue_tail = NULL;
-
     if(wm->user_subgroups != NULL){
         UserSubgroup *sg;
         MC_VECTOR_EACH(wm->user_subgroups, sg){
             for(size_t i = 0; i < sg->count; i++){
-                mc_free(wm->event_alloc, sg->serials[i]);
+                mc_free(NULL, sg->serials[i]);
             }
-            mc_free(wm->event_alloc, sg->serials);
-            mc_free(wm->event_alloc, sg->name);
+            mc_free(NULL, sg->serials);
+            mc_free(NULL, sg->name);
         }
         MC_VECTOR_FREE(wm->user_subgroups);
         wm->user_subgroups = NULL;
@@ -307,6 +310,7 @@ static void wm_teardown(MC_WM *wm){
     MC_VECTOR_FREE(wm->foreign_windows);
 
     mc_arena_destroy(wm->arena);
+    mc_dbarena_destroy(wm->event_arena);
 }
 
 static void wm_release(MC_WM *wm){
@@ -1046,33 +1050,71 @@ static MC_Error foreign_is_system(MC_ForeignWindow *foreign, bool *out){
     return MCE_NOT_SUPPORTED;
 }
 
-MC_Error mc_wm_poll_event(MC_WM *wm, MC_WMEvent *event){
-    if(!wm->is_alive){
-        return MCE_BUSY;
+static EventNode *queue_push(MC_WM *wm, const MC_WMEvent *event){
+    EventNode *node = NULL;
+    if(mc_alloc(wm->event_alloc, sizeof(EventNode), (void**)&node) != MCE_OK){
+        return NULL;
     }
 
+    node->next = NULL;
+    node->event = *event;
+
+    if(wm->event_queue_tail != NULL){
+        wm->event_queue_tail->next = node;
+    }
+    else{
+        wm->event_queue = node;
+    }
+    wm->event_queue_tail = node;
+
+    if(wm->event_queue_mark == NULL){
+        wm->event_queue_mark = node;
+    }
+
+    wm->event_count++;
+    return node;
+}
+
+static void intern_event(MC_WM *wm, MC_WMEvent *event){
+    if(event->type != MC_WME_PASTE_TEXT){
+        return;
+    }
+
+    MC_Str text = event->as.paste_text.text;
+    size_t len = (size_t)MC_STR_LEN(text);
+
+    char *copy = NULL;
+    if(len > 0 && mc_alloc(wm->event_alloc, len, (void**)&copy) == MCE_OK){
+        memcpy(copy, text.beg, len);
+        event->as.paste_text.text = MC_STR(copy, copy + len);
+    }
+    else{
+        event->as.paste_text.text = MC_STR(NULL, NULL);
+    }
+}
+
+static void queue_push_target(MC_WM *wm, MC_WMEvent *event){
+    if(wm->event_count >= wm->event_limit * 2){
+        WM_LOGE("event queue overflow (2x limit = %zu): dropping target event", wm->event_limit * 2);
+        return;
+    }
+
+    intern_event(wm, event);
+    queue_push(wm, event);
+}
+
+static void drain_target_events(MC_WM *wm){
     MC_WMVtab *v = &wm->vtab;
 
     for(;;){
-        if(wm->user_event_queue != NULL){
-            UserEventNode *node = wm->user_event_queue;
-            wm->user_event_queue = node->next;
-            if(wm->user_event_queue == NULL){
-                wm->user_event_queue_tail = NULL;
-            }
-
-            *event = node->event;
-            mc_free(wm->event_alloc, node);
-            return MCE_OK;
-        }
-
         while(wm->pending_indications){
             if(indication_category[wm->indications[0].type] & wm->events){
-                *event = translate_indication(wm);
-                return MCE_OK;
+                MC_WMEvent target_event = translate_indication(wm);
+                queue_push_target(wm, &target_event);
             }
-
-            discard_indication(wm);
+            else{
+                discard_indication(wm);
+            }
         }
 
         mc_arena_reset(wm->arena);
@@ -1082,7 +1124,7 @@ MC_Error mc_wm_poll_event(MC_WM *wm, MC_WMEvent *event){
         }
 
         if(!(v->poll_event && v->poll_event(wm->target, wm->target_event))){
-            return MCE_AGAIN;
+            return;
         }
 
         if(v->translate_event){
@@ -1100,14 +1142,64 @@ MC_Error mc_wm_poll_event(MC_WM *wm, MC_WMEvent *event){
         }
 
         if(wm->events & MC_WM_EVENTS_RAW){
-            *event = (MC_WMEvent){
-                .type = MC_WME_RAW,
-                .as.raw = wm->target_event
-            };
-
-            return MCE_OK;
+            void *raw = NULL;
+            if(mc_alloc(wm->event_alloc, wm->vtab.event_size, &raw) == MCE_OK){
+                memcpy(raw, wm->target_event, wm->vtab.event_size);
+                MC_WMEvent raw_event = { .type = MC_WME_RAW, .as.raw = raw };
+                queue_push_target(wm, &raw_event);
+            }
         }
     }
+}
+
+static void drain_pending_user(MC_WM *wm){
+    if(wm->pending_user == NULL){
+        return;
+    }
+
+    if(wm->event_queue_tail != NULL){
+        wm->event_queue_tail->next = wm->pending_user;
+    }
+    else{
+        wm->event_queue = wm->pending_user;
+    }
+    wm->event_queue_tail = wm->pending_user_tail;
+
+    if(wm->event_queue_mark == NULL){
+        wm->event_queue_mark = wm->pending_user;
+    }
+
+    wm->pending_user = NULL;
+    wm->pending_user_tail = NULL;
+}
+
+MC_Error mc_wm_poll_event(MC_WM *wm, MC_WMEvent *event){
+    if(!wm->is_alive){
+        return MCE_BUSY;
+    }
+
+    drain_target_events(wm);
+    drain_pending_user(wm);
+
+    if(wm->event_queue == NULL){
+        return MCE_AGAIN;
+    }
+
+    EventNode *node = wm->event_queue;
+    wm->event_queue = node->next;
+    if(wm->event_queue == NULL){
+        wm->event_queue_tail = NULL;
+    }
+
+    *event = node->event;
+    wm->event_count--;
+
+    if(node == wm->event_queue_mark){
+        mc_dbarena_swap(wm->event_arena);
+        wm->event_queue_mark = NULL;
+    }
+
+    return MCE_OK;
 }
 
 static bool event_matches(const MC_WMEventMatch *match, const MC_WMEvent *event){
@@ -1216,23 +1308,23 @@ MC_Error mc_wm_register_user_event(MC_WMRef *ref, const char *subgroup,
     MC_WMEventType offset = (MC_WMEventType)(wm->user_event_next | (MC_WME_GROUP_USER << MC_WME_GROUP_SHIFT));
 
     MC_String *name = NULL;
-    MC_RETURN_ERROR(mc_string_fmt(wm->event_alloc, &name, "%s", subgroup));
+    MC_RETURN_ERROR(mc_string_fmt(NULL, &name, "%s", subgroup));
 
     MC_String **serials = NULL;
-    MC_Error status = mc_alloc(wm->event_alloc, count * sizeof(MC_String*), (void**)&serials);
+    MC_Error status = mc_alloc(NULL, count * sizeof(MC_String*), (void**)&serials);
     if(status != MCE_OK){
-        mc_free(wm->event_alloc, name);
+        mc_free(NULL, name);
         return status;
     }
 
     for(size_t i = 0; i < count; i++){
-        status = mc_string_fmt(wm->event_alloc, &serials[i], "USER.%s.%s", subgroup, events[i].name);
+        status = mc_string_fmt(NULL, &serials[i], "USER.%s.%s", subgroup, events[i].name);
         if(status != MCE_OK){
             for(size_t j = 0; j < i; j++){
-                mc_free(wm->event_alloc, serials[j]);
+                mc_free(NULL, serials[j]);
             }
-            mc_free(wm->event_alloc, serials);
-            mc_free(wm->event_alloc, name);
+            mc_free(NULL, serials);
+            mc_free(NULL, name);
             return status;
         }
     }
@@ -1241,10 +1333,10 @@ MC_Error mc_wm_register_user_event(MC_WMRef *ref, const char *subgroup,
     UserSubgroups *grown = MC_VECTOR_PUSHN(wm->user_subgroups, 1, (&entry));
     if(grown == NULL){
         for(size_t i = 0; i < count; i++){
-            mc_free(wm->event_alloc, serials[i]);
+            mc_free(NULL, serials[i]);
         }
-        mc_free(wm->event_alloc, serials);
-        mc_free(wm->event_alloc, name);
+        mc_free(NULL, serials);
+        mc_free(NULL, name);
         return MCE_OUT_OF_MEMORY;
     }
     wm->user_subgroups = grown;
@@ -1282,21 +1374,34 @@ MC_Error mc_wm_push_user_event(MC_WMRef *ref, const MC_WMEvent *event){
 
     MC_WM *wm = wm_of(ref);
 
-    UserEventNode *node = NULL;
-    MC_RETURN_ERROR(mc_alloc(wm->event_alloc, sizeof(*node), (void**)&node));
+    if(wm->event_count >= wm->event_limit){
+        return MCE_OVERFLOW;
+    }
+
+    EventNode *node = NULL;
+    MC_RETURN_ERROR(mc_alloc(wm->event_alloc, sizeof(EventNode), (void**)&node));
 
     node->next = NULL;
     node->event = *event;
 
-    if(wm->user_event_queue_tail != NULL){
-        wm->user_event_queue_tail->next = node;
+    if(wm->pending_user_tail != NULL){
+        wm->pending_user_tail->next = node;
     }
     else{
-        wm->user_event_queue = node;
+        wm->pending_user = node;
     }
-    wm->user_event_queue_tail = node;
+    wm->pending_user_tail = node;
 
+    wm->event_count++;
     return MCE_OK;
+}
+
+void mc_wm_set_event_queue_limit(MC_WMRef *ref, size_t limit){
+    if(ref == NULL){
+        return;
+    }
+
+    wm_of(ref)->event_limit = limit;
 }
 
 const char *mc_wm_event_type_str(MC_WMRef *ref, MC_WMEventType type){
