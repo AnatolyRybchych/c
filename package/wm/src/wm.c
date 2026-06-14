@@ -45,6 +45,11 @@ typedef struct UserSubgroup{
 } UserSubgroup;
 MC_DEFINE_VECTOR(UserSubgroups, UserSubgroup);
 
+typedef struct UserEventNode{
+    struct UserEventNode *next;
+    MC_WMEvent event;
+} UserEventNode;
+
 typedef struct indicationNode indicationNode;
 
 typedef enum ReferenceType{
@@ -108,6 +113,8 @@ struct MC_WM{
     MC_Alloc *event_alloc;
     UserSubgroups *user_subgroups;
     uint16_t user_event_next;
+    UserEventNode *user_event_queue;
+    UserEventNode *user_event_queue_tail;
 
     MC_Arena *arena;
 
@@ -189,6 +196,8 @@ MC_Error mc_wm_init(MC_WM **ret_wm, const MC_WMVtab *vtab){
     wm->event_alloc = NULL;
     wm->user_subgroups = NULL;
     wm->user_event_next = 0;
+    wm->user_event_queue = NULL;
+    wm->user_event_queue_tail = NULL;
 
     MC_Error arena_status = mc_arena_init(&wm->arena, NULL);
     if(arena_status != MCE_OK){
@@ -265,6 +274,17 @@ static void wm_teardown(MC_WM *wm){
         mc_free(NULL, wm->event_subs);
         wm->event_subs = next;
     }
+
+    while(wm->user_event_queue != NULL){
+        UserEventNode *node = wm->user_event_queue;
+        wm->user_event_queue = node->next;
+        if(mc_wm_event_type_group(node->event.type) == MC_WME_GROUP_USER){
+            mc_json_delete(&node->event.as.user.data);
+        }
+
+        mc_free(wm->event_alloc, node);
+    }
+    wm->user_event_queue_tail = NULL;
 
     if(wm->user_subgroups != NULL){
         UserSubgroup *sg;
@@ -1034,6 +1054,18 @@ MC_Error mc_wm_poll_event(MC_WM *wm, MC_WMEvent *event){
     MC_WMVtab *v = &wm->vtab;
 
     for(;;){
+        if(wm->user_event_queue != NULL){
+            UserEventNode *node = wm->user_event_queue;
+            wm->user_event_queue = node->next;
+            if(wm->user_event_queue == NULL){
+                wm->user_event_queue_tail = NULL;
+            }
+
+            *event = node->event;
+            mc_free(wm->event_alloc, node);
+            return MCE_OK;
+        }
+
         while(wm->pending_indications){
             if(indication_category[wm->indications[0].type] & wm->events){
                 *event = translate_indication(wm);
@@ -1178,7 +1210,7 @@ MC_Error mc_wm_register_user_event(MC_WMRef *ref, const char *subgroup,
     MC_WM *wm = wm_of(ref);
 
     if((size_t)wm->user_event_next + count > (1u << MC_WME_GROUP_SHIFT)){
-        return MCE_INVALID_INPUT;
+        return MCE_OVERFLOW;
     }
 
     MC_WMEventType offset = (MC_WMEventType)(wm->user_event_next | (MC_WME_GROUP_USER << MC_WME_GROUP_SHIFT));
@@ -1240,6 +1272,30 @@ MC_Error mc_wm_user_event(MC_WMRef *ref, MC_WMEventType type, MC_WMEvent *out){
     *out = (MC_WMEvent){ .type = type };
     out->as.user.offset = sg->offset;
     out->as.user.data = data;
+    return MCE_OK;
+}
+
+MC_Error mc_wm_push_user_event(MC_WMRef *ref, const MC_WMEvent *event){
+    if(ref == NULL || event == NULL){
+        return MCE_INVALID_INPUT;
+    }
+
+    MC_WM *wm = wm_of(ref);
+
+    UserEventNode *node = NULL;
+    MC_RETURN_ERROR(mc_alloc(wm->event_alloc, sizeof(*node), (void**)&node));
+
+    node->next = NULL;
+    node->event = *event;
+
+    if(wm->user_event_queue_tail != NULL){
+        wm->user_event_queue_tail->next = node;
+    }
+    else{
+        wm->user_event_queue = node;
+    }
+    wm->user_event_queue_tail = node;
+
     return MCE_OK;
 }
 

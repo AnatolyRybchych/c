@@ -98,6 +98,7 @@ MC_Alloc *mc_wm_event_allocator(MC_WMRef *wm);
 MC_Error mc_wm_register_user_event(MC_WMRef *wm, const char *subgroup,
     const MC_WMUserEventDef *events, size_t count, MC_WMEventType *out_offset);
 MC_Error mc_wm_user_event(MC_WMRef *wm, MC_WMEventType type, MC_WMEvent *out);
+MC_Error mc_wm_push_user_event(MC_WMRef *wm, const MC_WMEvent *event);
 const char *mc_wm_event_type_str(MC_WMRef *wm, MC_WMEventType type);
 MC_WMEventType mc_wm_event_type_from_str(MC_WMRef *wm, const char *name);
 
