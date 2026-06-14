@@ -573,7 +573,7 @@ static int event_window_index(lua_State *L){
 
 static void push_event(lua_State *L, MC_WMRef *wm, const MC_WMEvent *event){
     MC_Json *json = NULL;
-    if(mc_wm_event_to_json(NULL, event, &json) != MCE_OK){
+    if(mc_wm_event_to_json(wm, NULL, event, &json) != MCE_OK){
         lua_newtable(L);
         return;
     }
@@ -646,7 +646,7 @@ static int wm_on_event(lua_State *L){
     MC_WMEventMatch match = { .type = MC_WME_NONE };
     if(!lua_isnoneornil(L, 2)){
         const char *name = luaL_checkstring(L, 2);
-        match.type = mc_wm_event_type_from_str(name);
+        match.type = mc_wm_event_type_from_str(lwm->wm, name);
         if(match.type == MC_WME_NONE){
             return luaL_error(L, "mc.wm: unknown event type '%s'", name);
         }
