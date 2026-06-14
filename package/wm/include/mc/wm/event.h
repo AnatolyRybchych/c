@@ -26,16 +26,16 @@
     MC_EVENT(MOUSE_ENTER,) \
     MC_EVENT(MOUSE_LEAVE,) \
     MC_EVENT(MOUSE_WHEEL,) \
-    MC_EVENT(KEY_DOWN,                  USE_ALL) \
-    MC_EVENT(KEY_UP,                    USE_ALL) \
-    MC_EVENT(TEXT_INPUT,                USE_ALL) \
-    MC_EVENT(PASTE_TEXT,                USE_ALL) \
-    MC_EVENT(GLOBAL_KEY_DOWN,           USE_ALL) \
-    MC_EVENT(GLOBAL_KEY_UP,             USE_ALL) \
-    MC_EVENT(GLOBAL_MOUSE_MOVED,        USE_ALL) \
-    MC_EVENT(GLOBAL_MOUSE_DOWN,         USE_ALL) \
-    MC_EVENT(GLOBAL_MOUSE_UP,           USE_ALL) \
-    MC_EVENT(GLOBAL_MOUSE_WHEEL,        USE_ALL) \
+    MC_EVENT(KEY_DOWN,) \
+    MC_EVENT(KEY_UP,) \
+    MC_EVENT(TEXT_INPUT,) \
+    MC_EVENT(PASTE_TEXT,) \
+    MC_EVENT(GLOBAL_KEY_DOWN,) \
+    MC_EVENT(GLOBAL_KEY_UP,) \
+    MC_EVENT(GLOBAL_MOUSE_MOVED,) \
+    MC_EVENT(GLOBAL_MOUSE_DOWN,) \
+    MC_EVENT(GLOBAL_MOUSE_UP,) \
+    MC_EVENT(GLOBAL_MOUSE_WHEEL,) \
 
 typedef unsigned MC_WMEventType;
 enum MC_WMEventType{
