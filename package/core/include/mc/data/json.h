@@ -75,6 +75,19 @@ int64_t mc_json_as_i64(MC_Json *json);
 uint64_t mc_json_as_u64(MC_Json *json);
 double mc_json_as_f64(MC_Json *json);
 
+MC_Error mc_json_object_get(MC_Json *json, const char *key, MC_Json **out);
+MC_Error mc_json_object_bool(MC_Json *json, const char *key, bool *out);
+MC_Error mc_json_object_i64(MC_Json *json, const char *key, int64_t *out);
+MC_Error mc_json_object_u64(MC_Json *json, const char *key, uint64_t *out);
+MC_Error mc_json_object_f64(MC_Json *json, const char *key, double *out);
+MC_Error mc_json_object_number(MC_Json *json, const char *key, double *out);
+MC_Error mc_json_object_str(MC_Json *json, const char *key, MC_Str *out);
+
+bool mc_json_object_as_bool(MC_Json *json, const char *key);
+int64_t mc_json_object_as_i64(MC_Json *json, const char *key);
+uint64_t mc_json_object_as_u64(MC_Json *json, const char *key);
+double mc_json_object_as_f64(MC_Json *json, const char *key);
+
 MC_Error mc_json_dump(MC_Json *json, MC_Stream *out);
 MC_Error mc_json_loads(MC_Alloc *alloc, MC_Json **json, MC_Str str);
 
