@@ -39,13 +39,16 @@
 MC_DEFINE_VECTOR(Windows, MC_WMWindow*);
 MC_DEFINE_VECTOR(ForeignWindows, MC_ForeignWindow*);
 
-typedef struct UserSubgroup{
+typedef struct EventGroup{
     MC_WMEventType offset;
+    size_t size;
+    size_t reserve;
     MC_String *name;
-    MC_String **serials;
-    size_t count;
-} UserSubgroup;
-MC_DEFINE_VECTOR(UserSubgroups, UserSubgroup);
+    MC_WMEventDefinition *events;
+    MC_Error (*to_json)(MC_Alloc *alloc, const MC_WMEvent *event, MC_Json *json);
+    MC_Error (*from_json)(MC_Alloc *alloc, const MC_Json *json, MC_WMEvent *event);
+} EventGroup;
+MC_DEFINE_VECTOR(EventGroups, EventGroup);
 
 typedef struct EventNode{
     struct EventNode *next;
@@ -122,8 +125,8 @@ struct MC_WM{
     size_t event_count;
     size_t event_limit;
 
-    UserSubgroups *user_subgroups;
-    uint16_t user_event_next;
+    EventGroups *event_groups;
+    MC_WMEventType event_next;
 
     MC_Arena *arena;
 
@@ -228,6 +231,20 @@ MC_Error mc_wm_init(MC_WM **ret_wm, const MC_WMVtab *vtab){
         return init_status;
     }
 
+    extern const MC_WMEventGroupDef *mc_wm_builtin_group_def(void);
+    MC_WMEventType builtin_offset;
+    MC_Error group_status = mc_wm_register_event_group(&wm->ref, mc_wm_builtin_group_def(), &builtin_offset);
+    if(group_status != MCE_OK){
+        if(wm->vtab.destroy){
+            wm->vtab.destroy(wm->target);
+        }
+        mc_arena_destroy(wm->arena);
+        mc_dbarena_destroy(wm->event_arena);
+        mc_free(NULL, wm->target_event);
+        mc_free(NULL, wm);
+        return group_status;
+    }
+
     wm->ref.refcount = 1;
     wm->is_alive = true;
 
@@ -289,17 +306,17 @@ static void wm_teardown(MC_WM *wm){
         wm->event_subs = next;
     }
 
-    if(wm->user_subgroups != NULL){
-        UserSubgroup *sg;
-        MC_VECTOR_EACH(wm->user_subgroups, sg){
-            for(size_t i = 0; i < sg->count; i++){
-                mc_free(NULL, sg->serials[i]);
+    if(wm->event_groups != NULL){
+        EventGroup *g;
+        MC_VECTOR_EACH(wm->event_groups, g){
+            for(size_t i = 0; i < g->size; i++){
+                mc_free(NULL, (void*)g->events[i].name);
             }
-            mc_free(NULL, sg->serials);
-            mc_free(NULL, sg->name);
+            mc_free(NULL, g->events);
+            mc_free(NULL, g->name);
         }
-        MC_VECTOR_FREE(wm->user_subgroups);
-        wm->user_subgroups = NULL;
+        MC_VECTOR_FREE(wm->event_groups);
+        wm->event_groups = NULL;
     }
 
     if(wm->vtab.destroy){
@@ -1271,9 +1288,6 @@ void mc_wm_dispatch_event_callbacks(MC_WMRef *ref, const MC_WMEvent *event){
     }
 }
 
-extern inline const char *mc_wm_event_type_str_static(MC_WMEventType type);
-extern inline MC_WMEventType mc_wm_event_type_from_str_static(const char *name);
-
 MC_Alloc *mc_wm_event_allocator(MC_WMRef *ref){
     if(ref == NULL){
         return NULL;
@@ -1282,79 +1296,117 @@ MC_Alloc *mc_wm_event_allocator(MC_WMRef *ref){
     return wm_of(ref)->event_alloc;
 }
 
-static UserSubgroup *find_user_subgroup(MC_WM *wm, MC_WMEventType type){
-    UserSubgroup *sg;
-    MC_VECTOR_EACH(wm->user_subgroups, sg){
-        if(type >= sg->offset && (size_t)(type - sg->offset) < sg->count){
-            return sg;
+static EventGroup *find_group(MC_WM *wm, MC_WMEventType type){
+    EventGroup *g;
+    MC_VECTOR_EACH(wm->event_groups, g){
+        if(type >= g->offset && (size_t)(type - g->offset) < g->size){
+            return g;
         }
     }
 
     return NULL;
 }
 
-MC_Error mc_wm_register_user_event(MC_WMRef *ref, const char *subgroup,
-        const MC_WMUserEventDef *events, size_t count, MC_WMEventType *out_offset){
-    if(ref == NULL || subgroup == NULL || events == NULL || count == 0 || out_offset == NULL){
+static EventGroup *find_group_by_name(MC_WM *wm, const char *name){
+    EventGroup *g;
+    MC_VECTOR_EACH(wm->event_groups, g){
+        if(strcmp(g->name->data, name) == 0){
+            return g;
+        }
+    }
+
+    return NULL;
+}
+
+MC_Error mc_wm_register_event_group(MC_WMRef *ref, const MC_WMEventGroupDef *def, MC_WMEventType *out_offset){
+    if(ref == NULL || def == NULL || def->name == NULL || def->events == NULL || def->size == 0 || out_offset == NULL){
         return MCE_INVALID_INPUT;
     }
 
     MC_WM *wm = wm_of(ref);
 
-    if((size_t)wm->user_event_next + count > (1u << MC_WME_GROUP_SHIFT)){
+    size_t total = def->size + def->reserve;
+    if((size_t)wm->event_next + total > 0xFFFF){
         return MCE_OVERFLOW;
     }
 
-    MC_WMEventType offset = (MC_WMEventType)(wm->user_event_next | (MC_WME_GROUP_USER << MC_WME_GROUP_SHIFT));
+    if(find_group_by_name(wm, def->name) != NULL){
+        return MCE_INVALID_INPUT;
+    }
+
+    MC_WMEventType offset = wm->event_next;
 
     MC_String *name = NULL;
-    MC_RETURN_ERROR(mc_string_fmt(NULL, &name, "%s", subgroup));
+    MC_RETURN_ERROR(mc_string_fmt(NULL, &name, "%s", def->name));
 
-    MC_String **serials = NULL;
-    MC_Error status = mc_alloc(NULL, count * sizeof(MC_String*), (void**)&serials);
+    MC_WMEventDefinition *events = NULL;
+    MC_Error status = mc_alloc(NULL, def->size * sizeof(MC_WMEventDefinition), (void**)&events);
     if(status != MCE_OK){
         mc_free(NULL, name);
         return status;
     }
 
-    for(size_t i = 0; i < count; i++){
-        status = mc_string_fmt(NULL, &serials[i], "USER.%s.%s", subgroup, events[i].name);
+    size_t group_len = strlen(def->name);
+    for(size_t i = 0; i < def->size; i++){
+        size_t event_len = strlen(def->events[i].name);
+        char *serial = NULL;
+        status = mc_alloc(NULL, group_len + 1 + event_len + 1, (void**)&serial);
         if(status != MCE_OK){
             for(size_t j = 0; j < i; j++){
-                mc_free(NULL, serials[j]);
+                mc_free(NULL, (void*)events[j].name);
             }
-            mc_free(NULL, serials);
+            mc_free(NULL, events);
             mc_free(NULL, name);
             return status;
         }
+
+        memcpy(serial, def->name, group_len);
+        serial[group_len] = '.';
+        memcpy(serial + group_len + 1, def->events[i].name, event_len);
+        serial[group_len + 1 + event_len] = '\0';
+
+        events[i] = def->events[i];
+        events[i].name = serial;
     }
 
-    UserSubgroup entry = { .offset = offset, .name = name, .serials = serials, .count = count };
-    UserSubgroups *grown = MC_VECTOR_PUSHN(wm->user_subgroups, 1, (&entry));
+    EventGroup entry = {
+        .offset = offset, .size = def->size, .reserve = def->reserve,
+        .name = name, .events = events,
+        .to_json = def->to_json, .from_json = def->from_json,
+    };
+    EventGroups *grown = MC_VECTOR_PUSHN(wm->event_groups, 1, (&entry));
     if(grown == NULL){
-        for(size_t i = 0; i < count; i++){
-            mc_free(NULL, serials[i]);
+        for(size_t i = 0; i < def->size; i++){
+            mc_free(NULL, (void*)events[i].name);
         }
-        mc_free(NULL, serials);
+        mc_free(NULL, events);
         mc_free(NULL, name);
         return MCE_OUT_OF_MEMORY;
     }
-    wm->user_subgroups = grown;
-    wm->user_event_next += (uint16_t)count;
+    wm->event_groups = grown;
+    wm->event_next = (MC_WMEventType)(offset + total);
 
     *out_offset = offset;
     return MCE_OK;
 }
 
-MC_Error mc_wm_user_event(MC_WMRef *ref, MC_WMEventType type, MC_WMEvent *out){
+MC_WMEventType mc_wm_event_group_offset(MC_WMRef *ref, const char *group){
+    if(ref == NULL || group == NULL){
+        return MC_WME_NONE;
+    }
+
+    EventGroup *g = find_group_by_name(wm_of(ref), group);
+    return g != NULL ? g->offset : MC_WME_NONE;
+}
+
+MC_Error mc_wm_event(MC_WMRef *ref, MC_WMEventType type, MC_WMEvent *out){
     if(ref == NULL || out == NULL){
         return MCE_INVALID_INPUT;
     }
 
     MC_WM *wm = wm_of(ref);
 
-    UserSubgroup *sg = find_user_subgroup(wm, type);
-    if(sg == NULL){
+    if(find_group(wm, type) == NULL){
         return MCE_NOT_FOUND;
     }
 
@@ -1362,12 +1414,11 @@ MC_Error mc_wm_user_event(MC_WMRef *ref, MC_WMEventType type, MC_WMEvent *out){
     MC_RETURN_ERROR(mc_json_new(wm->event_alloc, &data));
 
     *out = (MC_WMEvent){ .type = type };
-    out->as.user.offset = sg->offset;
-    out->as.user.data = data;
+    out->as.raw = data;
     return MCE_OK;
 }
 
-MC_Error mc_wm_push_user_event(MC_WMRef *ref, const MC_WMEvent *event){
+MC_Error mc_wm_push_event(MC_WMRef *ref, const MC_WMEvent *event){
     if(ref == NULL || event == NULL){
         return MCE_INVALID_INPUT;
     }
@@ -1405,40 +1456,119 @@ void mc_wm_set_event_queue_limit(MC_WMRef *ref, size_t limit){
 }
 
 const char *mc_wm_event_type_str(MC_WMRef *ref, MC_WMEventType type){
-    if(ref != NULL && mc_wm_event_type_group(type) == MC_WME_GROUP_USER){
-        MC_WM *wm = wm_of(ref);
-        UserSubgroup *sg = find_user_subgroup(wm, type);
-        if(sg != NULL){
-            return sg->serials[type - sg->offset]->data;
-        }
+    if(ref == NULL){
+        return NULL;
     }
 
-    return mc_wm_event_type_str_static(type);
+    EventGroup *g = find_group(wm_of(ref), type);
+    return g != NULL ? g->events[type - g->offset].name : NULL;
 }
 
 MC_WMEventType mc_wm_event_type_from_str(MC_WMRef *ref, const char *name){
-    if(name == NULL){
+    if(ref == NULL || name == NULL){
         return MC_WME_NONE;
     }
 
-    MC_WMEventType type = mc_wm_event_type_from_str_static(name);
-    if(type != MC_WME_NONE){
-        return type;
-    }
-
-    if(ref != NULL){
-        MC_WM *wm = wm_of(ref);
-        UserSubgroup *sg;
-        MC_VECTOR_EACH(wm->user_subgroups, sg){
-            for(size_t i = 0; i < sg->count; i++){
-                if(strcmp(sg->serials[i]->data, name) == 0){
-                    return (MC_WMEventType)(sg->offset + i);
-                }
+    MC_WM *wm = wm_of(ref);
+    EventGroup *g;
+    MC_VECTOR_EACH(wm->event_groups, g){
+        for(size_t i = 0; i < g->size; i++){
+            if(strcmp(g->events[i].name, name) == 0){
+                return (MC_WMEventType)(g->offset + i);
             }
         }
     }
 
     return MC_WME_NONE;
+}
+
+static MC_Json *json_field(const MC_Json *json, const char *key){
+    size_t n = mc_json_length((MC_Json*)json);
+    size_t key_len = strlen(key);
+    for(size_t i = 0; i < n; i++){
+        MC_Str k;
+        MC_Json *v;
+        if(mc_json_object_at((MC_Json*)json, i, &k, &v) != MCE_OK){
+            continue;
+        }
+
+        if((size_t)MC_STR_LEN(k) == key_len && memcmp(k.beg, key, key_len) == 0){
+            return v;
+        }
+    }
+
+    return NULL;
+}
+
+MC_Error mc_wm_event_to_json(MC_WMRef *ref, const MC_WMEvent *event, MC_Json *out){
+    if(event == NULL || out == NULL){
+        return MCE_INVALID_INPUT;
+    }
+
+    MC_RETURN_ERROR(mc_json_set_object(out));
+
+    const char *type_name = mc_wm_event_type_str(ref, event->type);
+    MC_RETURN_ERROR(mc_json_object_add_str(out, mc_strc(type_name != NULL ? type_name : "UNKNOWN"), "type"));
+
+    EventGroup *g = ref != NULL ? find_group(wm_of(ref), event->type) : NULL;
+
+    if(g != NULL && g->to_json != NULL){
+        return g->to_json(NULL, event, out);
+    }
+
+    if(event->as.raw != NULL){
+        MC_Json *data;
+        MC_RETURN_ERROR(mc_json_object_add_new(out, &data, "data"));
+        return mc_json_copy(data, (MC_Json*)event->as.raw);
+    }
+
+    return MCE_OK;
+}
+
+MC_Error mc_wm_event_from_json(MC_WMRef *ref, MC_Alloc *alloc, const MC_Json *json, MC_WMEvent *out){
+    if(ref == NULL || json == NULL || out == NULL){
+        return MCE_INVALID_INPUT;
+    }
+
+    MC_Json *type_node = json_field(json, "type");
+    MC_Str type_str;
+    if(type_node == NULL || mc_json_str(type_node, &type_str) != MCE_OK){
+        return MCE_INVALID_INPUT;
+    }
+
+    char buf[128];
+    size_t len = (size_t)MC_STR_LEN(type_str);
+    if(len >= sizeof(buf)){
+        return MCE_INVALID_INPUT;
+    }
+    memcpy(buf, type_str.beg, len);
+    buf[len] = '\0';
+
+    MC_WMEventType type = mc_wm_event_type_from_str(ref, buf);
+    if(type == MC_WME_NONE){
+        return MCE_NOT_FOUND;
+    }
+
+    *out = (MC_WMEvent){ .type = type };
+
+    EventGroup *g = find_group(wm_of(ref), type);
+    if(g != NULL && g->from_json != NULL){
+        return g->from_json(alloc, json, out);
+    }
+
+    MC_Json *data;
+    MC_RETURN_ERROR(mc_json_new(alloc, &data));
+    MC_Json *data_node = json_field(json, "data");
+    if(data_node != NULL){
+        MC_Error e = mc_json_copy(data, data_node);
+        if(e != MCE_OK){
+            mc_json_delete(&data);
+            return e;
+        }
+    }
+    out->as.raw = data;
+
+    return MCE_OK;
 }
 
 static void dump_vtable(MC_WM *wm){
@@ -1535,7 +1665,7 @@ static MC_WMEvent translate_indication(MC_WM *wm){
         return (MC_WMEvent){
             .type = MC_WME_WINDOW_READY,
             .as.window_ready = {
-                .base.window = window_identity(window),
+                .window = window_identity(window),
             }
         };
     case MC_WMIND_WINDOW_MOVED:
@@ -1544,7 +1674,7 @@ static MC_WMEvent translate_indication(MC_WM *wm){
         return (MC_WMEvent){
             .type = MC_WME_WINDOW_MOVED,
             .as.window_moved = {
-                .base.window = window_identity(window),
+                .window = window_identity(window),
                 .new_position = ind.as.window_moved.new_position,
             }
         };
@@ -1554,7 +1684,7 @@ static MC_WMEvent translate_indication(MC_WM *wm){
         return (MC_WMEvent){
             .type = MC_WME_WINDOW_RESIZED,
             .as.window_resized = {
-                .base.window = window_identity(window),
+                .window = window_identity(window),
                 .new_size = ind.as.window_resized.new_size,
             }
         };
@@ -1564,7 +1694,7 @@ static MC_WMEvent translate_indication(MC_WM *wm){
         return (MC_WMEvent){
             .type = MC_WME_WINDOW_REDRAW_REQUESTED,
             .as.redraw_requested = {
-                .base.window = window_identity(window),
+                .window = window_identity(window),
             }
         };
     case MC_WMIND_WINDOW_CLOSE_REQUESTED:
@@ -1573,7 +1703,7 @@ static MC_WMEvent translate_indication(MC_WM *wm){
         return (MC_WMEvent){
             .type = MC_WME_WINDOW_CLOSE_REQUESTED,
             .as.window_close_requested = {
-                .base.window = window_identity(window),
+                .window = window_identity(window),
             }
         };
     case MC_WMIND_WINDOW_STATE_CHANGED:
@@ -1583,7 +1713,7 @@ static MC_WMEvent translate_indication(MC_WM *wm){
         return (MC_WMEvent){
             .type = MC_WME_WINDOW_STATE_CHANGED,
             .as.window_state_changed = {
-                .base.window = window_identity(window),
+                .window = window_identity(window),
                 .state = ind.as.window_state_changed.state,
             }
         };
@@ -1593,7 +1723,7 @@ static MC_WMEvent translate_indication(MC_WM *wm){
         return (MC_WMEvent){
             .type = MC_WME_FOCUS_GAINED,
             .as.focus_gained = {
-                .base.window = window_identity(window),
+                .window = window_identity(window),
             }
         };
     case MC_WMIND_FOCUS_LOST:
@@ -1602,7 +1732,7 @@ static MC_WMEvent translate_indication(MC_WM *wm){
         return (MC_WMEvent){
             .type = MC_WME_FOCUS_LOST,
             .as.focus_lost = {
-                .base.window = window_identity(window),
+                .window = window_identity(window),
             }
         };
     case MC_WMIND_MOUSE_DOWN:
@@ -1611,7 +1741,7 @@ static MC_WMEvent translate_indication(MC_WM *wm){
         return (MC_WMEvent){
             .type = MC_WME_MOUSE_DOWN,
             .as.mouse_down = {
-                .base.window = window_identity(window),
+                .window = window_identity(window),
                 .button = ind.as.mouse_down.button,
                 .position = window->cached.mouse_pos,
             }
@@ -1622,7 +1752,7 @@ static MC_WMEvent translate_indication(MC_WM *wm){
         return (MC_WMEvent){
             .type = MC_WME_MOUSE_UP,
             .as.mouse_up = {
-                .base.window = window_identity(window),
+                .window = window_identity(window),
                 .button = ind.as.mouse_up.button,
                 .position = window->cached.mouse_pos,
             }
@@ -1634,7 +1764,7 @@ static MC_WMEvent translate_indication(MC_WM *wm){
         return (MC_WMEvent){
             .type = MC_WME_MOUSE_MOVED,
             .as.mouse_moved = {
-                .base.window = window_identity(window),
+                .window = window_identity(window),
                 .position = ind.as.mouse_moved.position,
             }
         };
@@ -1645,7 +1775,7 @@ static MC_WMEvent translate_indication(MC_WM *wm){
         return (MC_WMEvent){
             .type = MC_WME_MOUSE_ENTER,
             .as.mouse_enter = {
-                .base.window = window_identity(window),
+                .window = window_identity(window),
                 .position = window->cached.mouse_pos,
             }
         };
@@ -1656,7 +1786,7 @@ static MC_WMEvent translate_indication(MC_WM *wm){
         return (MC_WMEvent){
             .type = MC_WME_MOUSE_LEAVE,
             .as.mouse_enter = {
-                .base.window = window_identity(window),
+                .window = window_identity(window),
                 .position = window->cached.mouse_pos,
             }
         };
@@ -1664,7 +1794,7 @@ static MC_WMEvent translate_indication(MC_WM *wm){
         return (MC_WMEvent){
             .type = MC_WME_KEY_DOWN,
             .as.key_down = {
-                .base.window = 0,
+                .window = 0,
                 .key = ind.as.key_down.key,
             }
         };
@@ -1672,7 +1802,7 @@ static MC_WMEvent translate_indication(MC_WM *wm){
         return (MC_WMEvent){
             .type = MC_WME_KEY_UP,
             .as.key_up = {
-                .base.window = 0,
+                .window = 0,
                 .key = ind.as.key_up.key,
             }
         };
@@ -1683,7 +1813,7 @@ static MC_WMEvent translate_indication(MC_WM *wm){
             MC_WMEvent event = {
                 .type = MC_WME_TEXT_INPUT,
                 .as.text_input = {
-                    .base.window = window_identity(window),
+                    .window = window_identity(window),
                 }
             };
 
@@ -1697,7 +1827,7 @@ static MC_WMEvent translate_indication(MC_WM *wm){
         return (MC_WMEvent){
             .type = MC_WME_PASTE_TEXT,
             .as.paste_text = {
-                .base.window = window_identity(window),
+                .window = window_identity(window),
                 .text = ind.as.paste_text.text,
             }
         };
