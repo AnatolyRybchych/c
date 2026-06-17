@@ -142,27 +142,9 @@ static MC_Error wm_group_to_json(MC_Alloc *alloc, const MC_WMEvent *event, MC_Js
     return event_fields(json, event);
 }
 
-static MC_Json *field(const MC_Json *json, const char *key){
-    size_t n = mc_json_length((MC_Json*)json);
-    size_t key_len = strlen(key);
-    for(size_t i = 0; i < n; i++){
-        MC_Str k;
-        MC_Json *v;
-        if(mc_json_object_at((MC_Json*)json, i, &k, &v) != MCE_OK){
-            continue;
-        }
-
-        if((size_t)MC_STR_LEN(k) == key_len && memcmp(k.beg, key, key_len) == 0){
-            return v;
-        }
-    }
-
-    return NULL;
-}
-
 static MC_Vec2i read_pos(MC_Json *node){
-    MC_Json *x = node != NULL ? field(node, "x") : NULL;
-    MC_Json *y = node != NULL ? field(node, "y") : NULL;
+    MC_Json *x = node != NULL ? mc_json_field(node, "x") : NULL;
+    MC_Json *y = node != NULL ? mc_json_field(node, "y") : NULL;
     return (MC_Vec2i){
         .x = x != NULL ? (int)mc_json_as_i64(x) : 0,
         .y = y != NULL ? (int)mc_json_as_i64(y) : 0,
@@ -170,8 +152,8 @@ static MC_Vec2i read_pos(MC_Json *node){
 }
 
 static MC_Size2U read_size(MC_Json *node){
-    MC_Json *w = node != NULL ? field(node, "width") : NULL;
-    MC_Json *h = node != NULL ? field(node, "height") : NULL;
+    MC_Json *w = node != NULL ? mc_json_field(node, "width") : NULL;
+    MC_Json *h = node != NULL ? mc_json_field(node, "height") : NULL;
     return (MC_Size2U){
         .width = w != NULL ? (unsigned)mc_json_as_u64(w) : 0,
         .height = h != NULL ? (unsigned)mc_json_as_u64(h) : 0,
@@ -179,19 +161,19 @@ static MC_Size2U read_size(MC_Json *node){
 }
 
 static MC_Key read_key(const MC_Json *json){
-    MC_Json *k = field(json, "key");
+    MC_Json *k = mc_json_field(json, "key");
     MC_Str s;
     return (k != NULL && mc_json_str(k, &s) == MCE_OK) ? mc_key_from_str(s) : MC_KEY_UNKNOWN;
 }
 
 static MC_MouseButton read_button(const MC_Json *json){
-    MC_Json *b = field(json, "button");
+    MC_Json *b = mc_json_field(json, "button");
     MC_Str s;
     return (b != NULL && mc_json_str(b, &s) == MCE_OK) ? parse_button(s) : MC_MOUSE_UNKNOWN;
 }
 
 static void read_window(const MC_Json *json, MC_WMEvent *event){
-    MC_Json *w = field(json, "window");
+    MC_Json *w = mc_json_field(json, "window");
     if(w != NULL){
         event->as.window = mc_json_as_u64(w);
     }
@@ -209,15 +191,15 @@ static MC_Error wm_group_from_json(MC_Alloc *alloc, const MC_Json *json, MC_WMEv
         break;
     case MC_WME_WINDOW_RESIZED:
         read_window(json, event);
-        event->as.window_resized.new_size = read_size(field(json, "new_size"));
+        event->as.window_resized.new_size = read_size(mc_json_field(json, "new_size"));
         break;
     case MC_WME_WINDOW_MOVED:
         read_window(json, event);
-        event->as.window_moved.new_position = read_pos(field(json, "new_position"));
+        event->as.window_moved.new_position = read_pos(mc_json_field(json, "new_position"));
         break;
     case MC_WME_WINDOW_STATE_CHANGED:{
         read_window(json, event);
-        MC_Json *s = field(json, "state");
+        MC_Json *s = mc_json_field(json, "state");
         MC_Str ss;
         if(s != NULL && mc_json_str(s, &ss) == MCE_OK){
             event->as.window_state_changed.state = parse_state(ss);
@@ -226,31 +208,31 @@ static MC_Error wm_group_from_json(MC_Alloc *alloc, const MC_Json *json, MC_WMEv
     }
     case MC_WME_MOUSE_MOVED:
         read_window(json, event);
-        event->as.mouse_moved.position = read_pos(field(json, "position"));
+        event->as.mouse_moved.position = read_pos(mc_json_field(json, "position"));
         break;
     case MC_WME_MOUSE_DOWN:
         read_window(json, event);
-        event->as.mouse_down.position = read_pos(field(json, "position"));
+        event->as.mouse_down.position = read_pos(mc_json_field(json, "position"));
         event->as.mouse_down.button = read_button(json);
         break;
     case MC_WME_MOUSE_UP:
         read_window(json, event);
-        event->as.mouse_up.position = read_pos(field(json, "position"));
+        event->as.mouse_up.position = read_pos(mc_json_field(json, "position"));
         event->as.mouse_up.button = read_button(json);
         break;
     case MC_WME_MOUSE_ENTER:
         read_window(json, event);
-        event->as.mouse_enter.position = read_pos(field(json, "position"));
+        event->as.mouse_enter.position = read_pos(mc_json_field(json, "position"));
         break;
     case MC_WME_MOUSE_LEAVE:
         read_window(json, event);
-        event->as.mouse_leave.position = read_pos(field(json, "position"));
+        event->as.mouse_leave.position = read_pos(mc_json_field(json, "position"));
         break;
     case MC_WME_MOUSE_WHEEL:
         read_window(json, event);
-        event->as.mouse_wheel.position = read_pos(field(json, "position"));
-        event->as.mouse_wheel.up = (int)mc_json_as_i64(field(json, "up"));
-        event->as.mouse_wheel.right = (int)mc_json_as_i64(field(json, "right"));
+        event->as.mouse_wheel.position = read_pos(mc_json_field(json, "position"));
+        event->as.mouse_wheel.up = (int)mc_json_as_i64(mc_json_field(json, "up"));
+        event->as.mouse_wheel.right = (int)mc_json_as_i64(mc_json_field(json, "right"));
         break;
     case MC_WME_KEY_DOWN:
         read_window(json, event);
@@ -262,7 +244,7 @@ static MC_Error wm_group_from_json(MC_Alloc *alloc, const MC_Json *json, MC_WMEv
         break;
     case MC_WME_TEXT_INPUT:{
         read_window(json, event);
-        MC_Json *t = field(json, "text");
+        MC_Json *t = mc_json_field(json, "text");
         MC_Str ts;
         if(t != NULL && mc_json_str(t, &ts) == MCE_OK){
             size_t len = (size_t)MC_STR_LEN(ts);
@@ -276,7 +258,7 @@ static MC_Error wm_group_from_json(MC_Alloc *alloc, const MC_Json *json, MC_WMEv
     }
     case MC_WME_PASTE_TEXT:{
         read_window(json, event);
-        MC_Json *t = field(json, "text");
+        MC_Json *t = mc_json_field(json, "text");
         MC_Str ts;
         event->as.paste_text.text = MC_STR(NULL, NULL);
         if(t != NULL && mc_json_str(t, &ts) == MCE_OK){
@@ -296,20 +278,20 @@ static MC_Error wm_group_from_json(MC_Alloc *alloc, const MC_Json *json, MC_WMEv
         event->as.global_key_up.key = read_key(json);
         break;
     case MC_WME_GLOBAL_MOUSE_MOVED:
-        event->as.global_mouse_moved.position = read_pos(field(json, "position"));
+        event->as.global_mouse_moved.position = read_pos(mc_json_field(json, "position"));
         break;
     case MC_WME_GLOBAL_MOUSE_DOWN:
-        event->as.global_mouse_down.position = read_pos(field(json, "position"));
+        event->as.global_mouse_down.position = read_pos(mc_json_field(json, "position"));
         event->as.global_mouse_down.button = read_button(json);
         break;
     case MC_WME_GLOBAL_MOUSE_UP:
-        event->as.global_mouse_up.position = read_pos(field(json, "position"));
+        event->as.global_mouse_up.position = read_pos(mc_json_field(json, "position"));
         event->as.global_mouse_up.button = read_button(json);
         break;
     case MC_WME_GLOBAL_MOUSE_WHEEL:
-        event->as.global_mouse_wheel.position = read_pos(field(json, "position"));
-        event->as.global_mouse_wheel.up = (int)mc_json_as_i64(field(json, "up"));
-        event->as.global_mouse_wheel.right = (int)mc_json_as_i64(field(json, "right"));
+        event->as.global_mouse_wheel.position = read_pos(mc_json_field(json, "position"));
+        event->as.global_mouse_wheel.up = (int)mc_json_as_i64(mc_json_field(json, "up"));
+        event->as.global_mouse_wheel.right = (int)mc_json_as_i64(mc_json_field(json, "right"));
         break;
     default:
         break;
