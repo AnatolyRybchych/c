@@ -273,17 +273,18 @@ uint64_t mc_json_as_u64(MC_Json *json){
     return isnan(value) ? 0 : (uint64_t)value;
 }
 
-static MC_Json *find_value(MC_Json *json, const char *key){
-    if(key == NULL || mc_json_type(json) != MC_JSON_OBJECT || json->as.kv_arr == NULL){
-        return NULL;
-    }
-
+MC_Json *mc_json_field(const MC_Json *json, const char *key){
+    size_t n = mc_json_length((MC_Json*)json);
     size_t key_len = strlen(key);
-    for(size_t i = 0; i < json->as.kv_arr->size; i++){
-        struct Kv *kv = &json->as.kv_arr->kvs[i];
-        MC_Str k = mc_string_str(kv->key);
+    for(size_t i = 0; i < n; i++){
+        MC_Str k;
+        MC_Json *v;
+        if(mc_json_object_at((MC_Json*)json, i, &k, &v) != MCE_OK){
+            continue;
+        }
+
         if((size_t)MC_STR_LEN(k) == key_len && memcmp(k.beg, key, key_len) == 0){
-            return kv->value;
+            return v;
         }
     }
 
@@ -293,7 +294,7 @@ static MC_Json *find_value(MC_Json *json, const char *key){
 MC_Error mc_json_object_get(MC_Json *json, const char *key, MC_Json **out){
     MC_RETURN_INVALID(out == NULL);
 
-    MC_Json *value = find_value(json, key);
+    MC_Json *value = mc_json_field(json, key);
     if(value == NULL){
         return MCE_NOT_FOUND;
     }
@@ -303,52 +304,52 @@ MC_Error mc_json_object_get(MC_Json *json, const char *key, MC_Json **out){
 }
 
 MC_Error mc_json_object_bool(MC_Json *json, const char *key, bool *out){
-    MC_Json *value = find_value(json, key);
+    MC_Json *value = mc_json_field(json, key);
     return value != NULL ? mc_json_bool(value, out) : MCE_NOT_FOUND;
 }
 
 MC_Error mc_json_object_i64(MC_Json *json, const char *key, int64_t *out){
-    MC_Json *value = find_value(json, key);
+    MC_Json *value = mc_json_field(json, key);
     return value != NULL ? mc_json_i64(value, out) : MCE_NOT_FOUND;
 }
 
 MC_Error mc_json_object_u64(MC_Json *json, const char *key, uint64_t *out){
-    MC_Json *value = find_value(json, key);
+    MC_Json *value = mc_json_field(json, key);
     return value != NULL ? mc_json_u64(value, out) : MCE_NOT_FOUND;
 }
 
 MC_Error mc_json_object_f64(MC_Json *json, const char *key, double *out){
-    MC_Json *value = find_value(json, key);
+    MC_Json *value = mc_json_field(json, key);
     return value != NULL ? mc_json_f64(value, out) : MCE_NOT_FOUND;
 }
 
 MC_Error mc_json_object_number(MC_Json *json, const char *key, double *out){
-    MC_Json *value = find_value(json, key);
+    MC_Json *value = mc_json_field(json, key);
     return value != NULL ? mc_json_number(value, out) : MCE_NOT_FOUND;
 }
 
 MC_Error mc_json_object_str(MC_Json *json, const char *key, MC_Str *out){
-    MC_Json *value = find_value(json, key);
+    MC_Json *value = mc_json_field(json, key);
     return value != NULL ? mc_json_str(value, out) : MCE_NOT_FOUND;
 }
 
 bool mc_json_object_as_bool(MC_Json *json, const char *key){
-    MC_Json *value = find_value(json, key);
+    MC_Json *value = mc_json_field(json, key);
     return value != NULL ? mc_json_as_bool(value) : false;
 }
 
 int64_t mc_json_object_as_i64(MC_Json *json, const char *key){
-    MC_Json *value = find_value(json, key);
+    MC_Json *value = mc_json_field(json, key);
     return value != NULL ? mc_json_as_i64(value) : 0;
 }
 
 uint64_t mc_json_object_as_u64(MC_Json *json, const char *key){
-    MC_Json *value = find_value(json, key);
+    MC_Json *value = mc_json_field(json, key);
     return value != NULL ? mc_json_as_u64(value) : 0;
 }
 
 double mc_json_object_as_f64(MC_Json *json, const char *key){
-    MC_Json *value = find_value(json, key);
+    MC_Json *value = mc_json_field(json, key);
     return value != NULL ? mc_json_as_f64(value) : 0.0;
 }
 

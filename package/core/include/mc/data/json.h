@@ -69,6 +69,7 @@ MC_Error mc_json_number(MC_Json *json, double *out);
 MC_Error mc_json_str(MC_Json *json, MC_Str *out);
 MC_Error mc_json_at(MC_Json *json, size_t index, MC_Json **out);
 MC_Error mc_json_object_at(MC_Json *json, size_t index, MC_Str *key, MC_Json **out);
+MC_Json *mc_json_field(const MC_Json *json, const char *key);
 
 bool mc_json_as_bool(MC_Json *json);
 int64_t mc_json_as_i64(MC_Json *json);
