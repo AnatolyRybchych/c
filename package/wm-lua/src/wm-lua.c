@@ -683,7 +683,8 @@ static int event_window_index(lua_State *L){
 
 static void push_event(lua_State *L, MC_WMRef *wm, const MC_WMEvent *event){
     MC_Json *json = NULL;
-    if(mc_wm_event_to_json(wm, NULL, event, &json) != MCE_OK){
+    if(mc_json_new(NULL, &json) != MCE_OK || mc_wm_event_to_json(wm, event, json) != MCE_OK){
+        mc_json_delete(&json);
         lua_newtable(L);
         return;
     }
@@ -790,14 +791,6 @@ static int wm_register_events(lua_State *L){
     const char *group = luaL_checkstring(L, 2);
     luaL_checktype(L, 3, LUA_TTABLE);
 
-    static const char PREFIX[] = "USER.";
-    size_t prefix_len = sizeof(PREFIX) - 1;
-    if(strncmp(group, PREFIX, prefix_len) != 0 || group[prefix_len] == '\0'){
-        return luaL_error(L, "mc.wm: event group '%s' must start with 'USER.'", group);
-    }
-
-    const char *subgroup = group + prefix_len;
-
     lua_Integer count = luaL_len(L, 3);
     if(count <= 0){
         return luaL_error(L, "mc.wm: event group '%s' must define at least one event", group);
@@ -811,8 +804,8 @@ static int wm_register_events(lua_State *L){
     }
     lua_pop(L, 1);
 
-    MC_WMUserEventDef *defs = NULL;
-    if(mc_alloc(NULL, sizeof(MC_WMUserEventDef) * (size_t)count, (void**)&defs) != MCE_OK){
+    MC_WMEventDefinition *defs = NULL;
+    if(mc_alloc(NULL, sizeof(MC_WMEventDefinition) * (size_t)count, (void**)&defs) != MCE_OK){
         return luaL_error(L, "mc.wm: out of memory");
     }
 
@@ -833,8 +826,16 @@ static int wm_register_events(lua_State *L){
         lua_remove(L, -2);
     }
 
+    MC_WMEventGroupDef def = {
+        .name = group,
+        .events = defs,
+        .size = (size_t)count,
+        .reserve = 0,
+        .to_json = NULL,
+        .from_json = NULL,
+    };
     MC_WMEventType offset;
-    MC_Error e = mc_wm_register_user_event(lwm->wm, subgroup, defs, (size_t)count, &offset);
+    MC_Error e = mc_wm_register_event_group(lwm->wm, &def, &offset);
     mc_free(NULL, defs);
     lua_pop(L, (int)count);
 
@@ -856,31 +857,37 @@ static int wm_send_event(lua_State *L){
 
     const char *name = luaL_checkstring(L, 2);
 
-    static const char PREFIX[] = "USER.";
-    if(strncmp(name, PREFIX, sizeof(PREFIX) - 1) != 0){
-        return luaL_error(L, "mc.wm: event '%s' must start with 'USER.'", name);
-    }
-
-    MC_WMEventType type = mc_wm_event_type_from_str(lwm->wm, name);
-    if(type == MC_WME_NONE){
+    if(mc_wm_event_type_from_str(lwm->wm, name) == MC_WME_NONE){
         return luaL_error(L, "mc.wm: event '%s' is not registered", name);
     }
 
-    MC_WMEvent event;
-    require_ok(L, mc_wm_user_event(lwm->wm, type, &event), "send_event");
+    MC_Json *wire = NULL;
+    if(mc_json_new(NULL, &wire) != MCE_OK || mc_json_set_object(wire) != MCE_OK){
+        mc_json_delete(&wire);
+        return luaL_error(L, "mc.wm: out of memory");
+    }
 
-    if(!lua_isnoneornil(L, 3)){
+    MC_Error e = mc_json_object_add_str(wire, mc_strc(name), "type");
+    if(e == MCE_OK && !lua_isnoneornil(L, 3)){
         luaL_checktype(L, 3, LUA_TTABLE);
-        MC_Error e = lua_to_json(L, 3, event.as.user.data);
-        if(e != MCE_OK){
-            mc_json_delete(&event.as.user.data);
-            return luaL_error(L, "mc.wm: send_event('%s') payload failed (%s)", name, mc_strerror(e));
+        MC_Json *data;
+        e = mc_json_object_add_new(wire, &data, "data");
+        if(e == MCE_OK){
+            e = lua_to_json(L, 3, data);
         }
     }
 
-    MC_Error e = mc_wm_push_user_event(lwm->wm, &event);
+    MC_WMEvent event;
+    if(e == MCE_OK){
+        e = mc_wm_event_from_json(lwm->wm, mc_wm_event_allocator(lwm->wm), wire, &event);
+    }
+    mc_json_delete(&wire);
+
+    if(e == MCE_OK){
+        e = mc_wm_push_event(lwm->wm, &event);
+    }
+
     if(e != MCE_OK){
-        mc_json_delete(&event.as.user.data);
         return luaL_error(L, "mc.wm: send_event('%s') failed (%s)", name, mc_strerror(e));
     }
 
