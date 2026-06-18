@@ -353,6 +353,10 @@ MC_Error mc_task_waitn(const MC_Time *timeout, size_t count, MC_Task **tasks){
         while (!(cur->hdr.flags & TASK_DONE)){
             switch (mc_sched_continue(sched)){
             case MC_TASK_DONE:
+                if (!(cur->hdr.flags & TASK_DONE)) {
+                    mc_sleep(&sched->suspend);
+                }
+
                 break;
             case MC_TASK_SUSPEND:
                 mc_sleep(&sched->suspend);
