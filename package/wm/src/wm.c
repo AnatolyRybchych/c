@@ -1516,12 +1516,6 @@ MC_Error mc_wm_event_to_json(MC_WMRef *ref, const MC_WMEvent *event, MC_Json *ou
         return g->to_json(NULL, event, out);
     }
 
-    if(event->as.raw != NULL){
-        MC_Json *data;
-        MC_RETURN_ERROR(mc_json_object_add_new(out, &data, "data"));
-        return mc_json_copy(data, (MC_Json*)event->as.raw);
-    }
-
     return MCE_OK;
 }
 
