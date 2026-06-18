@@ -782,6 +782,26 @@ static int wm_on_event(lua_State *L){
     return 1;
 }
 
+static MC_Error user_event_to_json(MC_Alloc *alloc, const MC_WMEvent *event, MC_Json *out){
+    (void)alloc;
+
+    MC_Json *raw = (MC_Json*)event->as.raw;
+    size_t n = mc_json_length(raw);
+    for(size_t i = 0; i < n; i++){
+        MC_Str key;
+        MC_Json *value;
+        if(mc_json_object_at(raw, i, &key, &value) != MCE_OK){
+            continue;
+        }
+
+        MC_Json *member;
+        MC_RETURN_ERROR(mc_json_object_add_new(out, &member, "%.*s", (int)MC_STR_LEN(key), key.beg));
+        MC_RETURN_ERROR(mc_json_copy(member, value));
+    }
+
+    return MCE_OK;
+}
+
 static int wm_register_events(lua_State *L){
     LuaWM *lwm = luaL_checkudata(L, 1, WM_MT);
     if(lwm->wm == NULL){
@@ -831,7 +851,7 @@ static int wm_register_events(lua_State *L){
         .events = defs,
         .size = (size_t)count,
         .reserve = 0,
-        .to_json = NULL,
+        .to_json = user_event_to_json,
         .from_json = NULL,
     };
     MC_WMEventType offset;
