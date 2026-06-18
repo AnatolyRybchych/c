@@ -167,6 +167,31 @@ void mc_di_clear(MC_Di *di, MC_DiBuffer *buffer, MC_AColor color){
     }
 }
 
+void mc_di_fill_rect(MC_Di *di, MC_DiBuffer *buffer, MC_Rect2IU rect, MC_AColor color){
+    (void)di;
+
+    MC_Size2U size = buffer->size;
+
+    int x0 = rect.x < 0 ? 0 : rect.x;
+    int y0 = rect.y < 0 ? 0 : rect.y;
+
+    int x1 = rect.x + (int)rect.width;
+    int y1 = rect.y + (int)rect.height;
+    if(x1 > (int)size.width){
+        x1 = (int)size.width;
+    }
+    if(y1 > (int)size.height){
+        y1 = (int)size.height;
+    }
+
+    for(int y = y0; y < y1; y++){
+        MC_AColor *row = buffer->pixels + (size_t)y * size.width;
+        for(int x = x0; x < x1; x++){
+            row[x] = color;
+        }
+    }
+}
+
 MC_Error mc_di_blit(MC_Di *di, MC_DiBuffer *dst, MC_Vec2i dst_pos, MC_Vec2i src_pos, MC_Vec2i size, MC_DiBuffer *src){
     if(src == NULL){
         return MCE_INVALID_INPUT;

@@ -31,6 +31,7 @@ MC_Size2U mc_di_size(MC_DiBuffer *buffer);
 MC_AColor *mc_di_pixels(MC_DiBuffer *buffer);
 
 void mc_di_clear(MC_Di *di, MC_DiBuffer *buffer, MC_AColor color);
+void mc_di_fill_rect(MC_Di *di, MC_DiBuffer *buffer, MC_Rect2IU rect, MC_AColor color);
 MC_Error mc_di_blit(MC_Di *di, MC_DiBuffer *dst, MC_Vec2i dst_pos, MC_Vec2i src_pos, MC_Vec2i size, MC_DiBuffer *src);
 MC_Error mc_di_blit_pixels(MC_Di *di, MC_DiBuffer *dst, MC_Vec2i dst_pos, MC_Vec2i src_pos, MC_Vec2i size,
     MC_Size2U src_size, const MC_AColor src[src_size.height][src_size.width]);
