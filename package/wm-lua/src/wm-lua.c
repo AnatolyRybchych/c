@@ -690,19 +690,18 @@ static void push_event(lua_State *L, MC_WMRef *wm, const MC_WMEvent *event){
     }
 
     push_json(L, json);
+
+    MC_Json *id_node = mc_json_field(json, "window_id");
+    MC_Json *window_node = mc_json_field(json, "window");
+    bool resolvable = id_node != NULL && mc_json_is_integer(id_node)
+        && window_node != NULL && mc_json_type(window_node) == MC_JSON_NULL;
+    uint64_t identity = resolvable ? mc_json_as_u64(id_node) : 0;
+
     mc_json_delete(&json);
 
-    lua_getfield(L, -1, "window");
-    if(!lua_isinteger(L, -1)){
-        lua_pop(L, 1);
+    if(!resolvable){
         return;
     }
-
-    uint64_t identity = (uint64_t)lua_tointeger(L, -1);
-    lua_pop(L, 1);
-
-    lua_pushnil(L);
-    lua_setfield(L, -2, "window");
 
     lua_createtable(L, 0, 1);
     lua_pushlightuserdata(L, wm);
