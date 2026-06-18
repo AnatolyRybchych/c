@@ -380,6 +380,18 @@ const char *mc_task_status_str(MC_TaskStatus status){
     return result;
 }
 
+MC_TaskStatus mc_task_status(MC_Task *task){
+    if(task->hdr.flags & TASK_DONE){
+        return MC_TASK_DONE;
+    }
+
+    if(task->hdr.flags & (TASK_SCHEDULED | TASK_DELAYED)){
+        return MC_TASK_SUSPEND;
+    }
+
+    return MC_TASK_CONTINUE;
+}
+
 static TaskNode *create_task(MC_Sched *sched, MC_TaskStatus (*do_some)(MC_Task *this), unsigned context_size, const void *context){
     TaskNode *new;
 

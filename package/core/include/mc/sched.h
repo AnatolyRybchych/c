@@ -61,4 +61,6 @@ void mc_task_allow_hard_terminating(MC_Task *task);
 
 const char *mc_task_status_str(MC_TaskStatus status);
 
+MC_TaskStatus mc_task_status(MC_Task *task);
+
 #endif // MC_SCHED_H

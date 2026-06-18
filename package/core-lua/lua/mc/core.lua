@@ -5,26 +5,55 @@
 --- app registers it in C (`mc_core_lua_open`, parking it in `package.loaded["mc.core"]`).
 --- This file carries only the types (editor-only; not loaded at runtime).
 
---- An opaque handle to a task created on a scheduler (`Sched:task`). Cooperative: its
---- handler is called repeatedly while it returns `"continue"`, paused while it returns
---- `"suspend"`, and finished when it returns `"done"` (or `nil`). The task is already
---- scheduled when created — the handle is only needed to keep it alive.
+--- A task created on a scheduler (`Sched:task`). Cooperative: its handler is called
+--- repeatedly while it returns `"continue"`, paused while it returns `"suspend"`, and
+--- finished when it returns `"done"` (or `nil`). A freshly created task is **not**
+--- scheduled — call `:run()`, `:schedule(timeout)`, or `:run_after(...)` to start it.
 ---@class mc.core.Task
+---@field sched mc.core.Sched the scheduler this task belongs to
+---@field data any the data passed as the second argument to `Sched:task`
 local Task = {}
+
+--- Schedule the task to run as soon as possible. Returns self for chaining.
+---@return mc.core.Task self
+function Task:run() end
+
+--- Schedule the task to run after `timeout` milliseconds (call on a not-yet-started
+--- task). Returns self for chaining.
+---@param timeout integer milliseconds
+---@return mc.core.Task self
+function Task:schedule(timeout) end
+
+--- Schedule the task to run only after every given task has finished. Returns self
+--- for chaining.
+---@param ... mc.core.Task
+---@return mc.core.Task self
+function Task:run_after(...) end
+
+--- Defer the task's next activation by `delay` milliseconds (e.g. called from the
+--- handler to re-run later). Returns self for chaining.
+---@param delay integer milliseconds
+---@return mc.core.Task self
+function Task:delay(delay) end
+
+--- The task's current status: `"done"`, `"suspend"` (waiting for its scheduled time),
+--- or `"continue"` (runnable / not yet finished).
+---@return "done"|"suspend"|"continue"
+function Task:status() end
 
 --- A cooperative scheduler (`mc_sched`). Create tasks on it, then drive it with
 --- `:run()` (to completion) or `:step()` (one iteration).
 ---@class mc.core.Sched
 local Sched = {}
 
---- Create and schedule a task whose handler is `fn`. `fn` returns the next status:
---- `"continue"` (call again), `"suspend"` (pause), or `"done"`/`nil` (finish).
---- The task runs on the next `:run()`/`:step()`; pass `delay_ms` to defer its first
---- run by that many milliseconds.
----@param fn fun(): ("done"|"continue"|"suspend")?
----@param delay_ms? integer
+--- Create a task whose handler is `fn`. `fn` receives the task itself and returns the
+--- next status: `"continue"` (call again), `"suspend"` (pause), or `"done"`/`nil`
+--- (finish). The task is **not** scheduled until `:run()`/`:schedule()`/`:run_after()`.
+--- `data` is associated with the task and readable as `task.data`.
+---@param fn fun(task: mc.core.Task): ("done"|"continue"|"suspend")?
+---@param data? any
 ---@return mc.core.Task
-function Sched:task(fn, delay_ms) end
+function Sched:task(fn, data) end
 
 --- Run the scheduler until all tasks are done.
 function Sched:run() end
