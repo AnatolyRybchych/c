@@ -6,6 +6,7 @@
 #include <lua.h>
 #include <lauxlib.h>
 
+#include <stdbool.h>
 #include <stdint.h>
 #include <stdio.h>
 #include <string.h>
@@ -17,6 +18,7 @@
 
 typedef struct LuaSched {
     MC_Sched *sched;
+    bool owned;
 } LuaSched;
 
 typedef struct LuaTask {
@@ -149,11 +151,11 @@ static int l_sched_step(lua_State *L) {
 
 static int l_sched_gc(lua_State *L) {
     LuaSched *s = luaL_checkudata(L, 1, SCHED_MT);
-    if (s->sched != NULL) {
+    if (s->sched != NULL && s->owned) {
         mc_sched_delete(s->sched);
-        s->sched = NULL;
     }
 
+    s->sched = NULL;
     return 0;
 }
 
@@ -258,6 +260,7 @@ static int l_task_gc(lua_State *L) {
 static int l_sched_new(lua_State *L) {
     LuaSched *s = lua_newuserdatauv(L, sizeof(*s), 0);
     s->sched = NULL;
+    s->owned = true;
     luaL_setmetatable(L, SCHED_MT);
 
     if (mc_sched_new(&s->sched) != MCE_OK) {
@@ -319,6 +322,32 @@ int mc_core_lua_module(lua_State *L) {
 
     luaL_newlib(L, module);
     return 1;
+}
+
+int mc_core_lua_push_sched(lua_State *L, MC_Sched *sched) {
+    LuaSched *s = lua_newuserdatauv(L, sizeof(*s), 0);
+    s->sched = sched;
+    s->owned = false;
+    luaL_setmetatable(L, SCHED_MT);
+
+    lua_pushvalue(L, -1);
+    return luaL_ref(L, LUA_REGISTRYINDEX);
+}
+
+MC_Sched *mc_core_lua_pop_sched(lua_State *L, int ref) {
+    lua_rawgeti(L, LUA_REGISTRYINDEX, ref);
+    LuaSched *s = luaL_testudata(L, -1, SCHED_MT);
+    lua_pop(L, 1);
+
+    luaL_unref(L, LUA_REGISTRYINDEX, ref);
+
+    if (s == NULL) {
+        return NULL;
+    }
+
+    MC_Sched *sched = s->sched;
+    s->sched = NULL;
+    return sched;
 }
 
 void mc_core_lua_open(lua_State *L) {
