@@ -31,6 +31,14 @@ MC_Error mc_gettime(MC_GetTime gettime, MC_Time *time){
             .nsec = ts.tv_nsec,
         };
     } return MCE_OK;
+#elif defined(_WIN32)
+    case MC_GETTIME_SINCE_BOOT:{
+        ULONGLONG ms = GetTickCount64();
+        *time = (MC_Time){
+            .sec = ms / MC_MSEC_IN_SEC,
+            .nsec = (ms % MC_MSEC_IN_SEC) * (MC_NSEC_IN_SEC / MC_MSEC_IN_SEC),
+        };
+    } return MCE_OK;
 #endif
     default:
         *time = (MC_Time){0};
