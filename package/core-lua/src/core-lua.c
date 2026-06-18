@@ -149,6 +149,41 @@ static int l_sched_step(lua_State *L) {
     return 1;
 }
 
+static int l_sched_wait(lua_State *L) {
+    LuaSched *s = luaL_checkudata(L, 1, SCHED_MT);
+    if (s->sched == NULL) {
+        return luaL_error(L, "mc.core: scheduler is destroyed");
+    }
+
+    MC_Time timeout;
+    const MC_Time *timeout_ptr = NULL;
+    if (!lua_isnoneornil(L, 2)) {
+        timeout = ms_to_time(luaL_checkinteger(L, 2));
+        timeout_ptr = &timeout;
+    }
+
+    int count = lua_gettop(L) - 2;
+    if (count <= 0) {
+        return luaL_error(L, "mc.core: sched:wait needs at least one task");
+    }
+    if (count > TASK_DEPS_MAX) {
+        return luaL_error(L, "mc.core: sched:wait accepts at most %d tasks", TASK_DEPS_MAX);
+    }
+
+    MC_Task *tasks[TASK_DEPS_MAX];
+    for (int i = 0; i < count; i++) {
+        tasks[i] = check_task(L, i + 3);
+    }
+
+    MC_Error err = mc_task_waitn(timeout_ptr, (size_t)count, tasks);
+    if (err != MCE_OK && err != MCE_TIMEOUT) {
+        return luaL_error(L, "mc.core: sched:wait failed");
+    }
+
+    lua_pushboolean(L, err == MCE_OK);
+    return 1;
+}
+
 static int l_sched_gc(lua_State *L) {
     LuaSched *s = luaL_checkudata(L, 1, SCHED_MT);
     if (s->sched != NULL && s->owned) {
@@ -275,6 +310,7 @@ static void register_sched_class(lua_State *L) {
         { "task", l_sched_task },
         { "run", l_sched_run },
         { "step", l_sched_step },
+        { "wait", l_sched_wait },
         { "__gc", l_sched_gc },
         { NULL, NULL },
     };

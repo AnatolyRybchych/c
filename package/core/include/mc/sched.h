@@ -55,6 +55,7 @@ void mc_task_set_handler(MC_Task *task, MC_TaskStatus (*do_some)(MC_Task *this))
 /// @param timeout if NULL, then timeout is infinite
 /// @return MCE_TIMEOUT if exited due to timeout
 MC_Error mc_task_wait(const MC_Time *timeout, MC_Task *task, ...);
+MC_Error mc_task_waitn(const MC_Time *timeout, size_t count, MC_Task **tasks);
 
 /// @param task task that can be silently terminated
 void mc_task_allow_hard_terminating(MC_Task *task);

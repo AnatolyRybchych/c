@@ -336,18 +336,20 @@ void mc_task_unref(MC_Task *task){
     }
 }
 
-MC_Error mc_task_wait(const MC_Time *timeout, MC_Task *task, ...){
-    MC_Sched *sched = task->hdr.scheduler;
+MC_Error mc_task_waitn(const MC_Time *timeout, size_t count, MC_Task **tasks){
+    if(count == 0){
+        return MCE_OK;
+    }
+
+    MC_Sched *sched = tasks[0]->hdr.scheduler;
 
     MC_Time wait_until;
     if(timeout && mc_timesum(&sched->now, timeout, &wait_until) == MCE_OVERFLOW){
         wait_until = (MC_Time){.sec = ~0LLU};
     }
 
-    va_list tasks;
-    va_start(tasks, task);
-
-    for(MC_Task *cur = task; cur; cur = va_arg(tasks, MC_Task*)){
+    for(size_t i = 0; i < count; i++){
+        MC_Task *cur = tasks[i];
         while (!(cur->hdr.flags & TASK_DONE)){
             switch (mc_sched_continue(sched)){
             case MC_TASK_DONE:
@@ -360,14 +362,34 @@ MC_Error mc_task_wait(const MC_Time *timeout, MC_Task *task, ...){
             }
 
             if(timeout && mc_timecmp(&wait_until, &sched->now) < 0){
-                va_end(tasks);
                 return MCE_TIMEOUT;
             }
         }
     }
 
-    va_end(tasks);
     return MCE_OK;
+}
+
+MC_Error mc_task_wait(const MC_Time *timeout, MC_Task *task, ...){
+    MC_Task *tasks[32];
+    size_t count = 0;
+    tasks[count++] = task;
+
+    va_list args;
+    va_start(args, task);
+
+    for(MC_Task *cur; (cur = va_arg(args, MC_Task*));){
+        if(count >= sizeof tasks / sizeof *tasks){
+            va_end(args);
+            return MCE_INVALID_INPUT;
+        }
+
+        tasks[count++] = cur;
+    }
+
+    va_end(args);
+
+    return mc_task_waitn(timeout, count, tasks);
 }
 
 void mc_task_allow_hard_terminating(MC_Task *task){

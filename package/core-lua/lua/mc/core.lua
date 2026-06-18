@@ -63,6 +63,14 @@ function Sched:run() end
 ---@return "done"|"suspend"|"continue"
 function Sched:step() end
 
+--- Drive the scheduler until every given task has finished, or `timeout`
+--- milliseconds elapse (`nil` = wait forever). Returns `true` if all tasks
+--- completed, `false` if it returned due to the timeout.
+---@param timeout integer|nil milliseconds, or nil for no timeout
+---@param ... mc.core.Task
+---@return boolean completed
+function Sched:wait(timeout, ...) end
+
 ---@class mc.core
 local M = {}
 
