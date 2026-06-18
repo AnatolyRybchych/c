@@ -187,7 +187,7 @@ static void close(void *_ctx){
     Ctx *ctx = _ctx;
 
     while(!mc_list_empty(ctx->g)){
-        mc_free(ctx->alloc, mc_list_remove(ctx->g));
+        mc_free(ctx->alloc, mc_list_remove(&ctx->g));
     }
 
     if(ctx->blocks){

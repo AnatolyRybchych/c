@@ -2,6 +2,11 @@
 
 #include <mc/sched.h>
 #include <mc/time.h>
+#include <mc/data/alloc.h>
+#include <mc/data/str.h>
+#include <mc/data/json.h>
+#include <mc/data/stream.h>
+#include <mc/data/mstream.h>
 
 #include <lua.h>
 #include <lauxlib.h>
@@ -347,9 +352,235 @@ static void register_task_class(lua_State *L) {
     lua_pop(L, 1);
 }
 
+static void push_json(lua_State *L, MC_Json *json) {
+    luaL_checkstack(L, 4, "mc.core.json: nesting too deep");
+
+    switch (mc_json_type(json)) {
+    case MC_JSON_BOOL: {
+        bool value = false;
+        mc_json_bool(json, &value);
+        lua_pushboolean(L, value);
+        break;
+    }
+    case MC_JSON_NUMBER: {
+        if (mc_json_is_integer(json)) {
+            int64_t value = 0;
+            if (mc_json_i64(json, &value) == MCE_OK) {
+                lua_pushinteger(L, (lua_Integer)value);
+                break;
+            }
+        }
+
+        double number = 0;
+        mc_json_number(json, &number);
+        lua_pushnumber(L, (lua_Number)number);
+        break;
+    }
+    case MC_JSON_STRING: {
+        MC_Str str = {0};
+        mc_json_str(json, &str);
+        lua_pushlstring(L, str.beg, MC_STR_LEN(str));
+        break;
+    }
+    case MC_JSON_LIST: {
+        size_t length = mc_json_length(json);
+        lua_createtable(L, (int)length, 0);
+        for (size_t i = 0; i < length; i++) {
+            MC_Json *item = NULL;
+            mc_json_at(json, i, &item);
+            push_json(L, item);
+            lua_rawseti(L, -2, (lua_Integer)(i + 1));
+        }
+        break;
+    }
+    case MC_JSON_OBJECT: {
+        size_t length = mc_json_length(json);
+        lua_createtable(L, 0, (int)length);
+        for (size_t i = 0; i < length; i++) {
+            MC_Str key = {0};
+            MC_Json *value = NULL;
+            mc_json_object_at(json, i, &key, &value);
+            lua_pushlstring(L, key.beg, MC_STR_LEN(key));
+            push_json(L, value);
+            lua_rawset(L, -3);
+        }
+        break;
+    }
+    default:
+        lua_pushnil(L);
+        break;
+    }
+}
+
+static bool table_is_array(lua_State *L, int idx) {
+    size_t length = lua_rawlen(L, idx);
+    size_t count = 0;
+
+    lua_pushnil(L);
+    while (lua_next(L, idx) != 0) {
+        bool indexed = lua_isinteger(L, -2);
+        if (indexed) {
+            lua_Integer key = lua_tointeger(L, -2);
+            indexed = key >= 1 && (size_t)key <= length;
+        }
+
+        if (!indexed) {
+            lua_pop(L, 2);
+            return false;
+        }
+
+        count++;
+        lua_pop(L, 1);
+    }
+
+    return count == length;
+}
+
+static MC_Error lua_to_json(lua_State *L, int idx, MC_Json *out) {
+    idx = lua_absindex(L, idx);
+
+    switch (lua_type(L, idx)) {
+    case LUA_TNIL:
+        return mc_json_set_null(out);
+    case LUA_TBOOLEAN:
+        return mc_json_set_bool(out, lua_toboolean(L, idx));
+    case LUA_TNUMBER:
+        if (lua_isinteger(L, idx)) {
+            return mc_json_set_i64(out, (int64_t)lua_tointeger(L, idx));
+        }
+
+        return mc_json_set_lf(out, (double)lua_tonumber(L, idx));
+    case LUA_TSTRING: {
+        size_t len = 0;
+        const char *s = lua_tolstring(L, idx, &len);
+        return mc_json_set_string(out, MC_STR(s, s + len));
+    }
+    case LUA_TTABLE:
+        break;
+    default:
+        return MCE_INVALID_INPUT;
+    }
+
+    luaL_checkstack(L, 4, "mc.core.json: nesting too deep");
+
+    if (table_is_array(L, idx)) {
+        MC_Error err = mc_json_set_list(out);
+        if (err != MCE_OK) {
+            return err;
+        }
+
+        size_t length = lua_rawlen(L, idx);
+        for (size_t i = 1; i <= length; i++) {
+            MC_Json *item = NULL;
+            err = mc_json_list_add_new(out, &item);
+            if (err != MCE_OK) {
+                return err;
+            }
+
+            lua_rawgeti(L, idx, (lua_Integer)i);
+            err = lua_to_json(L, -1, item);
+            lua_pop(L, 1);
+            if (err != MCE_OK) {
+                return err;
+            }
+        }
+
+        return MCE_OK;
+    }
+
+    MC_Error err = mc_json_set_object(out);
+    if (err != MCE_OK) {
+        return err;
+    }
+
+    lua_pushnil(L);
+    while (lua_next(L, idx) != 0) {
+        if (lua_type(L, -2) != LUA_TSTRING) {
+            lua_pop(L, 1);
+            continue;
+        }
+
+        MC_Json *item = NULL;
+        err = mc_json_object_add_new(out, &item, "%s", lua_tolstring(L, -2, NULL));
+        if (err != MCE_OK) {
+            lua_pop(L, 2);
+            return err;
+        }
+
+        err = lua_to_json(L, -1, item);
+        if (err != MCE_OK) {
+            lua_pop(L, 2);
+            return err;
+        }
+
+        lua_pop(L, 1);
+    }
+
+    return MCE_OK;
+}
+
+static int l_json_loads(lua_State *L) {
+    size_t len = 0;
+    const char *s = luaL_checklstring(L, 1, &len);
+
+    MC_Json *json = NULL;
+    if (mc_json_loads(&mc_alloc_malloc, &json, MC_STR(s, s + len)) != MCE_OK) {
+        return luaL_error(L, "mc.core.json: invalid json");
+    }
+
+    push_json(L, json);
+    mc_json_delete(&json);
+    return 1;
+}
+
+static int l_json_dumps(lua_State *L) {
+    luaL_checkany(L, 1);
+
+    MC_Json *json = NULL;
+    if (mc_json_new(&mc_alloc_malloc, &json) != MCE_OK) {
+        return luaL_error(L, "mc.core.json: out of memory");
+    }
+
+    if (lua_to_json(L, 1, json) != MCE_OK) {
+        mc_json_delete(&json);
+        return luaL_error(L, "mc.core.json: value is not serializable");
+    }
+
+    MC_Stream *out = NULL;
+    if (mc_mstream(&mc_alloc_malloc, &out) != MCE_OK) {
+        mc_json_delete(&json);
+        return luaL_error(L, "mc.core.json: out of memory");
+    }
+
+    MC_Error err = mc_json_dump(json, out);
+    mc_json_delete(&json);
+    if (err != MCE_OK) {
+        mc_close(out);
+        return luaL_error(L, "mc.core.json: dump failed");
+    }
+
+    size_t size = mc_mstream_size(out);
+    mc_set_cursor(out, 0, MC_CURSOR_FROM_BEG);
+
+    luaL_Buffer b;
+    char *dst = luaL_buffinitsize(L, &b, size);
+    size_t read = 0;
+    mc_read(out, size, dst, &read);
+    mc_close(out);
+
+    luaL_pushresultsize(&b, read);
+    return 1;
+}
+
 int mc_core_lua_module(lua_State *L) {
     static const luaL_Reg module[] = {
         { "sched", l_sched_new },
+        { NULL, NULL },
+    };
+
+    static const luaL_Reg json_funcs[] = {
+        { "loads", l_json_loads },
+        { "dumps", l_json_dumps },
         { NULL, NULL },
     };
 
@@ -357,6 +588,10 @@ int mc_core_lua_module(lua_State *L) {
     register_task_class(L);
 
     luaL_newlib(L, module);
+
+    luaL_newlib(L, json_funcs);
+    lua_setfield(L, -2, "json");
+
     return 1;
 }
 

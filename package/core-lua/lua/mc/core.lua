@@ -71,7 +71,26 @@ function Sched:step() end
 ---@return boolean completed
 function Sched:wait(timeout, ...) end
 
+--- JSON serialization/deserialization (mc's `mc/data/json.h`).
+---@class mc.core.json
+local json = {}
+
+--- Parse a JSON string into a Lua value (object → table, array → 1-based table,
+--- number → integer/float, string/bool → as-is, null → nil). Raises on invalid JSON.
+---@param str string
+---@return any
+function json.loads(str) end
+
+--- Serialize a Lua value to a JSON string. A table is encoded as a JSON array iff its
+--- keys are exactly `1..n` (else an object keyed by its string keys; non-string keys are
+--- skipped). nil/boolean/number/string serialize directly. Raises on non-serializable
+--- values (functions, userdata, threads).
+---@param value any
+---@return string
+function json.dumps(value) end
+
 ---@class mc.core
+---@field json mc.core.json
 local M = {}
 
 --- Create a new scheduler.
