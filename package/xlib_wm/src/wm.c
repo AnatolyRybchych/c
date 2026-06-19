@@ -35,6 +35,10 @@ struct MC_TargetWMWindow{
     Window window_id;
 };
 
+struct MC_TargetForeignWindow{
+    Window window_id;
+};
+
 struct MC_TargetWMEvent{
     XEvent event;
 };
@@ -45,8 +49,28 @@ static MC_Error init_window(struct MC_TargetWM *wm, struct MC_TargetWMWindow *wi
 static void destroy_window(struct MC_TargetWM *wm, struct MC_TargetWMWindow *window);
 static MC_Error create_window_graphic(struct MC_TargetWM *wm, struct MC_TargetWMWindow *window, struct MC_Graphics **g);
 static MC_Error set_window_title(struct MC_TargetWM *wm, struct MC_TargetWMWindow *window, MC_Str title);
-static MC_Error set_window_size(struct MC_TargetWM *wm, struct MC_TargetWMWindow *window, MC_Size2U size);
 static MC_Error set_window_state(struct MC_TargetWM *wm, struct MC_TargetWMWindow *window, MC_WMWindowState state);
+static MC_Error set_window_rect(struct MC_TargetWM *wm, struct MC_TargetWMWindow *window, MC_WMArea area, MC_Rect2IU rect);
+static MC_Error focus_window(struct MC_TargetWM *wm, struct MC_TargetWMWindow *window);
+static MC_Error get_window_title(struct MC_TargetWM *wm, struct MC_TargetWMWindow *window, char *utf8, size_t cap, size_t *len);
+static MC_Error get_window_state(struct MC_TargetWM *wm, struct MC_TargetWMWindow *window, MC_WMWindowState *state);
+static MC_Error get_window_rect(struct MC_TargetWM *wm, struct MC_TargetWMWindow *window, MC_WMArea area, MC_Rect2IU *rect);
+static MC_Error request_events(struct MC_TargetWM *wm, MC_WMEvents events);
+static MC_Error get_focused_window(struct MC_TargetWM *wm, uint64_t *identity);
+static MC_Error get_hovered_window(struct MC_TargetWM *wm, uint64_t *identity);
+static MC_Error get_all_windows(struct MC_TargetWM *wm, uint64_t **identities, size_t *count);
+static MC_Error resolve_temporary_identity(struct MC_TargetWM *wm, uint64_t identity, MC_TargetResolvedIdentity *out);
+static void heartbeat(struct MC_TargetWM *wm);
+static void destroy_foreign_window(struct MC_TargetWM *wm, struct MC_TargetForeignWindow *window);
+static MC_Error close_foreign_window(struct MC_TargetWM *wm, struct MC_TargetForeignWindow *window);
+static MC_Error set_foreign_window_title(struct MC_TargetWM *wm, struct MC_TargetForeignWindow *window, MC_Str title);
+static MC_Error set_foreign_window_state(struct MC_TargetWM *wm, struct MC_TargetForeignWindow *window, MC_WMWindowState state);
+static MC_Error set_foreign_window_rect(struct MC_TargetWM *wm, struct MC_TargetForeignWindow *window, MC_WMArea area, MC_Rect2IU rect);
+static MC_Error focus_foreign_window(struct MC_TargetWM *wm, struct MC_TargetForeignWindow *window);
+static MC_Error get_foreign_window_title(struct MC_TargetWM *wm, struct MC_TargetForeignWindow *window, char *utf8, size_t cap, size_t *len);
+static MC_Error get_foreign_window_state(struct MC_TargetWM *wm, struct MC_TargetForeignWindow *window, MC_WMWindowState *state);
+static MC_Error get_foreign_window_rect(struct MC_TargetWM *wm, struct MC_TargetForeignWindow *window, MC_WMArea area, MC_Rect2IU *rect);
+static MC_Error is_foreign_window_system(struct MC_TargetWM *wm, struct MC_TargetForeignWindow *window, bool *out);
 static MC_WMWindowState read_window_state(struct MC_TargetWM *wm, Window win);
 static bool poll_event(struct MC_TargetWM *wm, struct MC_TargetWMEvent *event);
 static unsigned translate_event(struct MC_TargetWM *wm, const struct MC_TargetWMEvent *event, MC_TargetIndication indications[MC_WM_MAX_INDICATIONS_PER_EVENT]);
@@ -60,6 +84,7 @@ static MC_WMVtab vtab = {
     .name = "X11",
     .wm_size = sizeof(struct MC_TargetWM),
     .window_size = sizeof(struct MC_TargetWMWindow),
+    .foreign_window_size = sizeof(struct MC_TargetForeignWindow),
     .event_size = sizeof(struct MC_TargetWMEvent),
 
     .init = init,
@@ -70,11 +95,34 @@ static MC_WMVtab vtab = {
     .create_window_graphic = create_window_graphic,
 
     .set_window_title = set_window_title,
-    .set_window_size = set_window_size,
     .set_window_state = set_window_state,
+    .set_window_rect = set_window_rect,
+    .focus_window = focus_window,
+    .get_window_title = get_window_title,
+    .get_window_state = get_window_state,
+    .get_window_rect = get_window_rect,
 
     .poll_event = poll_event,
     .translate_event = translate_event,
+
+    .request_events = request_events,
+
+    .get_focused_window = get_focused_window,
+    .get_hovered_window = get_hovered_window,
+    .get_all_windows = get_all_windows,
+    .resolve_temporary_identity = resolve_temporary_identity,
+    .heartbeat = heartbeat,
+
+    .destroy_foreign_window = destroy_foreign_window,
+    .close_foreign_window = close_foreign_window,
+    .set_foreign_window_title = set_foreign_window_title,
+    .set_foreign_window_state = set_foreign_window_state,
+    .set_foreign_window_rect = set_foreign_window_rect,
+    .focus_foreign_window = focus_foreign_window,
+    .get_foreign_window_title = get_foreign_window_title,
+    .get_foreign_window_state = get_foreign_window_state,
+    .get_foreign_window_rect = get_foreign_window_rect,
+    .is_foreign_window_system = is_foreign_window_system,
 };
 
 const MC_WMVtab *mc_xlib_wm_vtab = &vtab;
@@ -175,9 +223,170 @@ static MC_Error set_window_title(struct MC_TargetWM *wm, struct MC_TargetWMWindo
     return MCE_OK;
 }
 
-static MC_Error set_window_size(struct MC_TargetWM *wm, struct MC_TargetWMWindow *window, MC_Size2U size){
-    XResizeWindow(wm->dpy, window->window_id, size.width, size.height);
+static MC_Error set_window_rect(struct MC_TargetWM *wm, struct MC_TargetWMWindow *window, MC_WMArea area, MC_Rect2IU rect){
+    (void)area;
+    XMoveResizeWindow(wm->dpy, window->window_id, rect.x, rect.y, rect.width, rect.height);
     return MCE_OK;
+}
+
+static MC_Error get_window_rect(struct MC_TargetWM *wm, struct MC_TargetWMWindow *window, MC_WMArea area, MC_Rect2IU *rect){
+    (void)area;
+
+    XWindowAttributes attr;
+    if(XGetWindowAttributes(wm->dpy, window->window_id, &attr) == 0){
+        return MCE_UNKNOWN;
+    }
+
+    int x = 0;
+    int y = 0;
+    Window child;
+    XTranslateCoordinates(wm->dpy, window->window_id,
+        RootWindow(wm->dpy, DefaultScreen(wm->dpy)), 0, 0, &x, &y, &child);
+
+    *rect = (MC_Rect2IU){ .x = x, .y = y, .width = (unsigned)attr.width, .height = (unsigned)attr.height };
+    return MCE_OK;
+}
+
+static MC_Error get_window_title(struct MC_TargetWM *wm, struct MC_TargetWMWindow *window, char *utf8, size_t cap, size_t *len){
+    char *name = NULL;
+    if(XFetchName(wm->dpy, window->window_id, &name) == 0 || name == NULL){
+        if(cap > 0){
+            utf8[0] = '\0';
+        }
+        *len = 0;
+        return MCE_OK;
+    }
+
+    size_t n = strlen(name);
+    if(cap > 0){
+        if(n > cap - 1){
+            n = cap - 1;
+        }
+        memcpy(utf8, name, n);
+        utf8[n] = '\0';
+    }
+
+    *len = n;
+    XFree(name);
+    return MCE_OK;
+}
+
+static MC_Error get_window_state(struct MC_TargetWM *wm, struct MC_TargetWMWindow *window, MC_WMWindowState *state){
+    *state = read_window_state(wm, window->window_id);
+    return MCE_OK;
+}
+
+static MC_Error focus_window(struct MC_TargetWM *wm, struct MC_TargetWMWindow *window){
+    XRaiseWindow(wm->dpy, window->window_id);
+    XSetInputFocus(wm->dpy, window->window_id, RevertToParent, CurrentTime);
+    XFlush(wm->dpy);
+    return MCE_OK;
+}
+
+static MC_Error request_events(struct MC_TargetWM *wm, MC_WMEvents events){
+    (void)wm;
+    (void)events;
+    return MCE_OK;
+}
+
+static MC_Error get_focused_window(struct MC_TargetWM *wm, uint64_t *identity){
+    (void)wm;
+    (void)identity;
+    return MCE_NOT_SUPPORTED;
+}
+
+static MC_Error get_hovered_window(struct MC_TargetWM *wm, uint64_t *identity){
+    (void)wm;
+    (void)identity;
+    return MCE_NOT_SUPPORTED;
+}
+
+static MC_Error get_all_windows(struct MC_TargetWM *wm, uint64_t **identities, size_t *count){
+    (void)wm;
+    (void)identities;
+    (void)count;
+    return MCE_NOT_SUPPORTED;
+}
+
+static MC_Error resolve_temporary_identity(struct MC_TargetWM *wm, uint64_t identity, MC_TargetResolvedIdentity *out){
+    (void)wm;
+    (void)identity;
+    (void)out;
+    return MCE_NOT_FOUND;
+}
+
+static void heartbeat(struct MC_TargetWM *wm){
+    (void)wm;
+}
+
+static void destroy_foreign_window(struct MC_TargetWM *wm, struct MC_TargetForeignWindow *window){
+    (void)wm;
+    (void)window;
+}
+
+static MC_Error close_foreign_window(struct MC_TargetWM *wm, struct MC_TargetForeignWindow *window){
+    (void)wm;
+    (void)window;
+    return MCE_NOT_SUPPORTED;
+}
+
+static MC_Error set_foreign_window_title(struct MC_TargetWM *wm, struct MC_TargetForeignWindow *window, MC_Str title){
+    (void)wm;
+    (void)window;
+    (void)title;
+    return MCE_NOT_SUPPORTED;
+}
+
+static MC_Error set_foreign_window_state(struct MC_TargetWM *wm, struct MC_TargetForeignWindow *window, MC_WMWindowState state){
+    (void)wm;
+    (void)window;
+    (void)state;
+    return MCE_NOT_SUPPORTED;
+}
+
+static MC_Error set_foreign_window_rect(struct MC_TargetWM *wm, struct MC_TargetForeignWindow *window, MC_WMArea area, MC_Rect2IU rect){
+    (void)wm;
+    (void)window;
+    (void)area;
+    (void)rect;
+    return MCE_NOT_SUPPORTED;
+}
+
+static MC_Error focus_foreign_window(struct MC_TargetWM *wm, struct MC_TargetForeignWindow *window){
+    (void)wm;
+    (void)window;
+    return MCE_NOT_SUPPORTED;
+}
+
+static MC_Error get_foreign_window_title(struct MC_TargetWM *wm, struct MC_TargetForeignWindow *window, char *utf8, size_t cap, size_t *len){
+    (void)wm;
+    (void)window;
+    (void)utf8;
+    (void)cap;
+    (void)len;
+    return MCE_NOT_SUPPORTED;
+}
+
+static MC_Error get_foreign_window_state(struct MC_TargetWM *wm, struct MC_TargetForeignWindow *window, MC_WMWindowState *state){
+    (void)wm;
+    (void)window;
+    (void)state;
+    return MCE_NOT_SUPPORTED;
+}
+
+static MC_Error get_foreign_window_rect(struct MC_TargetWM *wm, struct MC_TargetForeignWindow *window, MC_WMArea area, MC_Rect2IU *rect){
+    (void)wm;
+    (void)window;
+    (void)area;
+    (void)rect;
+    return MCE_NOT_SUPPORTED;
+}
+
+static MC_Error is_foreign_window_system(struct MC_TargetWM *wm, struct MC_TargetForeignWindow *window, bool *out){
+    (void)wm;
+    (void)window;
+    (void)out;
+    return MCE_NOT_SUPPORTED;
 }
 
 static void net_wm_state(struct MC_TargetWM *wm, Window win, long action, Atom first, Atom second){
