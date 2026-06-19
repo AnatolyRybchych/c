@@ -7,7 +7,7 @@ STAGE   := $(CURDIR)/build
 
 include rules.mk
 
-PKGS := core geometry net os graphics wm $(call wm_backend) lua core-lua wm-lua
+PKGS := core ui geometry net os graphics wm $(call wm_backend) lua core-lua wm-lua
 
 all: libs
 	$(foreach s,$(call subprojects), \

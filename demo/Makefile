@@ -8,7 +8,7 @@ include ../rules.mk
 
 INCLUDE := -I$(DESTDIR)$(PREFIX)/include
 LIBS    := -L$(DESTDIR)$(PREFIX)/lib \
-           -Wl,--start-group -lcore -lgeometry -lnet -los -lgraphics -lwm -l$(call wm_backend) -Wl,--end-group \
+           -Wl,--start-group -lcore -lui -lgeometry -lnet -los -lgraphics -lwm -l$(call wm_backend) -Wl,--end-group \
            $(call wm_libs)
 
 libfiles := $(wildcard $(DESTDIR)$(PREFIX)/lib/*.a)

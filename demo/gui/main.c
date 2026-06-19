@@ -15,6 +15,7 @@
 #endif
 
 #include <mc/graphics/graphics.h>
+#include <mc/ui/ui.h>
 
 #include <stdbool.h>
 
@@ -63,12 +64,15 @@ int main(void){
     MC_WM *wm;
     MC_REQUIRE(mc_wm_init(&wm, DEMO_WM_VTAB));
 
+    MC_UI *ui;
+    MC_REQUIRE(mc_ui_init(NULL, &ui));
+
     MC_WMWindow *window;
-    MC_REQUIRE(mc_wm_window_init(wm, &window));
+    MC_REQUIRE(mc_wm_window_init(mc_wm_get_ref(wm), &window));
 
     MC_WindowRef *ref = mc_wm_window_get_ref(window);
     MC_REQUIRE(mc_wm_window_set_title(ref, MC_STRC("mc gui demo - type text, Ctrl+V paste; F/M/N/R state; Q/Esc quit")));
-    MC_REQUIRE(mc_wm_window_set_size(ref, (MC_Size2U){.width = 640, .height = 480}));
+    MC_REQUIRE(mc_wm_window_set_size(ref, MC_WM_AREA_WINDOW, (MC_Size2U){.width = 640, .height = 480}));
 
     MC_Graphics *g;
     MC_REQUIRE(mc_wm_window_get_graphic(window, &g));
@@ -121,6 +125,7 @@ int main(void){
     }
 
     mc_wm_window_destroy(window);
+    mc_ui_destroy(ui);
     mc_wm_destroy(wm);
     return 0;
 }
