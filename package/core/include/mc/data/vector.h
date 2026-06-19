@@ -31,6 +31,11 @@
 #define MC_VECTOR_PUSH_ARRAY(VECTOR, ARRAY) \
     __vector_push_bytes(VECTOR, sizeof(ARRAY), &ARRAY[0])
 
+
+#define MC_VECTOR_RESERVE(VECTOR, COUNT) \
+    __vector_reserve_bytes(VECTOR, sizeof((VECTOR)->beg[0]) * (COUNT))
+
+
 #define MC_VECTOR_ERASE(VECTOR, IDX, COUNT) ((VECTOR) ? __vector_erase_bytes((VECTOR), (IDX) * sizeof *(VECTOR)->beg, (COUNT) * sizeof *(VECTOR)->beg) : (void)0)
 
 
@@ -51,7 +56,7 @@ inline void __vector_erase_bytes(void *vector, size_t idx, size_t size){
     }
 }
 
-inline void *__vector_push_bytes(void *vector, size_t size, const void *data){
+inline void *__vector_reserve_bytes(void *vector, size_t size){
     struct{
         uint8_t *end;
         uint8_t *capacity_end;
@@ -70,6 +75,21 @@ inline void *__vector_push_bytes(void *vector, size_t size, const void *data){
 
         v->end = v->beg + prev_size;
         v->capacity_end = v->beg + new_capacity;
+    }
+
+    return v;
+}
+
+inline void *__vector_push_bytes(void *vector, size_t size, const void *data){
+    struct{
+        uint8_t *end;
+        uint8_t *capacity_end;
+        uint8_t beg[];
+    } *v = vector;
+
+    v = __vector_reserve_bytes(vector, size);
+    if (!v) {
+        return v;
     }
 
     memcpy(v->end, data, size);
