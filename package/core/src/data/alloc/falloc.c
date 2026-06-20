@@ -2,7 +2,7 @@
 
 #include <mc/util/memory.h>
 
-#define HDR_SIZE  MC_ALIGN(sizeof(void*), sizeof(Hdr))
+#define HDR_SIZE  mc_align(alignof(max_align_t), sizeof(Hdr))
 
 static void *_alloc(MC_Alloc *this, size_t size);
 static void _free(MC_Alloc *this, void *ptr);
@@ -33,7 +33,7 @@ MC_Alloc *mc_fallok_allocator(MC_Falloc *fallback_alloc){
 static void *_alloc(MC_Alloc *this, size_t size){
     MC_Falloc *falloc = (MC_Falloc*)this;
 
-    size = MC_ALIGN(sizeof(void*), size) + HDR_SIZE;
+    size = mc_align(alignof(max_align_t), size) + HDR_SIZE;
 
     Hdr *hdr;
     for(size_t idx = 0; idx < falloc->fallbacks_cnt; idx++){

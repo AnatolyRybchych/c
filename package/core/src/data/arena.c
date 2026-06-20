@@ -58,7 +58,7 @@ MC_Alloc *mc_arena_allocator(MC_Arena *arena){
 }
 
 MC_Error mc_arena_alloc(MC_Arena *arena, size_t size, void **mem){
-    size = MC_ALIGN(alignof(void*), size);
+    size = mc_align(alignof(max_align_t), size);
 
     if(arena->buffer->available + size > arena->buffer->capacity_end){
         size_t capacity = arena->buffer->capacity_end - arena->buffer->beg;

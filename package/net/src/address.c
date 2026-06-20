@@ -218,13 +218,13 @@ static MC_Error ipv6_write(MC_Stream *out, const MC_IPv6Address *address) {
 
     if(leap_beg == leap_end) {
         return mc_fmt(out, "%x:%x:%x:%x:%x:%x:%x:%x",
-            MC_U16(d[0], d[1]), MC_U16(d[2], d[3]), MC_U16(d[4], d[5]), \
-            MC_U16(d[6], d[7]), MC_U16(d[8], d[9]), MC_U16(d[10], d[11]), \
-            MC_U16(d[12], d[13]), MC_U16(d[14], d[15]));
+            mc_u16(d[0], d[1]), mc_u16(d[2], d[3]), mc_u16(d[4], d[5]), \
+            mc_u16(d[6], d[7]), mc_u16(d[8], d[9]), mc_u16(d[10], d[11]), \
+            mc_u16(d[12], d[13]), mc_u16(d[14], d[15]));
     }
 
     for(const uint8_t *cur = d; cur != leap_beg; cur += 2){
-        MC_RETURN_ERROR(mc_fmt(out, "%x:", MC_U16(cur[0], cur[1])));
+        MC_RETURN_ERROR(mc_fmt(out, "%x:", mc_u16(cur[0], cur[1])));
     }
 
     if(d == leap_beg) {
@@ -232,7 +232,7 @@ static MC_Error ipv6_write(MC_Stream *out, const MC_IPv6Address *address) {
     }
 
     for(const uint8_t *cur = leap_end; cur != address->data + sizeof address->data; cur += 2){
-        MC_RETURN_ERROR(mc_fmt(out, ":%x", MC_U16(cur[0], cur[1])));
+        MC_RETURN_ERROR(mc_fmt(out, ":%x", mc_u16(cur[0], cur[1])));
     }
 
     if(leap_end == address->data + sizeof address->data) {

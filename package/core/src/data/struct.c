@@ -164,7 +164,7 @@ static int calcsize_aligned_native(const char *fmt){
         switch (ch){
         #define FMT(CH, _, NATIVE_TYPE, ...) \
         case CH: \
-            size = MC_ALIGN(alignof(NATIVE_TYPE), size) + alignof(NATIVE_TYPE) * (mul -1) + sizeof(NATIVE_TYPE); \
+            size = mc_align(alignof(NATIVE_TYPE), size) + alignof(NATIVE_TYPE) * (mul -1) + sizeof(NATIVE_TYPE); \
             break;
         ITER_FMT()
         #undef FMT
@@ -257,7 +257,7 @@ static int pack(void *buffer, unsigned buffer_size, const char *fmt, va_list arg
         #define FMT(CH, _, NATIVE_TYPE, VA_GET, ...) \
         case CH:{ \
             for(int i = 0; i < mul; i++){ \
-                if(align) cur_size = MC_ALIGN(alignof(NATIVE_TYPE), cur_size); \
+                if(align) cur_size = mc_align(alignof(NATIVE_TYPE), cur_size); \
                 NATIVE_TYPE val = VA_GET(args); \
                 memcpy(&U8(buffer)[cur_size], &val, sizeof(NATIVE_TYPE)); \
                 if(inverse) inverse_endian(&U8(buffer)[cur_size], sizeof(NATIVE_TYPE)); \
@@ -312,7 +312,7 @@ static int unpack(void *buffer, unsigned buffer_size, const char *fmt, va_list a
         #define FMT(CH, _, NATIVE_TYPE, __, VA_GET_LOCATION, ...) \
         case CH:{ \
             for(int i = 0; i < mul; i++){ \
-                if(align) cur_size = MC_ALIGN(alignof(NATIVE_TYPE), cur_size); \
+                if(align) cur_size = mc_align(alignof(NATIVE_TYPE), cur_size); \
                 void *location = VA_GET_LOCATION(args); \
                 if(location == NULL) continue; \
                 memcpy(location, &U8(buffer)[cur_size], sizeof(NATIVE_TYPE)); \
