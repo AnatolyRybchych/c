@@ -18,19 +18,23 @@ MC_Alloc mc_alloc_nomem = {
     .free = NULL
 };
 
+static MC_Alloc *default_alloc = &mc_alloc_malloc;
+
 MC_Error mc_alloc(MC_Alloc *allocator, size_t size, void **ret_ptr){
     if(allocator == NULL){
-        *ret_ptr = malloc(size);
-    }
-    else{
-        *ret_ptr = allocator->alloc ? allocator->alloc(allocator, size) : NULL;
+        allocator = default_alloc;
     }
 
+    *ret_ptr = allocator->alloc ? allocator->alloc(allocator, size) : NULL;
     return *ret_ptr ? MCE_OK : MCE_OUT_OF_MEMORY;
 }
 
 void mc_free(MC_Alloc *allocator, void *ptr){
-    if(allocator && allocator->free){
+    if(allocator == NULL){
+        allocator = default_alloc;
+    }
+
+    if(allocator->free){
         allocator->free(allocator, ptr);
     }
 }
