@@ -13,16 +13,20 @@ typedef struct PropInfo PropInfo;
 struct ModuleInfo {
     MC_String *name;
     MC_UIModuleID id;
+    unsigned prop_base;
+    unsigned event_base;
     unsigned views_cnt;
-    unsigned reserved_cnt;
+    unsigned props_cnt;
+    unsigned events_cnt;
 };
 
 struct ViewInfo {
     MC_String *name;
     MC_UIViewID id;
-    unsigned events_cnt;
+    unsigned prop_base;
+    unsigned event_base;
     unsigned props_cnt;
-    unsigned reserved_cnt;
+    unsigned events_cnt;
     MC_Error (*event_to_json)(const MC_UiEvent *event, MC_Alloc *alloc, MC_Json **json);
     MC_Error (*event_from_json)(const MC_Json *json, MC_UIProp prop, MC_UiEvent **event);
     MC_Error (*prop_to_json)(const MC_UIView *view, MC_UIProp prop, MC_Alloc *alloc, MC_Json **json);
@@ -104,29 +108,25 @@ MC_UIView *mc_ui_find_view(const MC_UI *ui, const char *name) {
 
 static MC_Error register_module(MC_UI *ui, const MC_UIModuleDef *def) {
     unsigned views_cnt = 0;
-    unsigned module_reserved_cnt = 0;
+    unsigned module_props_cnt = 0;
+    unsigned module_events_cnt = 0;
 
     for (const MC_UIViewDef *view = def->views; view && view->name; view++) {
         views_cnt += 1;
 
-        unsigned props_cnt = 0;
         for (char *const *prop = view->props; prop && *prop; prop++) {
-            props_cnt += 1;
-        }
-        
-        unsigned events_cnt = 0;
-        for (char *const *events = view->events; events && *events; events++) {
-            events_cnt += 1;
+            module_props_cnt += 1;
         }
 
-        unsigned reserved_cnt = MAX(events_cnt, props_cnt);
-        module_reserved_cnt += reserved_cnt;
+        for (char *const *event = view->events; event && *event; event++) {
+            module_events_cnt += 1;
+        }
     }
 
     ModuleInfoList *new_modules = MC_VECTOR_RESERVE(ui->modules, 1);
     ViewInfoList *new_views = MC_VECTOR_RESERVE(ui->views, views_cnt);
-    EventInfoList *new_events = MC_VECTOR_RESERVE(ui->events, module_reserved_cnt);
-    PropInfoList *new_props = MC_VECTOR_RESERVE(ui->props, module_reserved_cnt);
+    EventInfoList *new_events = MC_VECTOR_RESERVE(ui->events, module_events_cnt);
+    PropInfoList *new_props = MC_VECTOR_RESERVE(ui->props, module_props_cnt);
 
     ui->modules = new_modules ? new_modules : ui->modules;
     ui->views = new_views ? new_views : ui->views;
@@ -139,29 +139,36 @@ static MC_Error register_module(MC_UI *ui, const MC_UIModuleDef *def) {
 
     memset(ui->modules->end, 0, sizeof(ModuleInfo[1]));
     memset(ui->views->end, 0, sizeof(ViewInfo[views_cnt]));
-    memset(ui->events->end, 0, sizeof(EventInfo[module_reserved_cnt]));
-    memset(ui->props->end, 0, sizeof(PropInfo[module_reserved_cnt]));
+    memset(ui->events->end, 0, sizeof(EventInfo[module_events_cnt]));
+    memset(ui->props->end, 0, sizeof(PropInfo[module_props_cnt]));
 
     ModuleInfo module = (ModuleInfo){
-        .id = MC_VECTOR_SIZE(ui->props),
-        .reserved_cnt = module_reserved_cnt,
+        .id = MC_VECTOR_SIZE(ui->modules),
         .views_cnt = views_cnt,
+        .prop_base = MC_VECTOR_SIZE(ui->props),
+        .event_base = MC_VECTOR_SIZE(ui->events),
+        .props_cnt = module_props_cnt,
+        .events_cnt = module_events_cnt,
     };
 
     *ui->modules->end = module;
 
-    MC_UIViewID view_id = module.id;
+    unsigned views_base = MC_VECTOR_SIZE(ui->views);
+    unsigned prop_base = module.prop_base;
+    unsigned event_base = module.event_base;
     unsigned view_idx = 0;
     for (const MC_UIViewDef *view_def = def->views; view_def && view_def->name; view_def++) {
         ViewInfo view = (ViewInfo) {
-            .id = view_id
+            .id = views_base + view_idx,
+            .prop_base = prop_base,
+            .event_base = event_base,
         };
-        
+
         MC_RETURN_ERROR(mc_string(ui->alloc, &view.name, mc_strc(view_def->name)));
 
         for (char *const *prop_name = view_def->props; prop_name && *prop_name; prop_name++) {
             PropInfo prop_info = (PropInfo) {
-                .id = view.id + view.props_cnt
+                .id = view.prop_base + view.props_cnt
             };
 
             MC_RETURN_ERROR(mc_string(ui->alloc, &prop_info.name, mc_strc(*prop_name)));
@@ -172,7 +179,7 @@ static MC_Error register_module(MC_UI *ui, const MC_UIModuleDef *def) {
 
         for (char *const *event_name = view_def->events; event_name && *event_name; event_name++) {
             EventInfo event_info = (EventInfo) {
-                .id = view.id + view.events_cnt
+                .id = view.event_base + view.events_cnt
             };
 
             MC_RETURN_ERROR(mc_string(ui->alloc, &event_info.type, mc_strc(*event_name)));
@@ -181,18 +188,16 @@ static MC_Error register_module(MC_UI *ui, const MC_UIModuleDef *def) {
             view.events_cnt += 1;
         }
 
-        view.reserved_cnt += MAX(view.props_cnt, view.events_cnt);
         ui->views->end[view_idx] = view;
         view_idx += 1;
-        view_id += view.reserved_cnt;
+        prop_base += view.props_cnt;
+        event_base += view.events_cnt;
     }
 
     ui->modules->end += 1;
     ui->views->end += module.views_cnt;
-
-    // its a little bit redundant to make the view id as a base for both properties and events
-    ui->props->end += module.reserved_cnt;
-    ui->events->end += module.reserved_cnt;
+    ui->props->end += module.props_cnt;
+    ui->events->end += module.events_cnt;
 
     return MCE_OK;
 }
