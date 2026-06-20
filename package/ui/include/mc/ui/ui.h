@@ -9,6 +9,8 @@
 
 typedef struct MC_UI MC_UI;
 
+extern const MC_UIModuleDef mc_ui_module_def;
+
 MC_Error mc_ui_init(MC_Alloc *alloc, MC_UI **ui);
 void mc_ui_destroy(MC_UI *ui);
 

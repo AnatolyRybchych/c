@@ -66,6 +66,7 @@ int main(void){
 
     MC_UI *ui;
     MC_REQUIRE(mc_ui_init(NULL, &ui));
+    MC_REQUIRE(mc_ui_register_module(ui, &mc_ui_module_def));
 
     MC_WMWindow *window;
     MC_REQUIRE(mc_wm_window_init(mc_wm_get_ref(wm), &window));

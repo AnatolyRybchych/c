@@ -26,7 +26,7 @@
     for(ELEMENT = (VECTOR)->beg; ELEMENT != (VECTOR)->end; ELEMENT++)
 
 #define MC_VECTOR_PUSHN(VECTOR, SIZE, ELEMENTS) \
-    __vector_push_bytes(VECTOR, SIZE * sizeof(ELEMENTS[0]), ELEMENTS)
+    __vector_push_bytes((VECTOR), (SIZE) * sizeof((ELEMENTS)[0]), (ELEMENTS))
 
 #define MC_VECTOR_PUSH_ARRAY(VECTOR, ARRAY) \
     __vector_push_bytes(VECTOR, sizeof(ARRAY), &ARRAY[0])

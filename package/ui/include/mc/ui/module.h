@@ -6,9 +6,11 @@
 typedef struct MC_UIModule MC_UIModule;
 typedef struct MC_UIModuleDef MC_UIModuleDef;
 
+typedef unsigned MC_UIModuleID;
+
 struct MC_UIModuleDef {
     char *name;
-    MC_UIViewDef (*views)[];
+    MC_UIViewDef *views;
 };
 
 #endif // MC_UI_MODULE_H

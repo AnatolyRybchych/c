@@ -18,8 +18,8 @@ struct MC_UIViewDef {
     char *name;
     char *parent;
 
-    char *(*props)[];
-    char *(*events)[];
+    char **props;
+    char **events;
 
     void (*ctor)(MC_UIView *view);
     void (*dtor)(MC_UIView *view);
