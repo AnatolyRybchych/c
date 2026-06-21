@@ -3,12 +3,35 @@
 #include <mc/util/error.h>
 #include <mc/data/vector.h>
 #include <mc/data/string.h>
+#include <mc/data/str.h>
 #include <mc/data/stack.h>
+
+#include <stddef.h>
+#include <string.h>
+
+typedef struct UiElementData UiElementData;
+typedef struct UIElementInstance UIElementInstance;
 
 typedef struct ModuleInfo ModuleInfo;
 typedef struct ViewInfo ViewInfo;
 typedef struct EventInfo EventInfo;
 typedef struct PropInfo PropInfo;
+
+struct UiElementData {
+    UiElementData *parent;
+
+    max_align_t data[];
+};
+
+struct UIElementInstance {
+    MC_UIViewID view;
+    UiElementData *data;
+};
+
+struct MC_UIElement {
+    MC_UI *ui;
+    UIElementInstance instance;
+};
 
 struct ModuleInfo {
     MC_String *name;
@@ -23,14 +46,19 @@ struct ModuleInfo {
 struct ViewInfo {
     MC_String *name;
     MC_UIViewID id;
+    MC_UIViewID parent;
+    size_t size;
     unsigned prop_base;
     unsigned event_base;
     unsigned props_cnt;
     unsigned events_cnt;
+    void (*ctor)(MC_UIElement *element);
+    void (*dtor)(MC_UIElement *element);
+    void (*handle_event)(MC_UIElement *element, const MC_UiEvent *event);
+    MC_Error (*prop_to_json)(const MC_UIElement *element, MC_UIProp prop, MC_Alloc *alloc, MC_Json **json);
+    MC_Error (*prop_from_json)(MC_UIElement *element, MC_UIProp prop, const MC_Json *json);
     MC_Error (*event_to_json)(const MC_UiEvent *event, MC_Alloc *alloc, MC_Json **json);
     MC_Error (*event_from_json)(const MC_Json *json, MC_UIProp prop, MC_UiEvent **event);
-    MC_Error (*prop_to_json)(const MC_UIView *view, MC_UIProp prop, MC_Alloc *alloc, MC_Json **json);
-    MC_Error (*prop_from_json)(MC_UIView *view, MC_UIProp prop, const MC_Json *json);
 };
 
 struct EventInfo {
@@ -47,6 +75,7 @@ MC_DEFINE_VECTOR(ModuleInfoList, ModuleInfo);
 MC_DEFINE_VECTOR(ViewInfoList, ViewInfo);
 MC_DEFINE_VECTOR(EventInfoList, EventInfo);
 MC_DEFINE_VECTOR(PropInfoList, PropInfo);
+MC_DEFINE_VECTOR(ElementInstanceList, UIElementInstance);
 
 struct MC_UI {
     MC_Alloc *alloc;
@@ -56,6 +85,7 @@ struct MC_UI {
     ViewInfoList *views;
     PropInfoList *props;
     EventInfoList *events;
+    ElementInstanceList *elements;
 };
 
 static MC_Error register_module(MC_UI *ui, const MC_UIModuleDef *def);
@@ -87,6 +117,7 @@ void mc_ui_destroy(MC_UI *ui) {
     MC_VECTOR_FREE(ui->views);
     MC_VECTOR_FREE(ui->events);
     MC_VECTOR_FREE(ui->props);
+    MC_VECTOR_FREE(ui->elements);
 
     mc_stack_destroy(ui->stack);
 }
@@ -100,10 +131,76 @@ MC_Error mc_ui_register_module(MC_UI *ui, const MC_UIModuleDef *def) {
     return error;
 }
 
-MC_UIView *mc_ui_find_view(const MC_UI *ui, const char *name) {
-    (void)ui;
-    (void)name;
-    return NULL;
+MC_UIViewID mc_ui_find_view(const MC_UI *ui, const char *name) {
+    if (ui == NULL || name == NULL) {
+        return MC_UI_VIEW_INVALID;
+    }
+
+    MC_Str target = mc_strc(name);
+    for (size_t i = 0; i < (size_t)MC_VECTOR_SIZE(ui->views); i++) {
+        if (mc_str_equ(mc_string_str(ui->views->beg[i].name), target)) {
+            return ui->views->beg[i].id;
+        }
+    }
+
+    return MC_UI_VIEW_INVALID;
+}
+
+MC_Error mc_ui_create_element(MC_UI *ui, MC_UIViewID view, MC_UIElementID *out) {
+    MC_RETURN_INVALID(ui == NULL || out == NULL);
+    if (view >= MC_VECTOR_SIZE(ui->views)) {
+        return MCE_NOT_FOUND;
+    }
+    ViewInfo *info = &ui->views->beg[view];
+
+    MC_StackCursor top = mc_stack_top(ui->stack);
+
+    UiElementData *data = NULL;
+    MC_RETURN_ERROR(mc_alloc(ui->alloc, sizeof(UiElementData) + info->size, (void**)&data));
+    data->parent = NULL;
+    memset(data->data, 0, info->size);
+
+    UIElementInstance instance = { .view = view, .data = data };
+
+    MC_UIElementID id = MC_VECTOR_SIZE(ui->elements);
+    ElementInstanceList *grown = MC_VECTOR_PUSHN(ui->elements, 1, &instance);
+    if (grown == NULL) {
+        mc_stack_settop(ui->stack, top);
+        return MCE_OUT_OF_MEMORY;
+    }
+    ui->elements = grown;
+
+    if (info->ctor != NULL) {
+        MC_UIElement element = { .ui = ui, .instance = instance };
+        info->ctor(&element);
+    }
+
+    *out = id;
+    return MCE_OK;
+}
+
+MC_Error mc_ui_element_destroy(MC_UI *ui, MC_UIElementID element) {
+    if (ui == NULL || element >= MC_VECTOR_SIZE(ui->elements)) {
+        return MCE_INVALID_INPUT;
+    }
+
+    UIElementInstance instance = ui->elements->beg[element];
+
+    UiElementData *data = instance.data;
+    for (MC_UIViewID v = instance.view; v != MC_UI_VIEW_INVALID && data != NULL; v = ui->views->beg[v].parent) {
+        ViewInfo *info = &ui->views->beg[v];
+        if (info->dtor != NULL) {
+            MC_UIElement el = {
+                .ui = ui,
+                .instance = { .view = v, .data = data },
+            };
+            info->dtor(&el);
+        }
+
+        data = data->parent;
+    }
+
+    return MCE_OK;
 }
 
 static MC_Error register_module(MC_UI *ui, const MC_UIModuleDef *def) {
@@ -160,8 +257,17 @@ static MC_Error register_module(MC_UI *ui, const MC_UIModuleDef *def) {
     for (const MC_UIViewDef *view_def = def->views; view_def && view_def->name; view_def++) {
         ViewInfo view = (ViewInfo) {
             .id = views_base + view_idx,
+            .parent = MC_UI_VIEW_INVALID,
+            .size = view_def->size,
             .prop_base = prop_base,
             .event_base = event_base,
+            .ctor = view_def->ctor,
+            .dtor = view_def->dtor,
+            .handle_event = view_def->handle_event,
+            .prop_to_json = view_def->prop_to_json,
+            .prop_from_json = view_def->prop_from_json,
+            .event_to_json = view_def->event_to_json,
+            .event_from_json = view_def->event_from_json,
         };
 
         MC_RETURN_ERROR(mc_string(ui->alloc, &view.name, mc_strc(view_def->name)));
@@ -198,6 +304,14 @@ static MC_Error register_module(MC_UI *ui, const MC_UIModuleDef *def) {
     ui->views->end += module.views_cnt;
     ui->props->end += module.props_cnt;
     ui->events->end += module.events_cnt;
+
+    unsigned resolve_idx = 0;
+    for (const MC_UIViewDef *view_def = def->views; view_def && view_def->name; view_def++) {
+        if (view_def->parent != NULL) {
+            ui->views->beg[views_base + resolve_idx].parent = mc_ui_find_view(ui, view_def->parent);
+        }
+        resolve_idx += 1;
+    }
 
     return MCE_OK;
 }
