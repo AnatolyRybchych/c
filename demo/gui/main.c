@@ -68,6 +68,10 @@ int main(void){
     MC_REQUIRE(mc_ui_init(NULL, &ui));
     MC_REQUIRE(mc_ui_register_module(ui, &mc_ui_module_def));
 
+    MC_UIElementID element;
+    MC_REQUIRE(mc_ui_create_element(ui, mc_ui_find_view(ui, "View"), &element));
+    MC_REQUIRE(mc_ui_element_destroy(ui, element));
+
     MC_WMWindow *window;
     MC_REQUIRE(mc_wm_window_init(mc_wm_get_ref(wm), &window));
 
