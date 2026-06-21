@@ -4,6 +4,7 @@
 #include <mc/ui/module.h>
 #include <mc/ui/view.h>
 #include <mc/ui/element.h>
+#include <mc/ui/metadata.h>
 
 #include <mc/data/alloc.h>
 #include <mc/error.h>
@@ -21,5 +22,7 @@ MC_UIViewID mc_ui_find_view(const MC_UI *ui, const char *name);
 
 MC_Error mc_ui_create_element(MC_UI *ui, MC_UIViewID view, MC_UIElementID *out);
 MC_Error mc_ui_element_destroy(MC_UI *ui, MC_UIElementID element);
+
+const MC_UIInfo *mc_ui_metadata(const MC_UI *ui);
 
 #endif // MC_UI_H

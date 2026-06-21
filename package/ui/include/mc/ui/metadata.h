@@ -69,4 +69,6 @@ struct MC_UIInfo {
     EventInfoList *events;
 };
 
+MC_Error mc_ui_metadata_to_json(const MC_UIInfo *metadata, MC_Alloc *alloc, MC_Json **out);
+
 #endif // MC_UI_METADATA_H

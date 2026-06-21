@@ -152,6 +152,14 @@ MC_Error mc_ui_element_destroy(MC_UI *ui, MC_UIElementID element) {
     return MCE_OK;
 }
 
+const MC_UIInfo *mc_ui_metadata(const MC_UI *ui) {
+    if (ui == NULL) {
+        return NULL;
+    }
+
+    return &ui->metadata;
+}
+
 static MC_Error register_module(MC_UI *ui, const MC_UIModuleDef *def) {
     unsigned views_cnt = 0;
     unsigned module_props_cnt = 0;
