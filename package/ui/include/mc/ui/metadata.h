@@ -18,15 +18,20 @@ typedef struct MC_UIModuleInfo MC_UIModuleInfo;
 typedef struct MC_UIViewInfo MC_UIViewInfo;
 typedef struct MC_UIEventInfo MC_UIEventInfo;
 typedef struct MC_UIPropInfo MC_UIPropInfo;
+typedef struct MC_UITypeInfo MC_UITypeInfo;
 
 struct MC_UIModuleInfo {
     MC_String *name;
     MC_UIModuleID id;
     unsigned prop_base;
     unsigned event_base;
+    unsigned type_base;
     unsigned views_cnt;
     unsigned props_cnt;
     unsigned events_cnt;
+    unsigned types_cnt;
+    MC_Error (*value_from_json)(MC_UITypeID type, const MC_Json *json, MC_Alloc *alloc, void **raw);
+    MC_Error (*value_to_json)(MC_UITypeID type, const void *raw, MC_Alloc *alloc, MC_Json **json);
 };
 
 struct MC_UIViewInfo {
@@ -57,16 +62,23 @@ struct MC_UIPropInfo {
     MC_String *name;
 };
 
+struct MC_UITypeInfo {
+    unsigned id;
+    MC_String *name;
+};
+
 MC_DEFINE_VECTOR(ModuleInfoList, MC_UIModuleInfo);
 MC_DEFINE_VECTOR(ViewInfoList, MC_UIViewInfo);
 MC_DEFINE_VECTOR(EventInfoList, MC_UIEventInfo);
 MC_DEFINE_VECTOR(PropInfoList, MC_UIPropInfo);
+MC_DEFINE_VECTOR(TypeInfoList, MC_UITypeInfo);
 
 struct MC_UIInfo {
     ModuleInfoList *modules;
     ViewInfoList *views;
     PropInfoList *props;
     EventInfoList *events;
+    TypeInfoList *types;
 };
 
 MC_Error mc_ui_metadata_to_json(const MC_UIInfo *metadata, MC_Alloc *alloc, MC_Json **out);

@@ -21,9 +21,11 @@ static MC_Error dump_module(const MC_UIModuleInfo *module, MC_Json *obj) {
     MC_RETURN_ERROR(mc_json_object_add_u64(obj, module->id, "id"));
     MC_RETURN_ERROR(mc_json_object_add_u64(obj, module->prop_base, "prop_base"));
     MC_RETURN_ERROR(mc_json_object_add_u64(obj, module->event_base, "event_base"));
+    MC_RETURN_ERROR(mc_json_object_add_u64(obj, module->type_base, "type_base"));
     MC_RETURN_ERROR(mc_json_object_add_u64(obj, module->views_cnt, "views_cnt"));
     MC_RETURN_ERROR(mc_json_object_add_u64(obj, module->props_cnt, "props_cnt"));
     MC_RETURN_ERROR(mc_json_object_add_u64(obj, module->events_cnt, "events_cnt"));
+    MC_RETURN_ERROR(mc_json_object_add_u64(obj, module->types_cnt, "types_cnt"));
 
     return MCE_OK;
 }
@@ -51,6 +53,13 @@ static MC_Error dump_prop(const MC_UIPropInfo *prop, MC_Json *obj) {
 static MC_Error dump_event(const MC_UIEventInfo *event, MC_Json *obj) {
     MC_RETURN_ERROR(mc_json_object_add_u64(obj, event->id, "id"));
     MC_RETURN_ERROR(put_str(obj, "type", event->type));
+
+    return MCE_OK;
+}
+
+static MC_Error dump_type(const MC_UITypeInfo *type, MC_Json *obj) {
+    MC_RETURN_ERROR(mc_json_object_add_u64(obj, type->id, "id"));
+    MC_RETURN_ERROR(put_str(obj, "name", type->name));
 
     return MCE_OK;
 }
@@ -100,6 +109,14 @@ static MC_Error metadata_to_json(const MC_UIInfo *metadata, MC_Json *root) {
         MC_Json *obj = NULL;
         MC_RETURN_ERROR(add_object(events, &obj));
         MC_RETURN_ERROR(dump_event(&metadata->events->beg[i], obj));
+    }
+
+    MC_Json *types = NULL;
+    MC_RETURN_ERROR(add_list(root, "types", &types));
+    for (size_t i = 0; i < (size_t)MC_VECTOR_SIZE(metadata->types); i++) {
+        MC_Json *obj = NULL;
+        MC_RETURN_ERROR(add_object(types, &obj));
+        MC_RETURN_ERROR(dump_type(&metadata->types->beg[i], obj));
     }
 
     return MCE_OK;

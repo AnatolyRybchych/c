@@ -67,6 +67,7 @@ void mc_ui_destroy(MC_UI *ui) {
     MC_VECTOR_FREE(NULL, ui->metadata.views);
     MC_VECTOR_FREE(NULL, ui->metadata.events);
     MC_VECTOR_FREE(NULL, ui->metadata.props);
+    MC_VECTOR_FREE(NULL, ui->metadata.types);
     MC_VECTOR_FREE(NULL, ui->elements);
 
     mc_stack_destroy(ui->stack);
@@ -164,6 +165,7 @@ static MC_Error register_module(MC_UI *ui, const MC_UIModuleDef *def) {
     unsigned views_cnt = 0;
     unsigned module_props_cnt = 0;
     unsigned module_events_cnt = 0;
+    unsigned module_types_cnt = 0;
 
     for (const MC_UIViewDef *view = def->views; view && view->name; view++) {
         views_cnt += 1;
@@ -177,23 +179,33 @@ static MC_Error register_module(MC_UI *ui, const MC_UIModuleDef *def) {
         }
     }
 
+    for (char *const *type = def->types; type && *type; type++) {
+        module_types_cnt += 1;
+    }
+
     MC_RETURN_ERROR(MC_VECTOR_RESERVE(NULL, ui->metadata.modules, 1));
     MC_RETURN_ERROR(MC_VECTOR_RESERVE(NULL, ui->metadata.views, views_cnt));
     MC_RETURN_ERROR(MC_VECTOR_RESERVE(NULL, ui->metadata.events, module_events_cnt));
     MC_RETURN_ERROR(MC_VECTOR_RESERVE(NULL, ui->metadata.props, module_props_cnt));
+    MC_RETURN_ERROR(MC_VECTOR_RESERVE(NULL, ui->metadata.types, module_types_cnt));
 
     memset(ui->metadata.modules->end, 0, sizeof(MC_UIModuleInfo[1]));
     memset(ui->metadata.views->end, 0, sizeof(MC_UIViewInfo[views_cnt]));
     memset(ui->metadata.events->end, 0, sizeof(MC_UIEventInfo[module_events_cnt]));
     memset(ui->metadata.props->end, 0, sizeof(MC_UIPropInfo[module_props_cnt]));
+    memset(ui->metadata.types->end, 0, sizeof(MC_UITypeInfo[module_types_cnt]));
 
     MC_UIModuleInfo module = (MC_UIModuleInfo){
         .id = MC_VECTOR_SIZE(ui->metadata.modules),
         .views_cnt = views_cnt,
         .prop_base = MC_VECTOR_SIZE(ui->metadata.props),
         .event_base = MC_VECTOR_SIZE(ui->metadata.events),
+        .type_base = MC_VECTOR_SIZE(ui->metadata.types),
         .props_cnt = module_props_cnt,
         .events_cnt = module_events_cnt,
+        .types_cnt = module_types_cnt,
+        .value_from_json = def->value_from_json,
+        .value_to_json = def->value_to_json,
     };
 
     *ui->metadata.modules->end = module;
@@ -248,10 +260,23 @@ static MC_Error register_module(MC_UI *ui, const MC_UIModuleDef *def) {
         event_base += view.events_cnt;
     }
 
+    unsigned type_idx = 0;
+    for (char *const *type_name = def->types; type_name && *type_name; type_name++) {
+        MC_UITypeInfo type_info = (MC_UITypeInfo) {
+            .id = module.type_base + type_idx
+        };
+
+        MC_RETURN_ERROR(mc_string(ui->alloc, &type_info.name, mc_strc(*type_name)));
+
+        ui->metadata.types->beg[type_info.id] = type_info;
+        type_idx += 1;
+    }
+
     ui->metadata.modules->end += 1;
     ui->metadata.views->end += module.views_cnt;
     ui->metadata.props->end += module.props_cnt;
     ui->metadata.events->end += module.events_cnt;
+    ui->metadata.types->end += module.types_cnt;
 
     unsigned resolve_idx = 0;
     for (const MC_UIViewDef *view_def = def->views; view_def && view_def->name; view_def++) {
