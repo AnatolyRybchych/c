@@ -1140,9 +1140,9 @@ static MC_Error object_add(MC_Json *json, MC_String *key, MC_Json *item){
     else if(json->as.kv_arr->size == json->as.kv_arr->capacity){
         struct KvArray *new_array;
         size_t new_capacity = json->as.kv_arr->size * 2;
-        MC_RETURN_ERROR(mc_alloc(json->alloc, sizeof(struct KvArray) + sizeof(struct Kv*[new_capacity]), (void**)&new_array));
+        MC_RETURN_ERROR(mc_alloc(json->alloc, sizeof(struct KvArray) + sizeof(struct Kv[new_capacity]), (void**)&new_array));
 
-        memcpy(new_array, json->as.arr, sizeof(struct KvArray) + sizeof(struct Kv*[json->as.arr->size]));
+        memcpy(new_array, json->as.kv_arr, sizeof(struct KvArray) + sizeof(struct Kv[json->as.kv_arr->size]));
         new_array->capacity = new_capacity;
         mc_free(json->alloc, json->as.kv_arr);
         json->as.kv_arr = new_array;
