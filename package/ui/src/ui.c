@@ -113,11 +113,11 @@ void mc_ui_destroy(MC_UI *ui) {
         return;
     }
 
-    MC_VECTOR_FREE(ui->modules);
-    MC_VECTOR_FREE(ui->views);
-    MC_VECTOR_FREE(ui->events);
-    MC_VECTOR_FREE(ui->props);
-    MC_VECTOR_FREE(ui->elements);
+    MC_VECTOR_FREE(NULL, ui->modules);
+    MC_VECTOR_FREE(NULL, ui->views);
+    MC_VECTOR_FREE(NULL, ui->events);
+    MC_VECTOR_FREE(NULL, ui->props);
+    MC_VECTOR_FREE(NULL, ui->elements);
 
     mc_stack_destroy(ui->stack);
 }
@@ -163,12 +163,11 @@ MC_Error mc_ui_create_element(MC_UI *ui, MC_UIViewID view, MC_UIElementID *out) 
     UIElementInstance instance = { .view = view, .data = data };
 
     MC_UIElementID id = MC_VECTOR_SIZE(ui->elements);
-    ElementInstanceList *grown = MC_VECTOR_PUSHN(ui->elements, 1, &instance);
-    if (grown == NULL) {
+    MC_Error error = MC_VECTOR_PUSHN(NULL, ui->elements, 1, &instance);
+    if (error != MCE_OK) {
         mc_stack_settop(ui->stack, top);
-        return MCE_OUT_OF_MEMORY;
+        return error;
     }
-    ui->elements = grown;
 
     if (info->ctor != NULL) {
         MC_UIElement element = { .ui = ui, .instance = instance };
@@ -220,19 +219,10 @@ static MC_Error register_module(MC_UI *ui, const MC_UIModuleDef *def) {
         }
     }
 
-    ModuleInfoList *new_modules = MC_VECTOR_RESERVE(ui->modules, 1);
-    ViewInfoList *new_views = MC_VECTOR_RESERVE(ui->views, views_cnt);
-    EventInfoList *new_events = MC_VECTOR_RESERVE(ui->events, module_events_cnt);
-    PropInfoList *new_props = MC_VECTOR_RESERVE(ui->props, module_props_cnt);
-
-    ui->modules = new_modules ? new_modules : ui->modules;
-    ui->views = new_views ? new_views : ui->views;
-    ui->events = new_events ? new_events : ui->events;
-    ui->props = new_props ? new_props : ui->props;
-
-    if (!new_modules || !new_views || !new_events || !new_props) {
-        return MCE_OUT_OF_MEMORY;
-    }
+    MC_RETURN_ERROR(MC_VECTOR_RESERVE(NULL, ui->modules, 1));
+    MC_RETURN_ERROR(MC_VECTOR_RESERVE(NULL, ui->views, views_cnt));
+    MC_RETURN_ERROR(MC_VECTOR_RESERVE(NULL, ui->events, module_events_cnt));
+    MC_RETURN_ERROR(MC_VECTOR_RESERVE(NULL, ui->props, module_props_cnt));
 
     memset(ui->modules->end, 0, sizeof(ModuleInfo[1]));
     memset(ui->views->end, 0, sizeof(ViewInfo[views_cnt]));

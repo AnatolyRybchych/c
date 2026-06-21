@@ -315,7 +315,7 @@ static void wm_teardown(MC_WM *wm){
             mc_free(NULL, g->events);
             mc_free(NULL, g->name);
         }
-        MC_VECTOR_FREE(wm->event_groups);
+        MC_VECTOR_FREE(NULL, wm->event_groups);
         wm->event_groups = NULL;
     }
 
@@ -323,8 +323,8 @@ static void wm_teardown(MC_WM *wm){
         wm->vtab.destroy(wm->target);
     }
 
-    MC_VECTOR_FREE(wm->windows);
-    MC_VECTOR_FREE(wm->foreign_windows);
+    MC_VECTOR_FREE(NULL, wm->windows);
+    MC_VECTOR_FREE(NULL, wm->foreign_windows);
 
     mc_arena_destroy(wm->arena);
     mc_dbarena_destroy(wm->event_arena);
@@ -400,12 +400,10 @@ MC_Error mc_wm_window_init(MC_WMRef *ref, MC_WMWindow **ret_window){
     window->target = (struct MC_TargetWMWindow*)window->data;
     window->is_alive = true;
 
-    Windows *new_windows = MC_VECTOR_PUSHN(wm->windows, 1, &window);
-    if(new_windows == NULL){
+    if(MC_VECTOR_PUSHN(NULL, wm->windows, 1, &window) != MCE_OK){
         mc_free(NULL, window);
         return MCE_OUT_OF_MEMORY;
     }
-    wm->windows = new_windows;
 
     MC_Error status = v->init_window(wm->target, window->target, &window->parameters);
     if(status != MCE_OK){
@@ -826,11 +824,7 @@ static MC_Error alloc_foreign(MC_WM *wm, MC_ForeignWindow **out){
 }
 
 static MC_Error track_foreign(MC_WM *wm, MC_ForeignWindow *foreign){
-    ForeignWindows *new_foreign = MC_VECTOR_PUSHN(wm->foreign_windows, 1, &foreign);
-    if(new_foreign == NULL){
-        return MCE_OUT_OF_MEMORY;
-    }
-    wm->foreign_windows = new_foreign;
+    MC_RETURN_ERROR(MC_VECTOR_PUSHN(NULL, wm->foreign_windows, 1, &foreign));
 
     return MCE_OK;
 }
@@ -1374,8 +1368,7 @@ MC_Error mc_wm_register_event_group(MC_WMRef *ref, const MC_WMEventGroupDef *def
         .name = name, .events = events,
         .to_json = def->to_json, .from_json = def->from_json,
     };
-    EventGroups *grown = MC_VECTOR_PUSHN(wm->event_groups, 1, (&entry));
-    if(grown == NULL){
+    if(MC_VECTOR_PUSHN(NULL, wm->event_groups, 1, (&entry)) != MCE_OK){
         for(size_t i = 0; i < def->size; i++){
             mc_free(NULL, (void*)events[i].name);
         }
@@ -1383,7 +1376,6 @@ MC_Error mc_wm_register_event_group(MC_WMRef *ref, const MC_WMEventGroupDef *def
         mc_free(NULL, name);
         return MCE_OUT_OF_MEMORY;
     }
-    wm->event_groups = grown;
     wm->event_next = (MC_WMEventType)(offset + total);
 
     *out_offset = offset;
